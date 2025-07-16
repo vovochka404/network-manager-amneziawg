@@ -135,12 +135,12 @@ static const char *
 wg_quick_find_exepath (void)
 {
 	static const char *paths[] = {
-		"/usr/sbin/wg-quick",
-		"/usr/bin/wg-quick",
-		"/sbin/wg-quick",
-		"/bin/wg-quick",
-		"/usr/local/sbin/wg-quick",
-		"/usr/local/bin/wg-quick",
+		"/usr/local/sbin/awg-quick",
+		"/usr/local/bin/awg-quick",
+		"/usr/sbin/awg-quick",
+		"/usr/bin/awg-quick",
+		"/sbin/awg-quick",
+		"/bin/awg-quick",
 	};
 	int i;
 
