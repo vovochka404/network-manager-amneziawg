@@ -28,14 +28,12 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
 #include <ctype.h>
 #include <stdio.h>
 
 #include "utils.h"
-#include "nm-utils/nm-shared-utils.h"
 
 const char *_nmovpn_test_temp_path = NULL;
 
@@ -104,6 +102,14 @@ setting_vpn_add_data_item_int64 (NMSettingVpn *setting,
                                  gint64 value)
 {
 	setting_vpn_add_data_item_v (setting, key, "%"G_GINT64_FORMAT, value);
+}
+
+static void
+setting_vpn_add_data_item_uint64 (NMSettingVpn *setting,
+								 const char *key,
+								 guint64 value)
+{
+	setting_vpn_add_data_item_v (setting, key, "%"G_GUINT64_FORMAT, value);
 }
 
 static void
@@ -567,6 +573,72 @@ parse_mtu(const char **line, guint64 *mtu, char **out_error)
 	return success;
 }
 
+static gboolean
+parse_junc_packet_count(const char **line, guint64 *junc_count, char **out_error)
+{
+	int idx = 0;
+	char *tmp = NULL;
+	gboolean success = TRUE;
+
+	if(!_parse_common(line, &idx, out_error)){
+		return FALSE;
+	}
+
+	tmp = g_strdup(line[idx]);
+	if(!g_ascii_string_to_unsigned(tmp, 10, NMV_WG_TAG_JUNC_COUNT_MIN, NMV_WG_TAG_JUNC_COUNT_MAX, junc_count, NULL)){
+		*out_error = g_strdup_printf("'%s' is not a junk assignment!", tmp);
+		*junc_count = -1;
+		success = FALSE;
+	}
+
+	g_free(tmp);
+	return success;
+}
+
+static gboolean
+parse_junc_packet_size(const char **line, guint64 *junc_size, char **out_error)
+{
+	int idx = 0;
+	char *tmp = NULL;
+	gboolean success = TRUE;
+
+	if(!_parse_common(line, &idx, out_error)){
+		return FALSE;
+	}
+
+	tmp = g_strdup(line[idx]);
+	if(!g_ascii_string_to_unsigned(tmp, 10, NMV_WG_TAG_JUNC_SIZE_MIN, NMV_WG_TAG_JUNC_SIZE_MAX, junc_size, NULL)){
+		*out_error = g_strdup_printf("'%s' is not a junk assignment!", tmp);
+		*junc_size = -1;
+		success = FALSE;
+	}
+
+	g_free(tmp);
+	return success;
+}
+
+static gboolean
+parse_magic_header_size(const char **line, guint64 *header_size, char **out_error)
+{
+	int idx = 0;
+	char *tmp = NULL;
+	gboolean success = TRUE;
+
+	if(!_parse_common(line, &idx, out_error)){
+		return FALSE;
+	}
+
+	tmp = g_strdup(line[idx]);
+	if(!g_ascii_string_to_unsigned(tmp, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, header_size, NULL)){
+		*out_error = g_strdup_printf("'%s' is not a valid header size assignment!", tmp);
+		*header_size = -1;
+		success = FALSE;
+	}
+
+	g_free(tmp);
+	return success;
+}
+
 
 // parse Persistent Keep Alive value (max 0-5min? (450))
 static gboolean
@@ -848,7 +920,7 @@ do_import (const char *path, const char *contents, gsize contents_len, GError **
 				goto handle_line_error;
 			}
 
-			setting_vpn_add_data_item_int64(s_vpn, NM_WG_KEY_LISTEN_PORT, port);
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_LISTEN_PORT, port);
 			have_listen_port = TRUE;
 			printf("%s = %ld\n", NMV_WG_TAG_LISTEN_PORT, port);
 			continue;
@@ -899,8 +971,107 @@ do_import (const char *path, const char *contents, gsize contents_len, GError **
 				goto handle_line_error;
 			}
 
-			setting_vpn_add_data_item_int64(s_vpn, NM_WG_KEY_MTU, mtu);
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_MTU, mtu);
 			printf("%s = %ld\n", NMV_WG_TAG_MTU, mtu);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_JC)){
+			guint64 jc = 50;
+			if(!parse_junc_packet_count(params, &jc, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_JC, jc);
+			printf("%s = %ld\n", NM_WG_KEY_JC, jc);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_JMIN)){
+			guint64 jmin = 50;
+			if(!parse_junc_packet_size(params, &jmin, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_JMIN, jmin);
+			printf("%s = %ld\n", NM_WG_KEY_JMIN, jmin);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_JMAX)){
+			guint64 jmax = 1250;
+			if(!parse_junc_packet_size(params, &jmax, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_JMAX, jmax);
+			printf("%s = %ld\n", NM_WG_KEY_JMAX, jmax);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_S1)){
+			guint64 size = 200;
+			if(!parse_junc_packet_size(params, &size, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_S1, size);
+			printf("%s = %ld\n", NM_WG_KEY_S1, size);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_S2)){
+			guint64 size = 240;
+			if(!parse_junc_packet_size(params, &size, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_S2, size);
+			printf("%s = %ld\n", NM_WG_KEY_S2, size);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_H1)){
+			guint64 header = 0;
+			if(!parse_magic_header_size(params, &header, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_H1, header);
+			printf("%s = %ld\n", NM_WG_KEY_H1, header);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_H2)){
+			guint64 header = 0;
+			if(!parse_magic_header_size(params, &header, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_H2, header);
+			printf("%s = %ld\n", NM_WG_KEY_H2, header);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_H3)){
+			guint64 header = 0;
+			if(!parse_magic_header_size(params, &header, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_H3, header);
+			printf("%s = %ld\n", NM_WG_KEY_H3, header);
+			continue;
+		}
+
+		if (NM_IN_STRSET (params[0], NMV_WG_TAG_H4)){
+			guint64 header = 0;
+			if(!parse_magic_header_size(params, &header, &line_error)){
+				goto handle_line_error;
+			}
+
+			setting_vpn_add_data_item_uint64(s_vpn, NM_WG_KEY_H4, header);
+			printf("%s = %ld\n", NM_WG_KEY_H4, header);
 			continue;
 		}
 
@@ -1148,6 +1319,16 @@ create_config_string (NMConnection *connection, GError **error)
 	const char *psk;
 	const char *pka;
 	const char *dns;
+	const char *mtu;
+	const char *jc;
+	const char *jmin;
+	const char *jmax;
+	const char *s1;
+	const char *s2;
+	const char *h1;
+	const char *h2;
+	const char *h3;
+	const char *h4;
 	char *value = NULL;
 	char **ip_list, **ip_iter;
 	GArray *ips;
@@ -1175,6 +1356,16 @@ create_config_string (NMConnection *connection, GError **error)
 	psk         = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_PRESHARED_KEY));
 	pka         = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_PERSISTENT_KEEP_ALIVE));
 	dns         = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_DNS));
+	mtu         = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_MTU));
+	jc          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_JC));
+	jmin        = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_JMIN));
+	jmax        = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_JMAX));
+	s1          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_S1));
+	s2          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_S2));
+	h1          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_H1));
+	h2          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_H2));
+	h3          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_H3));
+	h4          = _arg_is_set(nm_setting_vpn_get_data_item(s_vpn, NM_WG_KEY_H4));
 
 	if(!ip4 && !ip6){
 		g_set_error_literal(error,
@@ -1208,6 +1399,14 @@ create_config_string (NMConnection *connection, GError **error)
 		return NULL;
 	}
 
+	if(!jc || !jmin || !jmax || !s1 || !s2 || !h1 || !h2 || !h3 || !h4){
+		g_set_error_literal(error,
+							NMV_EDITOR_PLUGIN_ERROR,
+							NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
+							"Connection was incomplete (missing some of jc, jmin, jmax, s1, s2, h1, h2, h3, h4)");
+		return NULL;
+	}
+
 	// if we don't have a limitation on the peer's allowed IPs, we assume that everything is allowed
 	if(!allowed_ips){
 		allowed_ips = "0.0.0.0/0,::/0";
@@ -1235,8 +1434,22 @@ create_config_string (NMConnection *connection, GError **error)
 		args_write_line(f, NMV_WG_TAG_LISTEN_PORT, "=", listen_port);
 	}
 	if(dns){
-		args_write_line(f,NMV_WG_TAG_DNS, "=", dns);
+		args_write_line(f, NMV_WG_TAG_DNS, "=", dns);
 	}
+	if(mtu){
+		args_write_line(f, NMV_WG_TAG_MTU, "=", mtu);
+	}
+
+	args_write_line(f, NMV_WG_TAG_JC, "=", jc);
+	args_write_line(f, NMV_WG_TAG_JMIN, "=", jmin);
+	args_write_line(f, NMV_WG_TAG_JMAX, "=", jmax);
+	args_write_line(f, NMV_WG_TAG_S1, "=", s1);
+	args_write_line(f, NMV_WG_TAG_S2, "=", s2);
+	args_write_line(f, NMV_WG_TAG_H1, "=", h1);
+	args_write_line(f, NMV_WG_TAG_H2, "=", h2);
+	args_write_line(f, NMV_WG_TAG_H3, "=", h3);
+	args_write_line(f, NMV_WG_TAG_H4, "=", h4);
+
 	if(post_up){
 		args_write_line(f, NMV_WG_TAG_POST_UP, "=", post_up);
 	}

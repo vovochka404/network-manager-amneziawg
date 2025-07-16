@@ -22,12 +22,23 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdint.h>
+
 #define NMV_WG_TAG_INTERFACE			"[Interface]"
 #define NMV_WG_TAG_PRIVATE_KEY			"PrivateKey"
 #define NMV_WG_TAG_LISTEN_PORT			"ListenPort"
 #define NMV_WG_TAG_ADDRESS				"Address"
 #define NMV_WG_TAG_DNS                  "DNS"
 #define NMV_WG_TAG_MTU                  "MTU"
+#define NMV_WG_TAG_JC                   "Jc"
+#define NMV_WG_TAG_JMIN                 "Jmin"
+#define NMV_WG_TAG_JMAX                 "Jmax"
+#define NMV_WG_TAG_S1                   "S1"
+#define NMV_WG_TAG_S2                   "S2"
+#define NMV_WG_TAG_H1                   "H1"
+#define NMV_WG_TAG_H2                   "H2"
+#define NMV_WG_TAG_H3                   "H3"
+#define NMV_WG_TAG_H4                   "H4"
 #define NMV_WG_TAG_PRE_UP               "PreUp"
 #define NMV_WG_TAG_POST_UP				"PostUp"
 #define NMV_WG_TAG_PRE_DOWN             "PreDown"
@@ -38,6 +49,13 @@
 #define NMV_WG_TAG_ALLOWED_IPS			"AllowedIPs"
 #define NMV_WG_TAG_ENDPOINT				"Endpoint"
 #define NMV_WG_TAG_PERSISTENT_KEEP_ALIVE    "PersistentKeepalive"
+
+#define NMV_WG_TAG_JUNC_COUNT_MIN		0
+#define NMV_WG_TAG_JUNC_COUNT_MAX		UINT16_MAX
+#define NMV_WG_TAG_JUNC_SIZE_MIN		0
+#define NMV_WG_TAG_JUNC_SIZE_MAX		UINT16_MAX
+#define NMV_WG_TAG_HEADER_SIZE_MIN		0
+#define NMV_WG_TAG_HEADER_SIZE_MAX		UINT32_MAX
 
 #define NMV_OVPN_TAG_AUTH               "auth"
 #define NMV_OVPN_TAG_AUTH_NOCACHE       "auth-nocache"

@@ -42,6 +42,8 @@ appdata/network-manager-amneziawg.metainfo.xml
 */tests/*.trs
 test-*.log
 
+build
+
 auth-dialog/nm-amneziawg-auth-dialog
 nm-amneziawg-service.name
 nm-amneziawg.desktop

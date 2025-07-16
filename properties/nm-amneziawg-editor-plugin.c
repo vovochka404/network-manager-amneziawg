@@ -67,14 +67,14 @@ import (NMVpnEditorPlugin *iface, const char *path, GError **error)
 
 	ext = strrchr (path, '.');
 
-	if (!ext || (   !g_str_has_suffix (ext, ".wireguard")
-	             && !g_str_has_suffix (ext, ".wg")
+	if (!ext || (   !g_str_has_suffix (ext, ".amneziawg")
+	             && !g_str_has_suffix (ext, ".awg")
 	             && !g_str_has_suffix (ext, ".cnf")
 	             && !g_str_has_suffix (ext, ".conf"))) {   /* Special extension for testcases */
 		g_set_error_literal (error,
 		                     NMV_EDITOR_PLUGIN_ERROR,
 		                     NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
-		                     "Unknown Wireguard file extension");
+		                     "Unknown AmneziaWG file extension");
 		goto out;
 	}
 

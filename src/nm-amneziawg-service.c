@@ -31,7 +31,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -394,6 +393,96 @@ set_config(NMVpnServicePlugin *plugin, NMConnection *connection)
 		val = g_variant_new_string(setting);
 		g_variant_builder_add(&dns_builder, "{sv}", NMV_WG_TAG_DNS, val);
 		has_dns = TRUE;
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_JC);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_JUNC_COUNT_MIN, NMV_WG_TAG_JUNC_COUNT_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_JC, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_JMIN);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_JUNC_SIZE_MIN, NMV_WG_TAG_JUNC_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_JMIN, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_JMAX);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_JUNC_SIZE_MIN, NMV_WG_TAG_JUNC_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_JMAX, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_S1);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_JUNC_SIZE_MIN, NMV_WG_TAG_JUNC_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_S1, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_S2);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_JUNC_SIZE_MIN, NMV_WG_TAG_JUNC_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_S2, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_H1);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_H1, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_H2);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_H2, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_H3);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_H3, val);
+	}
+
+	setting = get_setting(s_vpn, NM_WG_KEY_H4);
+	if(setting) {
+		guint64 tmp = 0;
+		if(!g_ascii_string_to_unsigned(setting, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, &tmp, NULL)){
+			tmp = 0;
+		}
+		val = g_variant_new_uint32(tmp);
+		g_variant_builder_add(&builder, "{sv}", NM_WG_KEY_H4, val);
 	}
 
 	setting = get_setting(s_vpn, NM_WG_KEY_ENDPOINT);
