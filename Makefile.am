@@ -257,7 +257,7 @@ appdata_files = $(appdata_in_files:.xml.in=.xml)
 if WITH_GNOME
 appdata_DATA = $(appdata_files)
 endif
-appdata_in_files = appdata/network-manager-amneziawg.metainfo.xml.in
+appdata_in_files = $(srcdir)/appdata/network-manager-amneziawg.metainfo.xml.in
 @INTLTOOL_XML_RULE@
 
 nm-amneziawg-service.name: $(srcdir)/nm-amneziawg-service.name.in
