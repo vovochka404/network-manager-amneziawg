@@ -27,7 +27,7 @@
 
 #include "nm-default.h"
 
-#include "nm-wireguard-editor.h"
+#include "nm-amneziawg-editor.h"
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -40,19 +40,19 @@
 
 /*****************************************************************************/
 
-static void wireguard_editor_plugin_widget_interface_init (NMVpnEditorInterface *iface_class);
+static void amneziawg_editor_plugin_widget_interface_init (NMVpnEditorInterface *iface_class);
 
-G_DEFINE_TYPE_EXTENDED (WireguardEditor, wireguard_editor_plugin_widget, G_TYPE_OBJECT, 0,
+G_DEFINE_TYPE_EXTENDED (AmneziaWGEditor, amneziawg_editor_plugin_widget, G_TYPE_OBJECT, 0,
                         G_IMPLEMENT_INTERFACE (NM_TYPE_VPN_EDITOR,
-                                               wireguard_editor_plugin_widget_interface_init))
+                                               amneziawg_editor_plugin_widget_interface_init))
 
-#define WIREGUARD_EDITOR_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), WIREGUARD_TYPE_EDITOR, WireguardEditorPrivate))
+#define AMNEZIAWG_EDITOR_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), AMNEZIAWG_TYPE_EDITOR, AmneziaWGEditorPrivate))
 
 typedef struct {
 	GtkBuilder *builder;
 	GtkWidget *widget;
 	gboolean new_connection;
-} WireguardEditorPrivate;
+} AmneziaWGEditorPrivate;
 
 /*****************************************************************************/
 // functions for checking the contents of the input fields in the GUI
@@ -192,7 +192,7 @@ typedef gboolean (*CheckFunc)(const char *str);
 
 // helper function to reduce boilerplate code in 'check_validity()'
 static gboolean
-check (WireguardEditorPrivate *priv,
+check (AmneziaWGEditorPrivate *priv,
 		char *widget_name,
 		CheckFunc chk,
 		const char *key,
@@ -223,7 +223,7 @@ check (WireguardEditorPrivate *priv,
 
 // add or remove the "error" class from the specified input field
 static void
-set_error_class(WireguardEditorPrivate *priv, char *widget_name, gboolean error)
+set_error_class(AmneziaWGEditorPrivate *priv, char *widget_name, gboolean error)
 {
 	GtkWidget *widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
 	if(error){
@@ -236,7 +236,7 @@ set_error_class(WireguardEditorPrivate *priv, char *widget_name, gboolean error)
 
 // check if the specified input field contains any user input
 static gboolean
-is_filled_out(WireguardEditorPrivate *priv, char *widget_name)
+is_filled_out(AmneziaWGEditorPrivate *priv, char *widget_name)
 {
 	const char *str;
 	GtkWidget *widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
@@ -249,9 +249,9 @@ is_filled_out(WireguardEditorPrivate *priv, char *widget_name)
 // if there is an error in one or more of the input fields, mark the corresponding
 // input fields with the "error" class
 static gboolean
-check_validity (WireguardEditor *self, GError **error)
+check_validity (AmneziaWGEditor *self, GError **error)
 {
-	WireguardEditorPrivate *priv = WIREGUARD_EDITOR_GET_PRIVATE (self);
+	AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE (self);
 	gboolean success = TRUE;
 	gboolean ip4_ok = TRUE;
 	gboolean ip6_ok = TRUE;
@@ -335,15 +335,15 @@ check_validity (WireguardEditor *self, GError **error)
 static void
 stuff_changed_cb (GtkWidget *widget, gpointer user_data)
 {
-	g_signal_emit_by_name (WIREGUARD_EDITOR (user_data), "changed");
+	g_signal_emit_by_name (AMNEZIAWG_EDITOR (user_data), "changed");
 }
 
 // set up the GUI: fill the contents of the input fields with the stuff contained
 // in our NMConnection
 static gboolean
-init_editor_plugin (WireguardEditor *self, NMConnection *connection, GError **error)
+init_editor_plugin (AmneziaWGEditor *self, NMConnection *connection, GError **error)
 {
-	WireguardEditorPrivate *priv = WIREGUARD_EDITOR_GET_PRIVATE (self);
+	AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE (self);
 	NMSettingVpn *s_vpn;
 	GtkWidget *widget;
 	const char *value;
@@ -507,8 +507,8 @@ init_editor_plugin (WireguardEditor *self, NMConnection *connection, GError **er
 static GObject *
 get_widget (NMVpnEditor *iface)
 {
-	WireguardEditor *self = WIREGUARD_EDITOR (iface);
-	WireguardEditorPrivate *priv = WIREGUARD_EDITOR_GET_PRIVATE (self);
+	AmneziaWGEditor *self = AMNEZIAWG_EDITOR (iface);
+	AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE (self);
 
 	return G_OBJECT (priv->widget);
 }
@@ -520,8 +520,8 @@ update_connection (NMVpnEditor *iface,
                    NMConnection *connection,
                    GError **error)
 {
-	WireguardEditor *self = WIREGUARD_EDITOR (iface);
-	WireguardEditorPrivate *priv = WIREGUARD_EDITOR_GET_PRIVATE (self);
+	AmneziaWGEditor *self = AMNEZIAWG_EDITOR (iface);
+	AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE (self);
 	NMSettingVpn *s_vpn;
 	GtkWidget *widget;
 	const char *str;
@@ -533,7 +533,7 @@ update_connection (NMVpnEditor *iface,
 	}
 
 	s_vpn = NM_SETTING_VPN (nm_setting_vpn_new ());
-	g_object_set (s_vpn, NM_SETTING_VPN_SERVICE_TYPE, NM_VPN_SERVICE_TYPE_WIREGUARD, NULL);
+	g_object_set (s_vpn, NM_SETTING_VPN_SERVICE_TYPE, NM_VPN_SERVICE_TYPE_AMNEZIAWG, NULL);
 
 	// local ip4
 	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_ip4_entry"));
@@ -659,28 +659,28 @@ is_new_func (const char *key, const char *value, gpointer user_data)
 /*****************************************************************************/
 
 static void
-wireguard_editor_plugin_widget_init (WireguardEditor *plugin)
+amneziawg_editor_plugin_widget_init (AmneziaWGEditor *plugin)
 {
 }
 
 NMVpnEditor *
-wireguard_editor_new (NMConnection *connection, GError **error)
+amneziawg_editor_new (NMConnection *connection, GError **error)
 {
 	NMVpnEditor *object;
-	WireguardEditorPrivate *priv;
+	AmneziaWGEditorPrivate *priv;
 	gboolean new = TRUE;
 	NMSettingVpn *s_vpn;
 
 	if (error)
 		g_return_val_if_fail (*error == NULL, NULL);
 
-	object = g_object_new (WIREGUARD_TYPE_EDITOR, NULL);
+	object = g_object_new (AMNEZIAWG_TYPE_EDITOR, NULL);
 	if (!object) {
-		g_set_error_literal (error, NMV_EDITOR_PLUGIN_ERROR, 0, "Could not create wireguard object");
+		g_set_error_literal (error, NMV_EDITOR_PLUGIN_ERROR, 0, "Could not create amneziawg object");
 		return NULL;
 	}
 
-	priv = WIREGUARD_EDITOR_GET_PRIVATE (object);
+	priv = AMNEZIAWG_EDITOR_GET_PRIVATE (object);
 
 	priv->builder = gtk_builder_new ();
 
@@ -688,7 +688,7 @@ wireguard_editor_new (NMConnection *connection, GError **error)
 
 	// create the GUI from our .ui file
 	// note: the resource is described in gresource.xml and gets compiled to resources.c
-	if (!gtk_builder_add_from_resource (priv->builder, "/org/freedesktop/network-manager-wireguard/nm-wireguard-dialog.ui", error)) {
+	if (!gtk_builder_add_from_resource (priv->builder, "/org/freedesktop/network-manager-amneziawg/nm-amneziawg-dialog.ui", error)) {
 		g_object_unref (object);
 		g_return_val_if_reached (NULL);
 	}
@@ -707,7 +707,7 @@ wireguard_editor_new (NMConnection *connection, GError **error)
 		nm_setting_vpn_foreach_data_item (s_vpn, is_new_func, &new);
 	priv->new_connection = new;
 
-	if (!init_editor_plugin (WIREGUARD_EDITOR (object), connection, error)) {
+	if (!init_editor_plugin (AMNEZIAWG_EDITOR (object), connection, error)) {
 		g_object_unref (object);
 		return NULL;
 	}
@@ -718,18 +718,18 @@ wireguard_editor_new (NMConnection *connection, GError **error)
 static void
 dispose (GObject *object)
 {
-	WireguardEditor *plugin = WIREGUARD_EDITOR (object);
-	WireguardEditorPrivate *priv = WIREGUARD_EDITOR_GET_PRIVATE (plugin);
+	AmneziaWGEditor *plugin = AMNEZIAWG_EDITOR (object);
+	AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE (plugin);
 
 	g_clear_object (&priv->widget);
 
 	g_clear_object (&priv->builder);
 
-	G_OBJECT_CLASS (wireguard_editor_plugin_widget_parent_class)->dispose (object);
+	G_OBJECT_CLASS (amneziawg_editor_plugin_widget_parent_class)->dispose (object);
 }
 
 static void
-wireguard_editor_plugin_widget_interface_init (NMVpnEditorInterface *iface_class)
+amneziawg_editor_plugin_widget_interface_init (NMVpnEditorInterface *iface_class)
 {
 	/* interface implementation */
 	iface_class->get_widget = get_widget;
@@ -737,29 +737,23 @@ wireguard_editor_plugin_widget_interface_init (NMVpnEditorInterface *iface_class
 }
 
 static void
-wireguard_editor_plugin_widget_class_init (WireguardEditorClass *req_class)
+amneziawg_editor_plugin_widget_class_init (AmneziaWGEditorClass *req_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (req_class);
 
-	g_type_class_add_private (req_class, sizeof (WireguardEditorPrivate));
+	g_type_class_add_private (req_class, sizeof (AmneziaWGEditorPrivate));
 
 	object_class->dispose = dispose;
 }
 
 /*****************************************************************************/
 
-#ifndef NM_VPN_OLD
-
-#include "nm-wireguard-editor-plugin.h"
-
-G_MODULE_EXPORT NMVpnEditor *
-nm_vpn_editor_factory_wireguard (NMVpnEditorPlugin *editor_plugin,
+NMVpnEditor *
+nm_vpn_editor_factory_amneziawg (NMVpnEditorPlugin *editor_plugin,
                                NMConnection *connection,
                                GError **error)
 {
 	g_return_val_if_fail (!error || !*error, NULL);
 
-	return wireguard_editor_new (connection, error);
+	return amneziawg_editor_new (connection, error);
 }
-#endif
-

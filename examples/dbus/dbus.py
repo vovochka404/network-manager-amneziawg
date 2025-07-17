@@ -85,17 +85,17 @@ def hibernate():
         print(str(ex))
 
 
-def get_wg_plugin(bus_name="org.freedesktop.NetworkManager.wireguard",
+def get_wg_plugin(bus_name="org.freedesktop.NetworkManager.amneziawg",
                   object_path="/org/freedesktop/NetworkManager/VPN/Plugin"):
-    """Retrieve the WireGuard VPN plugin from the System Bus.
+    """Retrieve the AmneziaWG VPN plugin from the System Bus.
 
     Arguments:
     bus_name -- the bus name of the object to import
-    object_path -- the object path of hte object (= where to find the interface)
+    object_path -- the object path of the object (= where to find the interface)
     """
 
-    # since our wireguard plugin implements the VPN plugin and does not export
-    # an interface on its own, we need to use the VPN plugin interfce
+    # since our amneziawg plugin implements the VPN plugin and does not export
+    # an interface on its own, we need to use the VPN plugin interface
     bus = SystemBus()
     wg = bus.get(bus_name, object_path)
     return wg
@@ -111,7 +111,7 @@ def wg_connect(wg_plugin):
 
     # these are the settings that are expected by Connect(a{sa{sv}}) for a VPN plugin
     service_type = GLib.Variant("s", "service")
-    user_name = GLib.Variant("s", "wireguard")
+    user_name = GLib.Variant("s", "amneziawg")
     persistent = GLib.Variant("b", False)
     data = GLib.Variant("a{ss}", {"maxi": "cool"})
     secrets = GLib.Variant("a{ss}", {"name": "maxi moser"})

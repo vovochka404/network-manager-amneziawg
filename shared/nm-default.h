@@ -63,34 +63,6 @@
 
 /*****************************************************************************/
 
-#ifdef NM_VPN_OLD
-
-#define NM_VPN_LIBNM_COMPAT
-#include <nm-connection.h>
-#include <nm-setting-connection.h>
-#include <nm-setting-8021x.h>
-#include <nm-setting-ip4-config.h>
-#include <nm-setting-vpn.h>
-#include <nm-utils.h>
-#include <nm-vpn-plugin-ui-interface.h>
-
-#define nm_simple_connection_new nm_connection_new
-#define NM_SETTING_IP_CONFIG NM_SETTING_IP4_CONFIG
-#define NM_SETTING_IP_CONFIG_METHOD NM_SETTING_IP4_CONFIG_METHOD
-#define NM_SETTING_IP_CONFIG_NEVER_DEFAULT NM_SETTING_IP4_CONFIG_NEVER_DEFAULT
-#define NMSettingIPConfig NMSettingIP4Config
-
-#define NMV_EDITOR_PLUGIN_ERROR                     NM_SETTING_VPN_ERROR
-#define NMV_EDITOR_PLUGIN_ERROR_FAILED              NM_SETTING_VPN_ERROR_UNKNOWN
-#define NMV_EDITOR_PLUGIN_ERROR_INVALID_PROPERTY    NM_SETTING_VPN_ERROR_INVALID_PROPERTY
-#define NMV_EDITOR_PLUGIN_ERROR_MISSING_PROPERTY    NM_SETTING_VPN_ERROR_MISSING_PROPERTY
-#define NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN        NM_SETTING_VPN_ERROR_UNKNOWN
-#define NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_READABLE   NM_SETTING_VPN_ERROR_UNKNOWN
-#define NMV_EDITOR_PLUGIN_ERROR_FILE_INVALID        NM_SETTING_VPN_ERROR_UNKNOWN
-
-#define _nm_utils_is_valid_iface_name(n)            nm_utils_iface_valid_name(n)
-
-#else /* !NM_VPN_OLD */
 
 #include <NetworkManager.h>
 
@@ -103,7 +75,5 @@
 #define NMV_EDITOR_PLUGIN_ERROR_FILE_INVALID        NM_CONNECTION_ERROR_FAILED
 
 #define _nm_utils_is_valid_iface_name(n)            nm_utils_is_valid_iface_name(n, NULL)
-
-#endif /* NM_VPN_OLD */
 
 #endif /* __NM_DEFAULT_H__ */

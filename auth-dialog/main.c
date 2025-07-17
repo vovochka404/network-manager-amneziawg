@@ -487,8 +487,8 @@ main (int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (strcmp (vpn_service, NM_VPN_SERVICE_TYPE_WIREGUARD) != 0) {
-		fprintf (stderr, "This dialog only works with the '%s' service\n", NM_VPN_SERVICE_TYPE_WIREGUARD);
+	if (strcmp (vpn_service, NM_VPN_SERVICE_TYPE_AMNEZIAWG) != 0) {
+		fprintf (stderr, "This dialog only works with the '%s' service\n", NM_VPN_SERVICE_TYPE_AMNEZIAWG);
 		return EXIT_FAILURE;
 	}
 

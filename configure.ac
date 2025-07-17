@@ -1,9 +1,9 @@
 AC_PREREQ(2.52)
 
-AC_INIT(NetworkManager-wireguard,
+AC_INIT(NetworkManager-amneziawg,
         0.9.0,
         https://example.org/bugtracker?product=nm-wg,
-        NetworkManager-wireguard)
+        NetworkManager-amneziawg)
 AM_INIT_AUTOMAKE([1.9 tar-ustar no-dist-gzip dist-xz])
 AM_MAINTAINER_MODE
 AM_SILENT_RULES([yes])
@@ -63,28 +63,16 @@ AC_SUBST([ACLOCAL_AMFLAGS])
 dnl
 dnl GNOME support
 dnl
-AC_ARG_WITH(gnome, AS_HELP_STRING([--without-gnome], [Build NetworkManager-wireguard without GNOME support, e.g. vpn service only]), [], [with_gnome_specified=no])
-AC_ARG_WITH(libnm-glib, AS_HELP_STRING([--without-libnm-glib], [Build NetworkManager-wireguard without libnm-glib comatibility]), [], [with_libnm_glib_specified=no])
-if test "$with_libnm_glib_specified" != no -a "$with_libnm_glib" != no; then
-	if test "$with_gnome_specified" != no -a "$with_gnome" == no; then
-		AC_MSG_ERROR(Building --with-libnm-glib conflicts with --without-gnome)
-	fi
-fi
+AC_ARG_WITH(gnome, AS_HELP_STRING([--without-gnome], [Build NetworkManager-amneziawg without GNOME support, e.g. vpn service only]), [], [with_gnome_specified=no])
 if test "$with_gnome" != no; then
 	with_gnome=yes
 fi
-if test "$with_libnm_glib_specified" == no; then
-	with_libnm_glib="$with_gnome"
-fi
-if test "$with_libnm_glib" != no; then
-	with_libnm_glib=yes
-fi
+
 AM_CONDITIONAL(WITH_GNOME, test "$with_gnome" != no)
-AM_CONDITIONAL(WITH_LIBNM_GLIB, test "$with_libnm_glib" != no)
 
 AC_ARG_ENABLE(absolute-paths, AS_HELP_STRING([--enable-absolute-paths], [Use absolute paths to in .name files. Useful for development. (default is no)]))
 
-GETTEXT_PACKAGE=NetworkManager-wireguard
+GETTEXT_PACKAGE=NetworkManager-amneziawg
 AC_SUBST(GETTEXT_PACKAGE)
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE", [Gettext package])
 
@@ -100,20 +88,10 @@ if test x"$with_gnome" != xno; then
 
 	PKG_CHECK_MODULES(LIBNMA, libnma >= 1.7.0)
 	PKG_CHECK_MODULES(LIBSECRET, libsecret-1 >= 0.18)
-
-	if test x"$with_libnm_glib" != xno; then
-		PKG_CHECK_MODULES(LIBNM_GLIB,
-			NetworkManager >= 1.7.0
-			libnm-util >= 1.7.0
-			libnm-glib >= 1.7.0
-			libnm-glib-vpn >= 1.7.0);
-
-		LIBNM_GLIB_CFLAGS="$LIBNM_GLIB_CFLAGS -DNM_VERSION_MIN_REQUIRED=NM_VERSION_1_2"
-		LIBNM_GLIB_CFLAGS="$LIBNM_GLIB_CFLAGS -DNM_VERSION_MAX_ALLOWED=NM_VERSION_1_2"
-	fi
 fi
 
 PKG_CHECK_MODULES(LIBNM, libnm >= 1.7.0)
+echo "LIBNM_CFLAGS: $LIBNM_CFLAGS"
 LIBNM_CFLAGS="$LIBNM_CFLAGS -DNM_VERSION_MIN_REQUIRED=NM_VERSION_1_8"
 LIBNM_CFLAGS="$LIBNM_CFLAGS -DNM_VERSION_MAX_ALLOWED=NM_VERSION_1_8"
 
@@ -151,7 +129,6 @@ AC_OUTPUT
 echo ""
 echo "Build configuration: "
 echo "  --with-gnome=$with_gnome"
-echo "  --with-libnm-glib=$with_libnm_glib"
 echo "  --enable-absolute-paths=$enable_absolute_paths"
 echo "  --enable-more-warnings=$set_more_warnings"
 echo "  --enable-lto=$enable_lto"

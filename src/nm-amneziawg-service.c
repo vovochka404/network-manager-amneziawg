@@ -1,5 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
-/* nm-wireguard-service - wireguard integration with NetworkManager
+/* nm-amneziawg-service - amneziawg integration with NetworkManager
  *
  * Copyright (C) 2005 - 2008 Tim Niemueller <tim@niemueller.de>
  * Copyright (C) 2005 - 2010 Dan Williams <dcbw@redhat.com>
@@ -67,24 +67,24 @@ static struct {
 
 /*****************************************************************************/
 
-#define NM_TYPE_WIREGUARD_PLUGIN            (nm_wireguard_plugin_get_type ())
-#define NM_WIREGUARD_PLUGIN(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_WIREGUARD_PLUGIN, NMWireguardPlugin))
-#define NM_WIREGUARD_PLUGIN_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), NM_TYPE_WIREGUARD_PLUGIN, NMWireguardPluginClass))
-#define NM_IS_WIREGUARD_PLUGIN(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), NM_TYPE_WIREGUARD_PLUGIN))
-#define NM_IS_WIREGUARD_PLUGIN_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), NM_TYPE_WIREGUARD_PLUGIN))
-#define NM_WIREGUARD_PLUGIN_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), NM_TYPE_WIREGUARD_PLUGIN, NMWireguardPluginClass))
+#define NM_TYPE_AMNEZIAWG_PLUGIN            (nm_amneziawg_plugin_get_type ())
+#define NM_AMNEZIAWG_PLUGIN(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_AMNEZIAWG_PLUGIN, NMAmneziaWGPlugin))
+#define NM_AMNEZIAWG_PLUGIN_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), NM_TYPE_AMNEZIAWG_PLUGIN, NMAmneziaWGPluginClass))
+#define NM_IS_AMNEZIAWG_PLUGIN(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), NM_TYPE_AMNEZIAWG_PLUGIN))
+#define NM_IS_AMNEZIAWG_PLUGIN_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), NM_TYPE_AMNEZIAWG_PLUGIN))
+#define NM_AMNEZIAWG_PLUGIN_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), NM_TYPE_AMNEZIAWG_PLUGIN, NMAmneziaWGPluginClass))
 
 typedef struct {
 	NMVpnServicePlugin parent;
-} NMWireguardPlugin;
+} NMAmneziaWGPlugin;
 
 typedef struct {
 	NMVpnServicePluginClass parent;
-} NMWireguardPluginClass;
+} NMAmneziaWGPluginClass;
 
-GType nm_wireguard_plugin_get_type (void);
+GType nm_amneziawg_plugin_get_type (void);
 
-NMWireguardPlugin *nm_wireguard_plugin_new (const char *bus_name);
+NMAmneziaWGPlugin *nm_amneziawg_plugin_new (const char *bus_name);
 
 /*****************************************************************************/
 
@@ -102,18 +102,18 @@ typedef struct {
 	char *mgt_path;
 	char *connection_file;
 	GString *connection_config;
-} NMWireguardPluginPrivate;
+} NMAmneziaWGPluginPrivate;
 
-G_DEFINE_TYPE (NMWireguardPlugin, nm_wireguard_plugin, NM_TYPE_VPN_SERVICE_PLUGIN);
+G_DEFINE_TYPE (NMAmneziaWGPlugin, nm_amneziawg_plugin, NM_TYPE_VPN_SERVICE_PLUGIN);
 
-#define NM_WIREGUARD_PLUGIN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_WIREGUARD_PLUGIN, NMWireguardPluginPrivate))
+#define NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_AMNEZIAWG_PLUGIN, NMAmneziaWGPluginPrivate))
 
 /*****************************************************************************/
 
 #define _NMLOG(level, ...) \
 	G_STMT_START { \
 		if (gl.log_level >= (level)) { \
-			g_print ("nm-wireguard[%ld] %-7s " _NM_UTILS_MACRO_FIRST (__VA_ARGS__) "\n", \
+			g_print ("nm-amneziawg[%ld] %-7s " _NM_UTILS_MACRO_FIRST (__VA_ARGS__) "\n", \
 			         (long) getpid (), \
 			         nm_utils_syslog_to_str (level) \
 			         _NM_UTILS_MACRO_REST (__VA_ARGS__)); \
@@ -192,7 +192,7 @@ static gboolean
 wg_disconnect(NMVpnServicePlugin *plugin,
 				GError **error)
 {
-	NMWireguardPluginPrivate *priv = NM_WIREGUARD_PLUGIN_GET_PRIVATE(plugin);
+	NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
 	const char *wg_quick_path = wg_quick_find_exepath();
 	char *filename = priv->connection_file;
 	GString *cfg_content = priv->connection_config;
@@ -232,7 +232,7 @@ wg_disconnect(NMVpnServicePlugin *plugin,
 	priv->connection_config = NULL;
 	priv->connection_file = NULL;
 
-	_LOGI("Disconnected from Wireguard Connection!");
+	_LOGI("Disconnected from AmneziaWG Connection!");
 	return TRUE;
 }
 
@@ -526,7 +526,7 @@ connect_common(NMVpnServicePlugin *plugin,
 				GVariant *details,
 				GError **error)
 {
-	NMWireguardPluginPrivate *priv = NM_WIREGUARD_PLUGIN_GET_PRIVATE(plugin);
+	NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
 	const char *wg_quick_path = wg_quick_find_exepath();
 	const char *connection_name = nm_connection_get_id(connection);
 	const gchar *if_name = create_interface_name_from_string(connection_name);
@@ -535,7 +535,7 @@ connect_common(NMVpnServicePlugin *plugin,
 	char *filename = NULL;
 	GString *connection_config = NULL;
 
-	_LOGI("Setting up Wireguard Connection ('%s')", connection_name);
+	_LOGI("Setting up AmneziaWG Connection ('%s')", connection_name);
 	if(wg_quick_path == NULL){
 		_LOGW("Error: Could not find wg-quick!");
 		return FALSE;
@@ -586,7 +586,7 @@ wg_connect (NMVpnServicePlugin *plugin,
 				NMConnection *connection,
 				GError **error)
 {
-	_LOGI("Connecting to Wireguard: '%s'", nm_connection_get_id(connection));
+	_LOGI("Connecting to AmneziaWG: '%s'", nm_connection_get_id(connection));
 	return connect_common(plugin, connection, NULL, error);
 }
 
@@ -598,12 +598,12 @@ wg_connect_interactive(NMVpnServicePlugin *plugin,
 							GVariant *details,
 							GError **error)
 {
-	_LOGI("Connecting interactively to Wireguard: '%s'", nm_connection_get_id(connection));
+	_LOGI("Connecting interactively to AmneziaWG: '%s'", nm_connection_get_id(connection));
 	if(!connect_common(plugin, connection, details, error)){
 		return FALSE;
 	}
 
-	NM_WIREGUARD_PLUGIN_GET_PRIVATE(plugin)->interactive = TRUE;
+	NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin)->interactive = TRUE;
 	return TRUE;
 }
 
@@ -628,23 +628,23 @@ wg_new_secrets (NMVpnServicePlugin *plugin,
 }
 
 static void
-nm_wireguard_plugin_init (NMWireguardPlugin *plugin)
+nm_amneziawg_plugin_init (NMAmneziaWGPlugin *plugin)
 {
 }
 
 static void
 dispose (GObject *object)
 {
-	G_OBJECT_CLASS (nm_wireguard_plugin_parent_class)->dispose (object);
+	G_OBJECT_CLASS (nm_amneziawg_plugin_parent_class)->dispose (object);
 }
 
 static void
-nm_wireguard_plugin_class_init (NMWireguardPluginClass *plugin_class)
+nm_amneziawg_plugin_class_init (NMAmneziaWGPluginClass *plugin_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (plugin_class);
 	NMVpnServicePluginClass *parent_class = NM_VPN_SERVICE_PLUGIN_CLASS (plugin_class);
 
-	g_type_class_add_private (object_class, sizeof (NMWireguardPluginPrivate));
+	g_type_class_add_private (object_class, sizeof (NMAmneziaWGPluginPrivate));
 
 	object_class->dispose = dispose;
 
@@ -656,16 +656,16 @@ nm_wireguard_plugin_class_init (NMWireguardPluginClass *plugin_class)
 	parent_class->new_secrets         = wg_new_secrets;
 }
 
-NMWireguardPlugin *
-nm_wireguard_plugin_new (const char *bus_name)
+NMAmneziaWGPlugin *
+nm_amneziawg_plugin_new (const char *bus_name)
 {
-	NMWireguardPlugin *plugin;
+	NMAmneziaWGPlugin *plugin;
 	GError *error = NULL;
 
 	// NOTE: owning this name must be allowed in a DBUS configuration file:
-	// "/etc/dbus-1/system.d/nm-wireguard-service.conf"
+	// "/etc/dbus-1/system.d/nm-amneziawg-service.conf"
 	// (an example conf file was copied to the root of this project)
-	plugin =  (NMWireguardPlugin *) g_initable_new (NM_TYPE_WIREGUARD_PLUGIN, NULL, &error,
+	plugin =  (NMAmneziaWGPlugin *) g_initable_new (NM_TYPE_AMNEZIAWG_PLUGIN, NULL, &error,
 	                                              NM_VPN_SERVICE_PLUGIN_DBUS_SERVICE_NAME, bus_name,
 	                                              NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER, !gl.debug,
 	                                              NULL);
@@ -695,10 +695,10 @@ quit_mainloop (NMVpnServicePlugin *plugin, gpointer user_data)
 int
 main (int argc, char *argv[])
 {
-	NMWireguardPlugin *plugin;
+	NMAmneziaWGPlugin *plugin;
 	gboolean persist = FALSE;
 	GOptionContext *opt_ctx = NULL;
-	gchar *bus_name = NM_DBUS_SERVICE_WIREGUARD;
+	gchar *bus_name = NM_DBUS_SERVICE_AMNEZIAWG;
 	GError *error = NULL;
 	GMainLoop *loop;
 
@@ -713,14 +713,14 @@ main (int argc, char *argv[])
 	g_type_init ();
 #endif
 
-	if (getenv ("WIREGUARD_DEBUG")){
+	if (getenv ("AMNEZIAWG_DEBUG")){
 		gl.debug = TRUE;
 	}
 
 	/* locale will be set according to environment LC_* variables */
 	setlocale (LC_ALL, "");
 
-	bindtextdomain (GETTEXT_PACKAGE, NM_WIREGUARD_LOCALEDIR);
+	bindtextdomain (GETTEXT_PACKAGE, NM_AMNEZIAWG_LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 	textdomain (GETTEXT_PACKAGE);
 
@@ -732,7 +732,7 @@ main (int argc, char *argv[])
 	g_option_context_add_main_entries (opt_ctx, options, NULL);
 
 	g_option_context_set_summary (opt_ctx,
-	                              "nm-wireguard-service provides integrated Wireguard capability to NetworkManager.");
+	                              "nm-amneziawg-service provides integrated AmneziaWG capability to NetworkManager.");
 
 	if (!g_option_context_parse (opt_ctx, &argc, &argv, &error)) {
 		g_printerr ("Error parsing the command line options: %s\n", error->message);
@@ -767,7 +767,7 @@ main (int argc, char *argv[])
 	                                              10, 0, 1,
 	                                              gl.debug ? 0 : 1);
 
-	_LOGD ("nm-wireguard-service (version " DIST_VERSION ") starting...");
+	_LOGD ("nm-amneziawg-service (version " DIST_VERSION ") starting...");
 
 	// this is left over from openvpn, and doesn't seem to bother us...
 	if (   !g_file_test ("/sys/class/misc/tun", G_FILE_TEST_EXISTS)
@@ -777,7 +777,7 @@ main (int argc, char *argv[])
 
 	// here, the plugin is initialised
 	// (and the D-BUS thing is created: be careful that you're actually allowed to use the name!)
-	plugin = nm_wireguard_plugin_new (bus_name);
+	plugin = nm_amneziawg_plugin_new (bus_name);
 	if (!plugin){
 		exit (EXIT_FAILURE);
 	}

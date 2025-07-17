@@ -7,7 +7,7 @@ from gi.repository import Gtk
 import argparse
 import sys
 
-supported_services = ["org.freedesktop.NetworkManager.wireguard"]
+supported_services = ["org.freedesktop.NetworkManager.amneziawg"]
 
 # for parsing the data-keys
 DATA_KEY_TAG = "DATA_KEY="

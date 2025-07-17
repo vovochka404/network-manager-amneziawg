@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright Lubomir Rintel 2016 -->
 <component type="addon">
-  <id>network-manager-wireguard</id>
+  <id>network-manager-amneziawg</id>
   <project_license>GPL-2.0+</project_license>
   <metadata_license>CC0-1.0</metadata_license>
   <extends>nm-connection-editor.desktop</extends>
   <extends>gnome-control-center.desktop</extends>
-  <_name>WireGuard client</_name>
-  <_summary>Client for WireGuard virtual private networks</_summary>
+  <_name>AmneziaWG client</_name>
+  <_summary>Client for AmneziaWG virtual private networks</_summary>
 
   <keywords>
     <keyword>network</keyword>
@@ -15,12 +15,12 @@
     <keyword>NetworkManager</keyword>
     <keyword>connection</keyword>
     <keyword>VPN</keyword>
-    <keyword>WireGuard</keyword>
+    <keyword>AmneziaWG</keyword>
   </keywords>
 
   <description>
-    <_p>Support for configuring WireGuard virtual private network connections.</_p>
-    <_p>WireGuard is a modern VPN client built for simplicity.</_p>
+    <_p>Support for configuring AmneziaWG virtual private network connections.</_p>
+    <_p>AmneziaWG is a modern VPN client built for simplicity.</_p>
   </description>
 
   <screenshots>
@@ -33,9 +33,9 @@
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/max-moser/network-manager-wireguard</url>
-  <url type="bugtracker">https://github.com/max-moser/network-manager-wireguard/issues</url>
+  <url type="homepage">https://github.com/vovochka404/network-manager-amneziawg</url>
+  <url type="bugtracker">https://github.com/vovochka404/network-manager-amneziawg/issues</url>
   <update_contact>ubuntu@iam.tj</update_contact>
-  <translation type="gettext">NetworkManager-wireguard</translation>
+  <translation type="gettext">NetworkManager-amneziawg</translation>
   <_developer_name>Max Moser</_developer_name>
 </component>

@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
 /***************************************************************************
- * nm-wireguard-editor-plugin.c : GNOME UI dialogs for configuring wireguard VPN connections
+ * nm-amneziawg-editor-plugin.c : GNOME UI dialogs for configuring amneziawg VPN connections
  *
  * Copyright (C) 2005 Tim Niemueller <tim@niemueller.de>
  * Copyright (C) 2008 - 2010 Dan Williams, <dcbw@redhat.com>
@@ -25,7 +25,7 @@
 
 #include "nm-default.h"
 
-#include "nm-wireguard-editor-plugin.h"
+#include "nm-amneziawg-editor-plugin.h"
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -33,16 +33,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef NM_VPN_OLD
-#include "nm-wireguard-editor.h"
-#else
 #include "nm-utils/nm-vpn-plugin-utils.h"
-#endif
 
 #include "import-export.h"
 
-#define WIREGUARD_PLUGIN_NAME    "Wireguard"
-#define WIREGUARD_PLUGIN_DESC    "Used to set up client-side Wireguard connections."
+#define AMNEZIAWG_PLUGIN_NAME    "AmneziaWG"
+#define AMNEZIAWG_PLUGIN_DESC    "Used to set up client-side AmneziaWG connections."
 
 /*****************************************************************************/
 
@@ -53,11 +49,11 @@ enum {
 	PROP_SERVICE
 };
 
-static void wireguard_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class);
+static void amneziawg_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class);
 
-G_DEFINE_TYPE_EXTENDED (WireguardEditorPlugin, wireguard_editor_plugin, G_TYPE_OBJECT, 0,
+G_DEFINE_TYPE_EXTENDED (AmneziaWGEditorPlugin, amneziawg_editor_plugin, G_TYPE_OBJECT, 0,
                         G_IMPLEMENT_INTERFACE (NM_TYPE_VPN_EDITOR_PLUGIN,
-                                               wireguard_editor_plugin_interface_init))
+                                               amneziawg_editor_plugin_interface_init))
 
 /*****************************************************************************/
 
@@ -126,7 +122,6 @@ get_capabilities (NMVpnEditorPlugin *iface)
 	        //NM_VPN_EDITOR_PLUGIN_CAPABILITY_IPV6);
 }
 
-#ifndef NM_VPN_OLD
 static NMVpnEditor *
 _call_editor_factory (gpointer factory,
                       NMVpnEditorPlugin *editor_plugin,
@@ -138,27 +133,22 @@ _call_editor_factory (gpointer factory,
 	                                       connection,
 	                                       error);
 }
-#endif
 
 static NMVpnEditor *
 get_editor (NMVpnEditorPlugin *iface, NMConnection *connection, GError **error)
 {
-	g_return_val_if_fail (WIREGUARD_IS_EDITOR_PLUGIN (iface), NULL);
+	g_return_val_if_fail (AMNEZIAWG_IS_EDITOR_PLUGIN (iface), NULL);
 	g_return_val_if_fail (NM_IS_CONNECTION (connection), NULL);
 	g_return_val_if_fail (!error || !*error, NULL);
 
 	{
-#ifdef NM_VPN_OLD
-		return wireguard_editor_new (connection, error);
-#else
-		return nm_vpn_plugin_utils_load_editor (NM_PLUGIN_DIR"/libnm-vpn-plugin-wireguard-editor.so",
-		                                        "nm_vpn_editor_factory_wireguard",
+		return nm_vpn_plugin_utils_load_editor (NM_PLUGIN_DIR "/libnm-vpn-plugin-amneziawg-editor.so",
+		                                        "nm_vpn_editor_factory_amneziawg",
 		                                        _call_editor_factory,
 		                                        iface,
 		                                        connection,
 		                                        NULL,
 		                                        error);
-#endif
 	}
 }
 
@@ -170,13 +160,13 @@ get_property (GObject *object, guint prop_id,
 {
 	switch (prop_id) {
 	case PROP_NAME:
-		g_value_set_string (value, WIREGUARD_PLUGIN_NAME);
+		g_value_set_string (value, AMNEZIAWG_PLUGIN_NAME);
 		break;
 	case PROP_DESC:
-		g_value_set_string (value, _(WIREGUARD_PLUGIN_DESC));
+		g_value_set_string (value, _(AMNEZIAWG_PLUGIN_DESC));
 		break;
 	case PROP_SERVICE:
-		g_value_set_string (value, NM_VPN_SERVICE_TYPE_WIREGUARD);
+		g_value_set_string (value, NM_VPN_SERVICE_TYPE_AMNEZIAWG);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -185,12 +175,12 @@ get_property (GObject *object, guint prop_id,
 }
 
 static void
-wireguard_editor_plugin_init (WireguardEditorPlugin *plugin)
+amneziawg_editor_plugin_init (AmneziaWGEditorPlugin *plugin)
 {
 }
 
 static void
-wireguard_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class)
+amneziawg_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class)
 {
 	iface_class->get_editor = get_editor;
 	iface_class->get_capabilities = get_capabilities;
@@ -200,7 +190,7 @@ wireguard_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class)
 }
 
 static void
-wireguard_editor_plugin_class_init (WireguardEditorPluginClass *req_class)
+amneziawg_editor_plugin_class_init (AmneziaWGEditorPluginClass *req_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (req_class);
 
@@ -229,6 +219,6 @@ nm_vpn_editor_plugin_factory (GError **error)
 	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 
-	return g_object_new (WIREGUARD_TYPE_EDITOR_PLUGIN, NULL);
+	return g_object_new (AMNEZIAWG_TYPE_EDITOR_PLUGIN, NULL);
 }
 

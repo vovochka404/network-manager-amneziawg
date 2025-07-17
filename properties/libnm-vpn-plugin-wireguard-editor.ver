@@ -1,6 +1,0 @@
-{
-global:
-	nm_vpn_editor_factory_wireguard;
-local:
-	*;
-};
