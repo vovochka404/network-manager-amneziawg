@@ -1,7 +1,8 @@
-# Network-Manager VPN Plugin for WireGuard
+# Network-Manager VPN Plugin for AmneziaWG
 
-This project is a VPN Plugin for NetworkManager that handles client-side WireGuard connections.  
-It is based on the [OpenVPN Plugin](https://git.gnome.org/browse/network-manager-openvpn) and was started as a Bachelor's Thesis at [SBA Research](https://www.sba-research.org/).
+This project is a VPN Plugin for NetworkManager that handles client-side AmneziaWG connections.  
+It is based on old the [amneziawg Plugin](https://github.com/yanzilisan183/network-manager-amneziawg) and currently requires [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) to be installed on your system.  
+The plugin supports both IPv4 and IPv6 connections.
 
 
 
@@ -23,7 +24,9 @@ In order to get the plugin running, its sources have to be compiled and the resu
 ### Execution
 Once the installation is completed, the Plugin can be used per NetworkManager (usually graphically via the applet).
 
-When a new WireGuard connection is created and configured via the NetworkManager GUI (can also be called via `nm-connection-editor`), it is the Connection Editor Plugin which is executed.
+You can import your amneziawg configuration file into NetworkManager via `nmcli c import type amneziawg file my_vpn.conf` and then activate with `nmcli c up my_vpn`.
+
+When a new AmneziaWG connection is created and configured via the NetworkManager GUI (can also be called via `nm-connection-editor`), it is the Connection Editor Plugin which is executed.
 When the connection is activated, it is the service plugin that is being called.
 
 A very basic testing suite is provided in the form of the Python script `examples/dbus/dbus.py`, which looks up the Plugin via name on D-Bus and sends it a Connect() instruction. More or less the same thing (and more) can however be achieved by just using NetworkManager after installing the package, so there should not be a need for this - except for the fact that the script is easily modifiable.
@@ -48,8 +51,8 @@ Here is a brief overview over some of them:
 
 #### D-Bus Allowance
 
-D-Bus does not allow just anybody to own any D-Bus service name they like. Thus, it may be necessary to tell D-Bus that it is not forbidden to use the name `org.freedesktop.NetworkManager.wireguard`.  
-This can be achieved by placing an appropriate file (like `nm-wireguard-service.conf`) inside the directory `/etc/dbus-1/system.d` or similar.
+D-Bus does not allow just anybody to own any D-Bus service name they like. Thus, it may be necessary to tell D-Bus that it is not forbidden to use the name `org.freedesktop.NetworkManager.amneziawg`.  
+This can be achieved by placing an appropriate file (like `nm-amneziawg-service.conf`) inside the directory `/etc/dbus-1/system.d` or similar.
 
 The following is an example for the content of such a file:
 ~~~~xml
@@ -58,35 +61,37 @@ The following is an example for the content of such a file:
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 
 <busconfig>
-	<policy context="default">
-		<allow own_prefix="org.freedesktop.NetworkManager.wireguard"/>
-		<allow send_destination="org.freedesktop.NetworkManager.wireguard"/>
-		<deny own_prefix="org.freedesktop.NetworkManager.openvpn"/>
-		<deny send_destination="org.freedesktop.NetworkManager.openvpn"/>
-	</policy>
+    <policy user="root">
+        <allow own_prefix="org.freedesktop.NetworkManager.amneziawg"/>
+        <allow send_destination="org.freedesktop.NetworkManager.amneziawg"/>
+    </policy>
+    <policy context="default">
+        <deny own_prefix="org.freedesktop.NetworkManager.amneziawg"/>
+        <deny send_destination="org.freedesktop.NetworkManager.amneziawg"/>
+    </policy>
 </busconfig>
 ~~~~
 
 #### NetworkManager Plugin Configuration
 
-NetworkManager has to be told where the plugins live in order to be able to call them. This is done via `service.name` files, which usually reside in `/etc/NetworkManager/VPN` or `/usr/lib/NetworkManager/VPN` (e.g. `/usr/lib/NetworkManager/VPN/nm-wireguard-service.name`).
+NetworkManager has to be told where the plugins live in order to be able to call them. This is done via `service.name` files, which usually reside in `/etc/NetworkManager/VPN` or `/usr/lib/NetworkManager/VPN` (e.g. `/usr/lib/NetworkManager/VPN/nm-amneziawg-service.name`).
 
 An example for the content of these files would be:
 ~~~~ini
 # This file is obsoleted by a file in /usr/local/lib/NetworkManager/VPN
 
 [VPN Connection]
-name=wireguard
-service=org.freedesktop.NetworkManager.wireguard
-program=/usr/local/libexec/nm-wireguard-service
+name=amneziawg
+service=org.freedesktop.NetworkManager.amneziawg
+program=/usr/local/libexec/nm-amneziawg-service
 supports-multiple-connections=false
 
 [libnm]
-plugin=/usr/local/lib/NetworkManager/libnm-vpn-plugin-wireguard.so
+plugin=/usr/local/lib/NetworkManager/libnm-vpn-plugin-amneziawg.so
 
 [GNOME]
-auth-dialog=/usr/local/libexec/nm-wireguard-auth-dialog
-properties=/usr/local/lib/NetworkManager/libnm-wireguard-properties
+auth-dialog=/usr/local/libexec/nm-amneziawg-auth-dialog
+properties=/usr/local/lib/NetworkManager/libnm-amneziawg-properties
 supports-external-ui-mode=false
 supports-hints=false
 ~~~~
@@ -169,10 +174,19 @@ permissions=
 local-ip4=192.168.1.2/24
 local-listen-port=51820
 local-private-key=CBomGS37YC4ak+J2+NPuHtmgIk6gC7yQZKHnboJd3F8=
+connection-h1=644709644
+connection-h2=1603941500
+connection-h3=1896912457
+connection-h4=2099751415
+connection-jc=16
+connection-jmax=526
+connection-jmin=134
+connection-s1=34
+connection-s2=37
 peer-allowed-ips=192.168.1.254
 peer-endpoint=8.16.32.11:51820
 peer-public-key=GRk7K3A3JCaoVN1ZhFEtEvyU6+g+FdGaCtSObIYvXX0=
-service-type=org.freedesktop.NetworkManager.wireguard
+service-type=org.freedesktop.NetworkManager.amneziawg
 
 [vpn-secrets]
 password
