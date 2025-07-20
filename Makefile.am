@@ -22,7 +22,7 @@ SUBDIRS = \
 plugindir = $(libdir)/NetworkManager
 plugin_LTLIBRARIES =
 
-dbusservicedir = $(sysconfdir)/dbus-1/system.d
+dbusservicedir = $(datadir)/dbus-1/system.d
 dbusservice_DATA = nm-amneziawg-service.conf
 
 nmvpnservicedir = $(NM_VPN_SERVICE_DIR)
@@ -252,7 +252,7 @@ EXTRA_auth_dialog_nm_amneziawg_auth_dialog_DEPENDENCIES = \
 
 ###############################################################################
 
-appdatadir = $(datadir)/appdata
+appdatadir = $(datadir)/metainfo
 appdata_files = $(appdata_in_files:.xml.in=.xml)
 if WITH_GNOME
 appdata_DATA = $(appdata_files)
