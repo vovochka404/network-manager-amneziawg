@@ -99,6 +99,24 @@ check_interface_mtu_entry(const char *str)
 }
 
 static gboolean
+check_interface_junk_count_entry(const char *str)
+{
+	return g_ascii_string_to_unsigned(str, 10, NMV_WG_TAG_JUNC_COUNT_MIN, NMV_WG_TAG_JUNC_COUNT_MIN, NULL, NULL);
+}
+
+static gboolean
+check_interface_junk_size_entry(const char *str)
+{
+	return g_ascii_string_to_unsigned(str, 10, NMV_WG_TAG_JUNC_COUNT_MIN, NMV_WG_TAG_JUNC_COUNT_MIN, NULL, NULL);
+}
+
+static gboolean
+check_interface_magic_header_size(const char *str)
+{
+	return g_ascii_string_to_unsigned(str, 10, NMV_WG_TAG_HEADER_SIZE_MIN, NMV_WG_TAG_HEADER_SIZE_MAX, NULL, NULL);
+}
+
+static gboolean
 check_peer_persistent_keep_alive_entry(const char *str)
 {
 	if(is_empty(str)){
@@ -192,17 +210,15 @@ typedef gboolean (*CheckFunc)(const char *str);
 
 // helper function to reduce boilerplate code in 'check_validity()'
 static gboolean
-check (AmneziaWGEditorPrivate *priv,
-		char *widget_name,
+check (const AmneziaWGEditorPrivate *priv,
+		const char *widget_name,
 		CheckFunc chk,
 		const char *key,
 		gboolean set_error,
 		GError **error)
 {
-	const char *str;
-	GtkWidget *widget;
-	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
-	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	GtkWidget *widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
+	const char *str = gtk_entry_get_text (GTK_ENTRY (widget));
 	if (str && chk(str))
 		gtk_style_context_remove_class (gtk_widget_get_style_context (widget), "error");
 	else {
@@ -223,7 +239,7 @@ check (AmneziaWGEditorPrivate *priv,
 
 // add or remove the "error" class from the specified input field
 static void
-set_error_class(AmneziaWGEditorPrivate *priv, char *widget_name, gboolean error)
+set_error_class(const AmneziaWGEditorPrivate *priv, const char *widget_name, gboolean error)
 {
 	GtkWidget *widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
 	if(error){
@@ -236,11 +252,10 @@ set_error_class(AmneziaWGEditorPrivate *priv, char *widget_name, gboolean error)
 
 // check if the specified input field contains any user input
 static gboolean
-is_filled_out(AmneziaWGEditorPrivate *priv, char *widget_name)
+is_filled_out(const AmneziaWGEditorPrivate *priv, const char *widget_name)
 {
-	const char *str;
 	GtkWidget *widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, widget_name));
-	str = gtk_entry_get_text(GTK_ENTRY (widget));
+	const char *str = gtk_entry_get_text(GTK_ENTRY (widget));
 
 	return !is_empty(str);
 }
@@ -273,6 +288,33 @@ check_validity (AmneziaWGEditor *self, GError **error)
 		success = FALSE;
 	}
 	if(!check(priv, "interface_mtu_entry", check_interface_mtu_entry, NM_WG_KEY_MTU, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_jc_entry", check_interface_junk_count_entry, NM_WG_KEY_JC, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_jmin_entry", check_interface_junk_size_entry, NM_WG_KEY_JMIN, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_jmax_entry", check_interface_junk_size_entry, NM_WG_KEY_JMAX, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_s1_entry", check_interface_junk_size_entry, NM_WG_KEY_S1, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_s2_entry", check_interface_junk_size_entry, NM_WG_KEY_S2, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_h1_entry", check_interface_magic_header_size, NM_WG_KEY_H1, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_h2_entry", check_interface_magic_header_size, NM_WG_KEY_H2, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_h3_entry", check_interface_magic_header_size, NM_WG_KEY_H3, TRUE, error)){
+		success = FALSE;
+	}
+	if(!check(priv, "interface_h4_entry", check_interface_magic_header_size, NM_WG_KEY_H4, TRUE, error)){
 		success = FALSE;
 	}
 	if(!check(priv, "peer_public_key_entry", check_peer_public_key, NM_WG_KEY_PUBLIC_KEY, TRUE, error)){
@@ -405,6 +447,96 @@ init_editor_plugin (AmneziaWGEditor *self, NMConnection *connection, GError **er
 	g_return_val_if_fail (widget != NULL, FALSE);
 	if (s_vpn) {
 		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_LISTEN_PORT);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface JC
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jc_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_JC);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface JMin
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jmin_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_JMIN);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface JMax
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jmax_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_JMAX);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface S1
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_s1_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_S1);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface S2
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_s2_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_S2);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface H1
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h1_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_H1);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface H2
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h2_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_H2);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface H3
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h3_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_H3);
+		if (value)
+			gtk_entry_set_text (GTK_ENTRY (widget), value);
+	}
+	g_signal_connect (G_OBJECT (widget), "changed", G_CALLBACK (stuff_changed_cb), self);
+
+	// Interface H4
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h4_entry"));
+	g_return_val_if_fail (widget != NULL, FALSE);
+	if (s_vpn) {
+		value = nm_setting_vpn_get_data_item (s_vpn, NM_WG_KEY_H4);
 		if (value)
 			gtk_entry_set_text (GTK_ENTRY (widget), value);
 	}
@@ -575,6 +707,69 @@ update_connection (NMVpnEditor *iface,
 	str = gtk_entry_get_text (GTK_ENTRY (widget));
 	if (str && str[0]){
 		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_LISTEN_PORT, str);
+	}
+
+	// Jc
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jc_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_JC, str);
+	}
+
+	// JMin
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jmin_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_JMIN, str);
+	}
+
+	// JMax
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_jmax_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_JMAX, str);
+	}
+
+	// S1
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_s1_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_S1, str);
+	}
+
+	// S2
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_s2_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_S2, str);
+	}
+
+	// H1
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h1_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_H1, str);
+	}
+
+	// H2
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h2_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_H2, str);
+	}
+
+	// H3
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h3_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_H3, str);
+	}
+
+	// H4
+	widget = GTK_WIDGET (gtk_builder_get_object (priv->builder, "interface_h4_entry"));
+	str = gtk_entry_get_text (GTK_ENTRY (widget));
+	if (str && str[0]){
+		nm_setting_vpn_add_data_item (s_vpn, NM_WG_KEY_H4, str);
 	}
 
 	// pre up script
