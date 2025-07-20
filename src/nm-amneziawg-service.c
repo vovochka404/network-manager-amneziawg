@@ -156,7 +156,7 @@ wg_quick_find_exepath (void)
 // create a valid interface name from the specified string
 // this allocates memory which should be freed after usage
 //
-// wg-quick uses the following regular expression to check the interface name
+// awg-quick uses the following regular expression to check the interface name
 // for validity:
 // [a-zA-Z0-9_=+.-]{1,15}
 static gchar *
@@ -199,7 +199,7 @@ wg_disconnect(NMVpnServicePlugin *plugin,
 	int retcode = 1;
 
 	if(wg_quick_path == NULL){
-		_LOGW("Error: Could not find wg-quick!");
+		_LOGW("Error: Could not find awg-quick!");
 		return FALSE;
 	}
 
@@ -220,7 +220,7 @@ wg_disconnect(NMVpnServicePlugin *plugin,
 	command = g_strdup_printf("%s down '%s'", wg_quick_path, filename);
 
 	if(!g_spawn_command_line_sync(command, NULL, NULL, &retcode, error)){
-		_LOGW("An error occured while spawning wg-quick! (Error: %s)", (*error)->message);
+		_LOGW("An error occurred while spawning awg-quick! (Error: %s)", (*error)->message);
 	}
 
 	// delete the file and free temporary private data
@@ -603,8 +603,8 @@ set_config(NMVpnServicePlugin *plugin, NMConnection *connection)
 // the common part of both Connect() and ConnectInteractively():
 // create a configuration string from the NMVpnServicePlugin and NMConnection,
 // export this configuration to a temporary file (/tmp/CONNECTION-ID.conf)
-// and call wg-quick on this script
-// the temporary file gets deleted immediately after wg-quick has completed
+// and call awg-quick on this script
+// the temporary file gets deleted immediately after awg-quick has completed
 // 
 // in order to be able to disconnect properly, the configuration string
 // and filename are saved in the plugin's private data, such that the
@@ -626,7 +626,7 @@ connect_common(NMVpnServicePlugin *plugin,
 
 	_LOGI("Setting up AmneziaWG Connection ('%s')", connection_name);
 	if(wg_quick_path == NULL){
-		_LOGW("Error: Could not find wg-quick!");
+		_LOGW("Error: Could not find awg-quick!");
 		return FALSE;
 	}
 
@@ -654,7 +654,7 @@ connect_common(NMVpnServicePlugin *plugin,
 	command = g_strdup_printf("%s up '%s'", wg_quick_path, filename);
 
 	if(!g_spawn_command_line_sync(command, NULL, NULL, &retcode, error)){
-		_LOGW("An error occured while spawning wg-quick! (Error: %s)", (*error)->message);
+		_LOGW("An error occurred while spawning awg-quick! (Error: %s)", (*error)->message);
 		return FALSE;
 	}
 
