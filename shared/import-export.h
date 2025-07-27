@@ -24,15 +24,15 @@
 
 extern const char *_nmovpn_test_temp_path;
 
-gboolean _nmovpn_test_args_parse_line (const char *line,
-                                       gsize line_len,
-                                       const char ***out_p,
-                                       char **out_error);
+gboolean _nmovpn_test_args_parse_line(const char *line,
+                                      gsize line_len,
+                                      const char ***out_p,
+                                      char **out_error);
 
-NMConnection *do_import (const char *path, const char *contents, gsize contents_len, GError **error);
+NMConnection *do_import(const char *path, const char *contents, gsize contents_len, GError **error);
 
-gboolean do_export (const char *path, NMConnection *connection, GError **error);
+gboolean do_export(const char *path, NMConnection *connection, GError **error);
 
-GString *create_config_string (NMConnection *connection, GError **error);
+GString *create_config_string(NMConnection *connection, GError **error);
 
 #endif

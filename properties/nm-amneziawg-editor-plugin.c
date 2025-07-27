@@ -27,9 +27,9 @@
 
 #include "nm-amneziawg-editor-plugin.h"
 
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,188 +37,180 @@
 
 #include "import-export.h"
 
-#define AMNEZIAWG_PLUGIN_NAME    "AmneziaWG"
-#define AMNEZIAWG_PLUGIN_DESC    "Used to set up client-side AmneziaWG connections."
+#define AMNEZIAWG_PLUGIN_NAME "AmneziaWG"
+#define AMNEZIAWG_PLUGIN_DESC "Used to set up client-side AmneziaWG connections."
 
 /*****************************************************************************/
 
 enum {
-	PROP_0,
-	PROP_NAME,
-	PROP_DESC,
-	PROP_SERVICE
+    PROP_0,
+    PROP_NAME,
+    PROP_DESC,
+    PROP_SERVICE
 };
 
-static void amneziawg_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class);
+static void amneziawg_editor_plugin_interface_init(NMVpnEditorPluginInterface *iface_class);
 
-G_DEFINE_TYPE_EXTENDED (AmneziaWGEditorPlugin, amneziawg_editor_plugin, G_TYPE_OBJECT, 0,
-                        G_IMPLEMENT_INTERFACE (NM_TYPE_VPN_EDITOR_PLUGIN,
-                                               amneziawg_editor_plugin_interface_init))
+G_DEFINE_TYPE_EXTENDED(AmneziaWGEditorPlugin, amneziawg_editor_plugin, G_TYPE_OBJECT, 0, G_IMPLEMENT_INTERFACE(NM_TYPE_VPN_EDITOR_PLUGIN, amneziawg_editor_plugin_interface_init))
 
 /*****************************************************************************/
 
 static NMConnection *
-import (NMVpnEditorPlugin *iface, const char *path, GError **error)
+import(NMVpnEditorPlugin *iface, const char *path, GError **error)
 {
-	NMConnection *connection = NULL;
-	char *contents = NULL;
-	char *ext;
-	gsize contents_len;
+    NMConnection *connection = NULL;
+    char *contents = NULL;
+    char *ext;
+    gsize contents_len;
 
-	ext = strrchr (path, '.');
+    ext = strrchr(path, '.');
 
-	if (!ext || (   !g_str_has_suffix (ext, ".amneziawg")
-	             && !g_str_has_suffix (ext, ".awg")
-	             && !g_str_has_suffix (ext, ".cnf")
-	             && !g_str_has_suffix (ext, ".conf"))) {   /* Special extension for testcases */
-		g_set_error_literal (error,
-		                     NMV_EDITOR_PLUGIN_ERROR,
-		                     NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
-		                     "Unknown AmneziaWG file extension");
-		goto out;
-	}
+    if (!ext || (!g_str_has_suffix(ext, ".amneziawg") && !g_str_has_suffix(ext, ".awg") && !g_str_has_suffix(ext, ".cnf") && !g_str_has_suffix(ext, ".conf"))) { /* Special extension for testcases */
+        g_set_error_literal(error,
+                            NMV_EDITOR_PLUGIN_ERROR,
+                            NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
+                            "Unknown AmneziaWG file extension");
+        goto out;
+    }
 
-	if (!g_file_get_contents (path, &contents, &contents_len, error))
-		return NULL;
+    if (!g_file_get_contents(path, &contents, &contents_len, error))
+        return NULL;
 
-	connection = do_import (path, contents, contents_len, error);
+    connection = do_import(path, contents, contents_len, error);
 
 out:
-	g_free (contents);
-	return connection;
+    g_free(contents);
+    return connection;
 }
 
-static gboolean
-export (NMVpnEditorPlugin *iface,
-        const char *path,
-        NMConnection *connection,
-        GError **error)
+static gboolean export(NMVpnEditorPlugin *iface,
+                       const char *path,
+                       NMConnection *connection,
+                       GError **error)
 {
-	return do_export (path, connection, error);
+    return do_export(path, connection, error);
 }
 
 static char *
-get_suggested_filename (NMVpnEditorPlugin *iface, NMConnection *connection)
+get_suggested_filename(NMVpnEditorPlugin *iface, NMConnection *connection)
 {
-	NMSettingConnection *s_con;
-	const char *id;
+    NMSettingConnection *s_con;
+    const char *id;
 
-	g_return_val_if_fail (connection != NULL, NULL);
+    g_return_val_if_fail(connection != NULL, NULL);
 
-	s_con = nm_connection_get_setting_connection (connection);
-	g_return_val_if_fail (s_con != NULL, NULL);
+    s_con = nm_connection_get_setting_connection(connection);
+    g_return_val_if_fail(s_con != NULL, NULL);
 
-	id = nm_setting_connection_get_id (s_con);
-	g_return_val_if_fail (id != NULL, NULL);
+    id = nm_setting_connection_get_id(s_con);
+    g_return_val_if_fail(id != NULL, NULL);
 
-	return g_strdup_printf ("%s.conf", id);
+    return g_strdup_printf("%s.conf", id);
 }
 
 static guint32
-get_capabilities (NMVpnEditorPlugin *iface)
+get_capabilities(NMVpnEditorPlugin *iface)
 {
-	return (NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT |
-	        NM_VPN_EDITOR_PLUGIN_CAPABILITY_EXPORT);
-	        //NM_VPN_EDITOR_PLUGIN_CAPABILITY_IPV6);
+    return (NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT |
+            NM_VPN_EDITOR_PLUGIN_CAPABILITY_EXPORT);
+    // NM_VPN_EDITOR_PLUGIN_CAPABILITY_IPV6);
 }
 
 static NMVpnEditor *
-_call_editor_factory (gpointer factory,
-                      NMVpnEditorPlugin *editor_plugin,
-                      NMConnection *connection,
-                      gpointer user_data,
-                      GError **error)
+_call_editor_factory(gpointer factory,
+                     NMVpnEditorPlugin *editor_plugin,
+                     NMConnection *connection,
+                     gpointer user_data,
+                     GError **error)
 {
-	return ((NMVpnEditorFactory) factory) (editor_plugin,
-	                                       connection,
-	                                       error);
+    return ((NMVpnEditorFactory)factory)(editor_plugin,
+                                         connection,
+                                         error);
 }
 
 static NMVpnEditor *
-get_editor (NMVpnEditorPlugin *iface, NMConnection *connection, GError **error)
+get_editor(NMVpnEditorPlugin *iface, NMConnection *connection, GError **error)
 {
-	g_return_val_if_fail (AMNEZIAWG_IS_EDITOR_PLUGIN (iface), NULL);
-	g_return_val_if_fail (NM_IS_CONNECTION (connection), NULL);
-	g_return_val_if_fail (!error || !*error, NULL);
+    g_return_val_if_fail(AMNEZIAWG_IS_EDITOR_PLUGIN(iface), NULL);
+    g_return_val_if_fail(NM_IS_CONNECTION(connection), NULL);
+    g_return_val_if_fail(!error || !*error, NULL);
 
-	{
-		return nm_vpn_plugin_utils_load_editor (NM_PLUGIN_DIR "/libnm-vpn-plugin-amneziawg-editor.so",
-		                                        "nm_vpn_editor_factory_amneziawg",
-		                                        _call_editor_factory,
-		                                        iface,
-		                                        connection,
-		                                        NULL,
-		                                        error);
-	}
+    {
+        return nm_vpn_plugin_utils_load_editor(NM_PLUGIN_DIR "/libnm-vpn-plugin-amneziawg-editor.so",
+                                               "nm_vpn_editor_factory_amneziawg",
+                                               _call_editor_factory,
+                                               iface,
+                                               connection,
+                                               NULL,
+                                               error);
+    }
 }
 
 /*****************************************************************************/
 
 static void
-get_property (GObject *object, guint prop_id,
-              GValue *value, GParamSpec *pspec)
+get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-	switch (prop_id) {
-	case PROP_NAME:
-		g_value_set_string (value, AMNEZIAWG_PLUGIN_NAME);
-		break;
-	case PROP_DESC:
-		g_value_set_string (value, _(AMNEZIAWG_PLUGIN_DESC));
-		break;
-	case PROP_SERVICE:
-		g_value_set_string (value, NM_VPN_SERVICE_TYPE_AMNEZIAWG);
-		break;
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-		break;
-	}
+    switch (prop_id) {
+    case PROP_NAME:
+        g_value_set_string(value, AMNEZIAWG_PLUGIN_NAME);
+        break;
+    case PROP_DESC:
+        g_value_set_string(value, _(AMNEZIAWG_PLUGIN_DESC));
+        break;
+    case PROP_SERVICE:
+        g_value_set_string(value, NM_VPN_SERVICE_TYPE_AMNEZIAWG);
+        break;
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
 }
 
 static void
-amneziawg_editor_plugin_init (AmneziaWGEditorPlugin *plugin)
+amneziawg_editor_plugin_init(AmneziaWGEditorPlugin *plugin)
 {
 }
 
 static void
-amneziawg_editor_plugin_interface_init (NMVpnEditorPluginInterface *iface_class)
+amneziawg_editor_plugin_interface_init(NMVpnEditorPluginInterface *iface_class)
 {
-	iface_class->get_editor = get_editor;
-	iface_class->get_capabilities = get_capabilities;
-	iface_class->import_from_file = import;
-	iface_class->export_to_file = export;
-	iface_class->get_suggested_filename = get_suggested_filename;
+    iface_class->get_editor = get_editor;
+    iface_class->get_capabilities = get_capabilities;
+    iface_class->import_from_file = import;
+    iface_class->export_to_file = export;
+    iface_class->get_suggested_filename = get_suggested_filename;
 }
 
 static void
-amneziawg_editor_plugin_class_init (AmneziaWGEditorPluginClass *req_class)
+amneziawg_editor_plugin_class_init(AmneziaWGEditorPluginClass *req_class)
 {
-	GObjectClass *object_class = G_OBJECT_CLASS (req_class);
+    GObjectClass *object_class = G_OBJECT_CLASS(req_class);
 
-	object_class->get_property = get_property;
+    object_class->get_property = get_property;
 
-	g_object_class_override_property (object_class,
-	                                  PROP_NAME,
-	                                  NM_VPN_EDITOR_PLUGIN_NAME);
+    g_object_class_override_property(object_class,
+                                     PROP_NAME,
+                                     NM_VPN_EDITOR_PLUGIN_NAME);
 
-	g_object_class_override_property (object_class,
-	                                  PROP_DESC,
-	                                  NM_VPN_EDITOR_PLUGIN_DESCRIPTION);
+    g_object_class_override_property(object_class,
+                                     PROP_DESC,
+                                     NM_VPN_EDITOR_PLUGIN_DESCRIPTION);
 
-	g_object_class_override_property (object_class,
-	                                  PROP_SERVICE,
-	                                  NM_VPN_EDITOR_PLUGIN_SERVICE);
+    g_object_class_override_property(object_class,
+                                     PROP_SERVICE,
+                                     NM_VPN_EDITOR_PLUGIN_SERVICE);
 }
 
 /*****************************************************************************/
 
 G_MODULE_EXPORT NMVpnEditorPlugin *
-nm_vpn_editor_plugin_factory (GError **error)
+nm_vpn_editor_plugin_factory(GError **error)
 {
-	g_return_val_if_fail (!error || !*error, NULL);
+    g_return_val_if_fail(!error || !*error, NULL);
 
-	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 
-	return g_object_new (AMNEZIAWG_TYPE_EDITOR_PLUGIN, NULL);
+    return g_object_new(AMNEZIAWG_TYPE_EDITOR_PLUGIN, NULL);
 }
-
