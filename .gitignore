@@ -42,7 +42,7 @@ appdata/network-manager-amneziawg.metainfo.xml
 */tests/*.trs
 test-*.log
 
-build
+build/
 
 auth-dialog/nm-amneziawg-auth-dialog
 nm-amneziawg-service.name
@@ -52,5 +52,16 @@ src/nm-amneziawg-service-amneziawg-helper
 properties/tests/test-import-export
 properties/tests/test-import-export-glib
 properties/resources.[ch]
+properties/resources.c
+properties/resources.h
 /NetworkManager-amneziawg*.tar*
 /po/NetworkManager-amneziawg.pot
+
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+compile_commands.json
+*.cmake
+.cache/
