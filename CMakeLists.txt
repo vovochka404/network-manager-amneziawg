@@ -46,6 +46,7 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(WITH_GNOME "Build with GNOME support" ON)
+option(WITH_GTK4 "Build with GTK4 support (requires libnma-gtk4)" OFF)
 option(ENABLE_ABSOLUTE_PATHS "Use absolute paths in .name files" OFF)
 
 include(GNUInstallDirs)
@@ -87,12 +88,35 @@ pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBNM REQUIRED libnm)
 
 if(WITH_GNOME)
-    pkg_check_modules(GTK REQUIRED gtk+-3.0)
-    pkg_check_modules(LIBNMA REQUIRED libnma)
-    pkg_check_modules(LIBSECRET libsecret-1)
-    if(NOT LIBSECRET_FOUND)
-        message(WARNING "libsecret-1 not found, disabling GNOME support")
+    set(HAVE_GTK3 FALSE)
+    set(HAVE_GTK4 FALSE)
+
+    pkg_check_modules(GTK3 gtk+-3.0)
+    if(GTK3_FOUND)
+        pkg_check_modules(LIBNMA3 libnma)
+        if(LIBNMA3_FOUND)
+            set(HAVE_GTK3 TRUE)
+        endif()
+    endif()
+
+    pkg_check_modules(GTK4 gtk4)
+    if(GTK4_FOUND)
+        pkg_check_modules(LIBNMA4 libnma-gtk4)
+        if(LIBNMA4_FOUND)
+            set(HAVE_GTK4 TRUE)
+        endif()
+    endif()
+
+    if(NOT HAVE_GTK3 AND NOT HAVE_GTK4)
+        message(WARNING "Neither GTK3 nor GTK4 found, disabling GNOME support")
         set(WITH_GNOME OFF CACHE BOOL "Build with GNOME support" FORCE)
+    endif()
+
+    if(HAVE_GTK3)
+        message(STATUS "Building with GTK3 support")
+    endif()
+    if(HAVE_GTK4)
+        message(STATUS "Building with GTK4 support")
     endif()
 endif()
 
@@ -105,10 +129,10 @@ execute_process(
 if(NM_VPN_SERVICE_DIR_RAW)
     set(NM_VPN_SERVICE_DIR "${NM_VPN_SERVICE_DIR_RAW}" CACHE PATH "NetworkManager VPN service directory")
 else()
-    set(NM_VPN_SERVICE_DIR "${CMAKE_INSTALL_LIBDIR}/NetworkManager/VPN" CACHE PATH "NetworkManager VPN service directory")
+    set(NM_VPN_SERVICE_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/NetworkManager/VPN" CACHE PATH "NetworkManager VPN service directory")
 endif()
 
-set(NM_PLUGIN_DIR "${CMAKE_INSTALL_LIBDIR}/NetworkManager" CACHE PATH "NetworkManager plugin directory")
+set(NM_PLUGIN_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/NetworkManager" CACHE PATH "NetworkManager plugin directory")
 
 set(NM_PLUGIN_DIR_NAME_FILE "")
 if(ENABLE_ABSOLUTE_PATHS)
@@ -117,7 +141,7 @@ endif()
 
 configure_file(
     ${CMAKE_SOURCE_DIR}/nm-amneziawg-service.name.in
-    ${CMAKE_SOURCE_DIR}/nm-amneziawg-service.name
+    ${CMAKE_BINARY_DIR}/nm-amneziawg-service.name
 )
 
 include(GenerateExportHeader)
@@ -131,9 +155,11 @@ set(CMAKE_INCLUDE_CURRENT_DIR INCLUDE)
 
 set(SHARED_SOURCES
     shared/nm-utils/nm-shared-utils.c
-    shared/utils.c
     shared/amneziawg.c
 )
+
+# Linker flags to catch undefined symbols at link time
+set(COMMON_LDFLAGS "-Wl,--no-undefined" "-Wl,--no-allow-shlib-undefined")
 
 set(COMMON_CFLAGS
     ${GLIB_CFLAGS}
@@ -155,10 +181,6 @@ set(COMMON_DEFINITIONS
     -DDATADIR="${CMAKE_INSTALL_DATADIR}"
     -DNM_AMNEZIAWG_LOCALEDIR="${CMAKE_INSTALL_LOCALEDIR}"
 )
-
-if(WITH_GNOME)
-    list(APPEND COMMON_CFLAGS ${GTK_CFLAGS} -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_3_16)
-endif()
 
 set(PROPERTIES_RESOURCES_DIR ${CMAKE_SOURCE_DIR}/properties)
 set(PROPERTIES_RESOURCES_XML ${CMAKE_SOURCE_DIR}/properties/gresource.xml)
@@ -202,6 +224,7 @@ add_executable(nm-amneziawg-service src/nm-amneziawg-service.c
     shared/awg/awg-config.c
     shared/awg/awg-device.c
     shared/awg/awg-nm-connection.c
+    shared/awg/awg-validate.c
     shared/awg/awg-connection-manager.c
     shared/awg/awg-connection-manager-dummy.c
     shared/awg/awg-connection-manager-external.c
@@ -216,6 +239,7 @@ add_executable(nm-amneziawg-test tests/test-main.c
     shared/awg/awg-config.c
     shared/awg/awg-device.c
     shared/awg/awg-nm-connection.c
+    shared/awg/awg-validate.c
     shared/awg/awg-connection-manager.c
     shared/awg/awg-connection-manager-dummy.c
     shared/awg/awg-connection-manager-external.c
@@ -234,12 +258,27 @@ endforeach()
 
 add_test(NAME amneziawg-test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND nm-amneziawg-test)
 
+add_executable(nm-amneziawg-netlink-test tests/test-netlink.c
+    shared/awg/awg-config.c
+    shared/awg/awg-device.c
+    shared/awg/awg-nm-connection.c
+    shared/awg/awg-connection-manager.c
+    shared/awg/awg-connection-manager-dummy.c
+    shared/awg/awg-connection-manager-external.c
+    shared/awg/awg-connection-manager-netlink.c
+    shared/amneziawg.c
+)
+target_include_directories(nm-amneziawg-netlink-test PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR})
+target_link_libraries(nm-amneziawg-netlink-test PRIVATE ${GLIB_LIBRARIES} ${LIBNM_LIBRARIES})
+target_compile_options(nm-amneziawg-netlink-test PRIVATE ${COMMON_CFLAGS} ${COMMON_DEFINITIONS})
+
 set(VPN_PLUGIN_SOURCES
     properties/nm-amneziawg-editor-plugin.c
     properties/nm-amneziawg-editor-plugin.h
     shared/awg/awg-device.c
     shared/awg/awg-config.c
     shared/awg/awg-nm-connection.c
+    shared/awg/awg-validate.c
 )
 
 set(EDITOR_SOURCES
@@ -282,57 +321,55 @@ target_sources(nm-vpn-plugin-amneziawg PRIVATE
     $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-core>
     $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-utils>
 )
-target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${COMMON_LDFLAGS} ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
 set_target_properties(nm-vpn-plugin-amneziawg PROPERTIES
     OUTPUT_NAME "nm-vpn-plugin-amneziawg"
 )
 
 if(WITH_GNOME)
-    add_library(nm-vpn-plugin-amneziawg-editor SHARED ${EDITOR_SOURCES})
-    target_include_directories(nm-vpn-plugin-amneziawg-editor PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR})
-    target_link_libraries(nm-vpn-plugin-amneziawg-editor PRIVATE
-        nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA_LIBRARIES}
-    )
-    target_compile_options(nm-vpn-plugin-amneziawg-editor PRIVATE
-        ${COMMON_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
-        -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
-    )
-    set_target_properties(nm-vpn-plugin-amneziawg-editor PROPERTIES
-        OUTPUT_NAME "nm-vpn-plugin-amneziawg-editor"
-    )
+    if(HAVE_GTK3)
+        add_library(nm-vpn-plugin-amneziawg-editor SHARED ${EDITOR_SOURCES})
+        target_include_directories(nm-vpn-plugin-amneziawg-editor PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK3_INCLUDE_DIRS} ${LIBNMA3_INCLUDE_DIRS})
+        target_link_libraries(nm-vpn-plugin-amneziawg-editor PRIVATE
+            ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK3_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA3_LIBRARIES}
+        )
+        target_compile_options(nm-vpn-plugin-amneziawg-editor PRIVATE
+            ${COMMON_CFLAGS} ${GTK3_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
+            -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
+            -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_3_16
+        )
+        set_target_properties(nm-vpn-plugin-amneziawg-editor PROPERTIES
+            OUTPUT_NAME "nm-vpn-plugin-amneziawg-editor"
+        )
+    endif()
 
-    add_library(nm-amneziawg-properties-core OBJECT
-        ${VPN_PLUGIN_SOURCES} ${EDITOR_SOURCES}
-    )
-    target_include_directories(nm-amneziawg-properties-core PUBLIC ${CMAKE_SOURCE_DIR}/shared)
-    target_include_directories(nm-amneziawg-properties-core PRIVATE ${CMAKE_BINARY_DIR})
-    target_sources(nm-amneziawg-properties-core PRIVATE properties/resources.h properties/resources.c)
-    target_compile_options(nm-amneziawg-properties-core PRIVATE
-        ${COMMON_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
-        -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB
-        -DNM_PLUGIN_DIR=\"${NM_PLUGIN_DIR}\"
-    )
-    target_link_libraries(nm-amneziawg-properties-core PRIVATE ${GLIB_LIBRARIES} ${GTK_LIBRARIES} ${LIBNM_LIBRARIES})
-    set_target_properties(nm-amneziawg-properties-core PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-    add_library(nm-amneziawg-properties SHARED)
-    target_sources(nm-amneziawg-properties PRIVATE
-        $<TARGET_OBJECTS:nm-amneziawg-properties-core>
-        $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-utils>
-    )
-    target_link_libraries(nm-amneziawg-properties PRIVATE ${GLIB_LIBRARIES} ${GTK_LIBRARIES} ${LIBNM_LIBRARIES})
-    set_target_properties(nm-amneziawg-properties PROPERTIES
-        OUTPUT_NAME "nm-amneziawg-properties"
-    )
+    if(HAVE_GTK4)
+        add_library(nm-vpn-plugin-amneziawg-editor-gtk4 SHARED ${EDITOR_SOURCES})
+        target_include_directories(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK4_INCLUDE_DIRS} ${LIBNMA4_INCLUDE_DIRS})
+        target_link_libraries(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
+            ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK4_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA4_LIBRARIES}
+        )
+        target_compile_options(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
+            ${COMMON_CFLAGS} ${GTK4_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
+            -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
+            -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_6
+        )
+        set_target_properties(nm-vpn-plugin-amneziawg-editor-gtk4 PROPERTIES
+            OUTPUT_NAME "nm-gtk4-vpn-plugin-amneziawg-editor"
+        )
+    endif()
 endif()
 
 install(TARGETS nm-amneziawg-service RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 install(TARGETS nm-vpn-plugin-amneziawg LIBRARY DESTINATION ${NM_PLUGIN_DIR})
 
 if(WITH_GNOME)
-    install(TARGETS nm-vpn-plugin-amneziawg-editor LIBRARY DESTINATION ${NM_PLUGIN_DIR})
-    install(TARGETS nm-amneziawg-properties LIBRARY DESTINATION ${NM_PLUGIN_DIR}/properties)
-    install(FILES properties/nm-amneziawg-dialog.ui DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-vpn-properties/amneziawg)
+    if(HAVE_GTK3)
+        install(TARGETS nm-vpn-plugin-amneziawg-editor LIBRARY DESTINATION ${NM_PLUGIN_DIR})
+    endif()
+    if(HAVE_GTK4)
+        install(TARGETS nm-vpn-plugin-amneziawg-editor-gtk4 LIBRARY DESTINATION ${NM_PLUGIN_DIR})
+    endif()
 endif()
 
 install(FILES nm-amneziawg-service.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system.d)
@@ -415,6 +452,7 @@ endif()
 message("")
 message("Build configuration:")
 message("  WITH_GNOME: ${WITH_GNOME}")
+message("  WITH_GTK4: ${WITH_GTK4}")
 message("  ENABLE_ABSOLUTE_PATHS: ${ENABLE_ABSOLUTE_PATHS}")
 message("  ENABLE_NLS: ${ENABLE_NLS}")
 message("  PROJECT_VERSION: ${PROJECT_VERSION}")
