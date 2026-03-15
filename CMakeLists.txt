@@ -433,15 +433,24 @@ if(ENABLE_NLS)
     set(POT_FILE ${CMAKE_BINARY_DIR}/${GETTEXT_PACKAGE}.pot)
     set(POTFILES_IN ${PO_DIRECTORY}/POTFILES.in)
 
+    # Extract strings from C source files and Glade UI files
+    set(ALL_SOURCE_FILES
+        ${CMAKE_SOURCE_DIR}/properties/nm-amneziawg-editor-plugin.c
+        ${CMAKE_SOURCE_DIR}/properties/nm-amneziawg-editor.c
+        ${CMAKE_SOURCE_DIR}/src/nm-amneziawg-service.c
+        ${CMAKE_SOURCE_DIR}/shared/awg/awg-validate.c
+        ${CMAKE_SOURCE_DIR}/shared/nm-utils/nm-shared-utils.c
+        ${CMAKE_SOURCE_DIR}/shared/nm-utils/nm-vpn-plugin-utils.c
+        ${CMAKE_SOURCE_DIR}/properties/nm-amneziawg-dialog.ui
+    )
+
     find_program(GETTEXT_XGETTEXT xgettext)
     if(GETTEXT_XGETTEXT)
-        add_custom_command(
-            OUTPUT ${POT_FILE}
-            COMMAND grep -v '^\\[' ${POTFILES_IN} \| xgettext --directory=${CMAKE_SOURCE_DIR} --files-from=/dev/stdin -o ${POT_FILE}
-            DEPENDS ${POTFILES_IN}
+        add_custom_target(pot ALL
+            COMMAND ${GETTEXT_XGETTEXT} -k_ --add-comments -o ${POT_FILE} ${ALL_SOURCE_FILES}
+            DEPENDS ${ALL_SOURCE_FILES}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
-        add_custom_target(pot ALL DEPENDS ${POT_FILE})
     endif()
 
     foreach(PO_IN ${PO_FILES})
