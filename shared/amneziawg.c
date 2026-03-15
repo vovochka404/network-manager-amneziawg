@@ -63,7 +63,8 @@ enum wgdevice_attribute {
 enum wgpeer_flag {
     WGPEER_F_REMOVE_ME = 1U << 0,
     WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
-    WGPEER_F_HAS_ADVANCED_SECURITY = 1U << 3
+    WGPEER_F_HAS_ADVANCED_SECURITY = 1U << 3,
+    WGPEER_F_HAS_AWG = 1U << 5
 };
 enum wgpeer_attribute {
     WGPEER_A_UNSPEC,
@@ -78,6 +79,7 @@ enum wgpeer_attribute {
     WGPEER_A_ALLOWEDIPS,
     WGPEER_A_PROTOCOL_VERSION,
     WGPEER_A_ADVANCED_SECURITY,
+    WGPEER_A_AWG,
     __WGPEER_A_LAST
 };
 
@@ -1144,6 +1146,24 @@ again:
             mnl_attr_put_u16(nlh, WGDEVICE_A_LISTEN_PORT, dev->listen_port);
         if (dev->flags & WGDEVICE_HAS_FWMARK)
             mnl_attr_put_u32(nlh, WGDEVICE_A_FWMARK, dev->fwmark);
+        if (dev->flags & WGDEVICE_HAS_JC)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_JC, dev->junk_packet_count);
+        if (dev->flags & WGDEVICE_HAS_JMIN)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_JMIN, dev->junk_packet_min_size);
+        if (dev->flags & WGDEVICE_HAS_JMAX)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_JMAX, dev->junk_packet_max_size);
+        if (dev->flags & WGDEVICE_HAS_S1)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_S1, dev->init_packet_junk_size);
+        if (dev->flags & WGDEVICE_HAS_S2)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_S2, dev->response_packet_junk_size);
+        if (dev->flags & WGDEVICE_HAS_H1)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_H1, dev->init_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H2)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_H2, dev->response_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H3)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_H3, dev->underload_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H4)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_H4, dev->transport_packet_magic_header);
         if (dev->flags & WGDEVICE_REPLACE_PEERS)
             flags |= WGDEVICE_F_REPLACE_PEERS;
         if (flags)
@@ -1181,6 +1201,15 @@ again:
                 if (!mnl_attr_put_u16_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval))
                     goto toobig_peers;
             }
+        }
+        if (peer->flags & WGPEER_HAS_ADVANCED_SECURITY) {
+            if (peer->awg) {
+                struct nlattr *awg_nest = mnl_attr_nest_start_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_AWG);
+                if (awg_nest) {
+                    mnl_attr_nest_end(nlh, awg_nest);
+                }
+            }
+            flags |= WGPEER_F_HAS_AWG;
         }
         if (flags) {
             if (!mnl_attr_put_u32_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_FLAGS, flags))
@@ -1557,6 +1586,7 @@ wg_free_device(wg_device *dev)
             free(allowedip);
         free(peer);
     }
+
     free(dev);
 }
 
