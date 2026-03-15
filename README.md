@@ -90,7 +90,6 @@ supports-multiple-connections=false
 plugin=/usr/local/lib/NetworkManager/libnm-vpn-plugin-amneziawg.so
 
 [GNOME]
-auth-dialog=/usr/local/libexec/nm-amneziawg-auth-dialog
 properties=/usr/local/lib/NetworkManager/libnm-amneziawg-properties
 supports-external-ui-mode=false
 supports-hints=false
@@ -107,43 +106,6 @@ The service is responsible for setting up a VPN connection with the supplied par
 If the binary service is not running at the time when NM wants to set up the connection, it will try to start the binary ad hoc.
 
 In principle, this piece of software can be written in any language, but in order to make the implementation sane, there should at least exist convenient D-Bus bindings for the language. Further, there are parts of the code already implemented in C, which might make it more convenient to just stick to that.
-
-
-### Auth-Dialog
-
-The auth-dialog is responsible for figuring out missing bits of required sensitive information (such as passwords).
-
-It reads the required secrets (and bits of data) for the VPN connection from STDIN in a key/value pair format (see below), until the string "DONE" occurs.  
-If there are still secrets (i.e. passwords) that are required but not supplied (which passwords are required can be determined by looking at the supplied `hints` flags), the auth-dialog will check if the keyring contains those secrets.  
-If there are still secrets missing (and user interaction is allowed per flag), a GTK dialog will be built up in order to prompt the user for passwords.
-
-After all is said and done, the binary writes the found secrets to STDOUT (in a line-based format, as seen below) and waits for "QUIT" to be read from STDIN before exiting.
-
-The behaviour of the binary can be modified by passing various options:
-* `-u UUID`: The UUID of the VPN connection, used for looking up secrets from the keyring
-* `-n NAME`: The name of the VPN connection, shown on the popup dialog
-* `-s SERVICE`: Specifies the name of the VPN service, e.g. `org.freedesktop.NetworkManager.openvpn` (used to check for compatibility)
-* `-i`: Allow interaction with the user (i.e. allow a GUI dialog to be created)
-* `--external-ui-mode`: Give a textual description of the dialog instead of creating a GTK dialog
-* `-r`: Force the creation of a dialog, even if all passwords were already found
-* `-t HINT`: Give hints about what passwords are required 
-
-Example input:
-~~~~
-DATA_KEY=key
-DATA_VAL=value
-DATA_KEY=another-key
-DATA_VAL=another-value
-SECRET_KEY=password
-SECRET_VAL=verysecurepassword
-DONE
-~~~~
-
-Example output:
-~~~~
-password
-verysecurepassword
-~~~~
 
 
 ### Connection Editor Plugin

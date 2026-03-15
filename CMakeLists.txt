@@ -45,9 +45,23 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(WITH_GNOME "Build with GNOME support" ON)
+set(_with_gtk3_user_specified OFF)
+if(DEFINED WITH_GTK3)
+    set(_with_gtk3_user_specified ON)
+endif()
+
+set(_with_gtk4_user_specified OFF)
+if(DEFINED WITH_GTK4)
+    set(_with_gtk4_user_specified ON)
+endif()
+
+set(_with_any_gtk_specified OFF)
+if (_with_gtk3_user_specified OR _with_gtk4_user_specified)
+    set(_with_any_gtk_specified ON)
+endif()
+
+option(WITH_GTK3 "Build with GTK3 support (requires libnma)" OFF)
 option(WITH_GTK4 "Build with GTK4 support (requires libnma-gtk4)" OFF)
-option(ENABLE_ABSOLUTE_PATHS "Use absolute paths in .name files" OFF)
 
 include(GNUInstallDirs)
 
@@ -87,37 +101,60 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBNM REQUIRED libnm)
 
-if(WITH_GNOME)
-    set(HAVE_GTK3 FALSE)
-    set(HAVE_GTK4 FALSE)
+set(HAVE_GTK3 OFF)
+set(HAVE_GTK4 OFF)
 
-    pkg_check_modules(GTK3 gtk+-3.0)
-    if(GTK3_FOUND)
-        pkg_check_modules(LIBNMA3 libnma)
-        if(LIBNMA3_FOUND)
-            set(HAVE_GTK3 TRUE)
+pkg_check_modules(GTK3 gtk+-3.0)
+if(GTK3_FOUND)
+    pkg_check_modules(LIBNMA3 libnma)
+    if(LIBNMA3_FOUND)
+        set(HAVE_GTK3 ON)
+    endif()
+endif()
+
+pkg_check_modules(GTK4 gtk4)
+if(GTK4_FOUND)
+    pkg_check_modules(LIBNMA4 libnma-gtk4)
+    if(LIBNMA4_FOUND)
+        set(HAVE_GTK4 ON)
+    endif()
+endif()
+
+if(_with_gtk3_user_specified)
+    if(WITH_GTK3 AND NOT HAVE_GTK3)
+        message(FATAL_ERROR "WITH_GTK3 is enabled but GTK3/libnma not found")
+    endif()
+else()
+    if(NOT _with_any_gtk_specified)
+        if(HAVE_GTK3)
+            set(WITH_GTK3 ON)
         endif()
     endif()
+endif()
 
-    pkg_check_modules(GTK4 gtk4)
-    if(GTK4_FOUND)
-        pkg_check_modules(LIBNMA4 libnma-gtk4)
-        if(LIBNMA4_FOUND)
-            set(HAVE_GTK4 TRUE)
+if(_with_gtk4_user_specified)
+    if(WITH_GTK4 AND NOT HAVE_GTK4)
+        message(FATAL_ERROR "WITH_GTK4 is enabled but GTK4/libnma-gtk4 not found")
+    endif()
+else()
+    if(NOT _with_any_gtk_specified)
+        if(HAVE_GTK4)
+            set(WITH_GTK4 ON)
         endif()
     endif()
+endif()
 
-    if(NOT HAVE_GTK3 AND NOT HAVE_GTK4)
-        message(WARNING "Neither GTK3 nor GTK4 found, disabling GNOME support")
-        set(WITH_GNOME OFF CACHE BOOL "Build with GNOME support" FORCE)
-    endif()
+set(WITH_GTK3 ${WITH_GTK3} CACHE BOOL "Build with GTK3 support")
+set(WITH_GTK4 ${WITH_GTK4} CACHE BOOL "Build with GTK4 support")
 
-    if(HAVE_GTK3)
-        message(STATUS "Building with GTK3 support")
-    endif()
-    if(HAVE_GTK4)
-        message(STATUS "Building with GTK4 support")
-    endif()
+if(WITH_GTK3)
+    message(STATUS "Building with GTK3 support")
+endif()
+if(WITH_GTK4)
+    message(STATUS "Building with GTK4 support")
+endif()
+if(NOT WITH_GTK3 AND NOT WITH_GTK4)
+    message(STATUS "Building without editor (no GTK3/GTK4)")
 endif()
 
 # Get VPN service dir from pkg-config (respects prefix and libdir)
@@ -133,11 +170,6 @@ else()
 endif()
 
 set(NM_PLUGIN_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/NetworkManager" CACHE PATH "NetworkManager plugin directory")
-
-set(NM_PLUGIN_DIR_NAME_FILE "")
-if(ENABLE_ABSOLUTE_PATHS)
-    set(NM_PLUGIN_DIR_NAME_FILE "${NM_PLUGIN_DIR}/")
-endif()
 
 configure_file(
     ${CMAKE_SOURCE_DIR}/nm-amneziawg-service.name.in
@@ -233,6 +265,9 @@ add_executable(nm-amneziawg-service src/nm-amneziawg-service.c
 target_include_directories(nm-amneziawg-service PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR})
 target_link_libraries(nm-amneziawg-service PRIVATE ${GLIB_LIBRARIES} ${LIBNM_LIBRARIES})
 target_compile_options(nm-amneziawg-service PRIVATE ${COMMON_CFLAGS} ${COMMON_DEFINITIONS})
+target_link_options(nm-amneziawg-service PRIVATE
+        "-Wl,--version-script=${CMAKE_SOURCE_DIR}/src/nm-amneziawg-service.ver"
+)
 set_target_properties(nm-amneziawg-service PROPERTIES OUTPUT_NAME "nm-amneziawg-service" LINKER_LANGUAGE C)
 
 add_executable(nm-amneziawg-test tests/test-main.c
@@ -325,55 +360,54 @@ target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${COMMON_LDFLAGS} ${LIBNM_
 set_target_properties(nm-vpn-plugin-amneziawg PROPERTIES
     OUTPUT_NAME "nm-vpn-plugin-amneziawg"
 )
-
-if(WITH_GNOME)
-    if(HAVE_GTK3)
-        add_library(nm-vpn-plugin-amneziawg-editor SHARED ${EDITOR_SOURCES})
-        target_include_directories(nm-vpn-plugin-amneziawg-editor PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK3_INCLUDE_DIRS} ${LIBNMA3_INCLUDE_DIRS})
-        target_link_libraries(nm-vpn-plugin-amneziawg-editor PRIVATE
-            ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK3_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA3_LIBRARIES}
-        )
-        target_compile_options(nm-vpn-plugin-amneziawg-editor PRIVATE
-            ${COMMON_CFLAGS} ${GTK3_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
-            -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
-            -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_3_16
-        )
-        set_target_properties(nm-vpn-plugin-amneziawg-editor PROPERTIES
-            OUTPUT_NAME "nm-vpn-plugin-amneziawg-editor"
-        )
-    endif()
-
-    if(HAVE_GTK4)
-        add_library(nm-vpn-plugin-amneziawg-editor-gtk4 SHARED ${EDITOR_SOURCES})
-        target_include_directories(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK4_INCLUDE_DIRS} ${LIBNMA4_INCLUDE_DIRS})
-        target_link_libraries(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
-            ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK4_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA4_LIBRARIES}
-        )
-        target_compile_options(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
-            ${COMMON_CFLAGS} ${GTK4_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
-            -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
-            -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_6
-        )
-        set_target_properties(nm-vpn-plugin-amneziawg-editor-gtk4 PROPERTIES
-            OUTPUT_NAME "nm-gtk4-vpn-plugin-amneziawg-editor"
-        )
-    endif()
-endif()
-
+target_link_options(nm-vpn-plugin-amneziawg PRIVATE
+        "-Wl,--version-script=${CMAKE_SOURCE_DIR}/properties/nm-vpn-plugin-amneziawg.ver"
+)
 install(TARGETS nm-amneziawg-service RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 install(TARGETS nm-vpn-plugin-amneziawg LIBRARY DESTINATION ${NM_PLUGIN_DIR})
 
-if(WITH_GNOME)
-    if(HAVE_GTK3)
-        install(TARGETS nm-vpn-plugin-amneziawg-editor LIBRARY DESTINATION ${NM_PLUGIN_DIR})
-    endif()
-    if(HAVE_GTK4)
-        install(TARGETS nm-vpn-plugin-amneziawg-editor-gtk4 LIBRARY DESTINATION ${NM_PLUGIN_DIR})
-    endif()
-endif()
-
 install(FILES nm-amneziawg-service.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system.d)
 install(FILES ${CMAKE_BINARY_DIR}/nm-amneziawg-service.name DESTINATION ${NM_VPN_SERVICE_DIR})
+
+if(WITH_GTK3)
+    add_library(nm-vpn-plugin-amneziawg-editor SHARED ${EDITOR_SOURCES})
+    target_include_directories(nm-vpn-plugin-amneziawg-editor PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK3_INCLUDE_DIRS} ${LIBNMA3_INCLUDE_DIRS})
+    target_link_libraries(nm-vpn-plugin-amneziawg-editor PRIVATE
+        ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK3_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA3_LIBRARIES}
+    )
+    target_compile_options(nm-vpn-plugin-amneziawg-editor PRIVATE
+        ${COMMON_CFLAGS} ${GTK3_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
+        -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
+        -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_3_16
+    )
+    target_link_options(nm-vpn-plugin-amneziawg-editor PRIVATE
+        "-Wl,--version-script=${CMAKE_SOURCE_DIR}/properties/nm-vpn-plugin-amneziawg-editor.ver"
+    )
+    set_target_properties(nm-vpn-plugin-amneziawg-editor PROPERTIES
+        OUTPUT_NAME "nm-vpn-plugin-amneziawg-editor"
+    )
+    install(TARGETS nm-vpn-plugin-amneziawg-editor LIBRARY DESTINATION ${NM_PLUGIN_DIR})
+endif()
+
+if(WITH_GTK4)
+    add_library(nm-vpn-plugin-amneziawg-editor-gtk4 SHARED ${EDITOR_SOURCES})
+    target_include_directories(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR} ${GTK4_INCLUDE_DIRS} ${LIBNMA4_INCLUDE_DIRS})
+    target_link_libraries(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
+        ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg-utils ${GLIB_LIBRARIES} ${GTK4_LIBRARIES} ${LIBNM_LIBRARIES} ${LIBNMA4_LIBRARIES}
+    )
+    target_compile_options(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
+        ${COMMON_CFLAGS} ${GTK4_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
+        -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
+        -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_6
+    )
+    target_link_options(nm-vpn-plugin-amneziawg-editor-gtk4 PRIVATE
+            "-Wl,--version-script=${CMAKE_SOURCE_DIR}/properties/nm-vpn-plugin-amneziawg-editor.ver"
+    )
+    set_target_properties(nm-vpn-plugin-amneziawg-editor-gtk4 PROPERTIES
+        OUTPUT_NAME "nm-gtk4-vpn-plugin-amneziawg-editor"
+    )
+    install(TARGETS nm-vpn-plugin-amneziawg-editor-gtk4 LIBRARY DESTINATION ${NM_PLUGIN_DIR})
+endif()
 
 if(ENABLE_NLS)
     set(AM_CPPFLAGS ${AM_CPPFLAGS} -DENABLE_NLS)
@@ -451,9 +485,8 @@ endif()
 
 message("")
 message("Build configuration:")
-message("  WITH_GNOME: ${WITH_GNOME}")
+message("  WITH_GTK3: ${WITH_GTK3}")
 message("  WITH_GTK4: ${WITH_GTK4}")
-message("  ENABLE_ABSOLUTE_PATHS: ${ENABLE_ABSOLUTE_PATHS}")
 message("  ENABLE_NLS: ${ENABLE_NLS}")
 message("  PROJECT_VERSION: ${PROJECT_VERSION}")
 message("  PROJECT_VERSION_FULL: ${PROJECT_VERSION_FULL}")
