@@ -1,61 +1,320 @@
-# Network-Manager VPN Plugin for AmneziaWG
+# NetworkManager VPN Plugin for AmneziaWG
 
-This project is a VPN Plugin for NetworkManager that handles client-side AmneziaWG connections.  
-It is based on old the [amneziawg Plugin](https://github.com/yanzilisan183/network-manager-amneziawg) and currently requires [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) to be installed on your system.  
-The plugin supports both IPv4 and IPv6 connections.
+[![CI Checks](https://github.com/amnezia-vpn/network-manager-amneziawg/actions/workflows/ci.yml/badge.svg)](https://github.com/amnezia-vpn/network-manager-amneziawg/actions/workflows/ci.yml)
+[![Release Packages](https://github.com/amnezia-vpn/network-manager-amneziawg/actions/workflows/release.yml/badge.svg)](https://github.com/amnezia-vpn/network-manager-amneziawg/actions/workflows/release.yml)
 
+A VPN Plugin for NetworkManager that handles client-side AmneziaWG connections. The plugin supports both IPv4 and IPv6 connections and provides a GUI editor for configuring VPN connections.
 
+## Kernel Module Compatibility
 
-## Guide
+**Important:** This plugin version is designed to work with the **amneziawg kernel module v1.0.20241112 or earlier**.
 
+For newer kernel module versions, use the **awg-quick mode** (see Environment Variables section below), which relies on the external `awg-quick` tool from amneziawg-tools instead of direct netlink communication with the kernel module.
 
-### Compilation
-For compilation, the project uses autoconf and related things.
-* `./autogen.sh`
-* `make`
+Requires [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) to be installed on your system.
 
+---
 
-### Installation
-In order to get the plugin running, its sources have to be compiled and the result has to be installed. This can be done by following these steps: 
-* Compile the project
-* `sudo make sysconfdir=/etc libdir=/usr/lib install` (don't worry; for uninstalling, there is the target `uninstall`)
+## Table of Contents
 
+- [Dependencies](#dependencies)
+- [Build](#build)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [nmcli Examples](#nmcli-examples)
+  - [GUI Usage](#gui-usage)
+- [Environment Variables](#environment-variables)
+- [Configuration File Example](#configuration-file-example)
+- [D-Bus Configuration](#d-bus-configuration)
 
-### Execution
-Once the installation is completed, the Plugin can be used per NetworkManager (usually graphically via the applet).
+---
 
-You can import your amneziawg configuration file into NetworkManager via `nmcli c import type amneziawg file my_vpn.conf` and then activate with `nmcli c up my_vpn`.
+## Dependencies
 
-When a new AmneziaWG connection is created and configured via the NetworkManager GUI (can also be called via `nm-connection-editor`), it is the Connection Editor Plugin which is executed.
-When the connection is activated, it is the service plugin that is being called.
+### Required Dependencies
 
-A very basic testing suite is provided in the form of the Python script `examples/dbus/dbus.py`, which looks up the Plugin via name on D-Bus and sends it a Connect() instruction. More or less the same thing (and more) can however be achieved by just using NetworkManager after installing the package, so there should not be a need for this - except for the fact that the script is easily modifiable.
+- **GLib 2** - `glib-2.0`
+- **NetworkManager** - `libnm`
 
+### Optional Dependencies
 
-### Viewing Logs
-The logs that are created by NetworkManager can be viewed with `journalctl -u NetworkManager` (at least on Arch Linux). For following new input, `journalctl` also supports the follow flag, much like `tail` (`-f`).
+- **amneziawg-tools** - Required for awg-quick mode (`awg-quick` command)
 
+For the GTK editor plugin (one of the following):
 
+- **GTK3**: `gtk+-3.0`, `libnma` (NetworkManager library for GTK3)
+- **GTK4**: `gtk4`, `libnma-gtk4` (NetworkManager library for GTK4)
 
-## Files
+### Build Dependencies
 
+- CMake 3.10+
+- pkg-config
+- Gettext, intltool (optional, for localization)
 
-### Scripts
-Over the course of the project, I created some files that are not required for the project itself, but rather for its development.  
-Here is a brief overview over some of them:
-* `includes2strings.py`: Searches the input for `-I` flags (useful for extracting the include dirs from a Makefile)
-* `examples/dbus/dbus.py`: A small script that tests the availability of the Plugin and its responsiveness to D-Bus messages
+---
 
+## Build
 
-### Configuration
+The project uses CMake as its build system.
 
-#### D-Bus Allowance
+### Basic Build
 
-D-Bus does not allow just anybody to own any D-Bus service name they like. Thus, it may be necessary to tell D-Bus that it is not forbidden to use the name `org.freedesktop.NetworkManager.amneziawg`.  
-This can be achieved by placing an appropriate file (like `nm-amneziawg-service.conf`) inside the directory `/etc/dbus-1/system.d` or similar.
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
 
-The following is an example for the content of such a file:
-~~~~xml
+### CMake Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `WITH_GTK3` | Build with GTK3 editor (requires libnma) | Auto-detect |
+| `WITH_GTK4` | Build with GTK4 editor (requires libnma-gtk4) | Auto-detect |
+| `CMAKE_INSTALL_PREFIX` | Install prefix | `/usr` |
+| `CMAKE_INSTALL_LIBDIR` | Library directory (e.g., lib64) | Auto-detect |
+
+### Build Examples
+
+```bash
+# Auto-detect GTK3/GTK4 (default)
+cmake ..
+
+# Force GTK3 only
+cmake .. -DWITH_GTK3=ON -DWITH_GTK4=OFF
+
+# Force GTK4 only
+cmake .. -DWITH_GTK3=OFF -DWITH_GTK4=ON
+
+# Build without editor (service only)
+cmake .. -DWITH_GTK3=OFF -DWITH_GTK4=OFF
+
+# System installation (for RPM packages)
+cmake .. -DWITH_GTK3=ON -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
+cmake --build .
+cpack -G RPM
+
+# Build DEB package (Debian/Ubuntu)
+cmake .. -DWITH_GTK3=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build .
+cpack -G DEB
+
+# Note: For packaging, CMAKE_INSTALL_PREFIX is typically /usr
+# The generated .rpm or .deb package can be installed with:
+#   sudo rpm -i NetworkManager-amneziawg-*.rpm
+#   sudo dpkg -i network-manager-amneziawg_*.deb
+```
+
+---
+
+## Installation
+
+```bash
+sudo cmake --install .
+```
+
+This installs:
+- Service plugin: `${libexecdir}/nm-amneziawg-service`
+- Editor plugin (if built): `${libdir}/NetworkManager/libnm-vpn-plugin-amneziawg-editor.so`
+- D-Bus policy: `${sysconfdir}/dbus-1/system.d/nm-amneziawg-service.conf`
+- VPN name file: `${sysconfdir}/NetworkManager/VPN/nm-amneziawg-service.name`
+
+---
+
+## Usage
+
+### nmcli Examples
+
+#### Import existing configuration
+
+```bash
+nmcli c import type amneziawg file /path/to/vpn.conf
+```
+
+#### Create connection manually
+
+```bash
+# Create the VPN connection
+nmcli c add type vpn ifname '*' vpn-type amneziawg con-name "My AmneziaWG VPN"
+
+# Set interface private key
+nmcli c modify "My AmneziaWG VPN" vpn.data \
+  "local-private-key=YAnL1JqN5iMHW2kHbNfT9xLqX5vBz1mQWc8p3Kf9R0E="
+
+# Set peer public key
+nmcli c modify "My AmneziaWG VPN" vpn.data \
+  "peer-1-public-key=XbK2mPw8nR4tY6vLqZ9hF1cJ3sA5gD7eB9uG2pK0M="
+
+# Set peer endpoint
+nmcli c modify "My AmneziaWG VPN" vpn.data \
+  "peer-1-endpoint=vpn.example.com:51820"
+
+# Set peer allowed IPs
+nmcli c modify "My AmneziaWG VPN" vpn.data \
+  "peer-1-allowed-ips=0.0.0.0/0,::/0"
+
+# Activate the connection
+nmcli c up "My AmneziaWG VPN"
+```
+
+#### List connections
+
+```bash
+nmcli c show | grep amneziawg
+```
+
+#### View connection details
+
+```bash
+nmcli c show "My AmneziaWG VPN"
+```
+
+#### Delete connection
+
+```bash
+nmcli c delete "My AmneziaWG VPN"
+```
+
+### GUI Usage
+
+1. Open **NetworkManager** connection editor:
+   - From system tray: Click network icon → Network Settings → Add
+   - Or run: `nm-connection-editor`
+
+2. Click **Add** → Select **AmneziaWG** as VPN type
+
+3. Configure the interface:
+   - **Private Key**: Enter your base64-encoded private key (required)
+   - **Listen Port**: Optional, defaults to auto
+   - **MTU**: Optional, 0 for auto-detect
+   - **FwMark**: Optional, for firewall marking
+
+4. Add peers in the **Peers** section:
+   - **Public Key**: Peer's base64-encoded public key (required)
+   - **Endpoint**: Server address (host:port), required
+   - **Allowed IPs**: Comma-separated list of subnets (e.g., `0.0.0.0/0,::/0`)
+   - **Preshared Key**: Optional, for extra security
+   - **Keep-alive**: Optional, seconds
+
+5. Click **Save**
+
+6. Activate: `nmcli c up "Connection Name"`
+
+---
+
+## Environment Variables
+
+The plugin supports the following environment variables to configure its behavior:
+
+| Variable | Description |
+|----------|-------------|
+| `NM_FORCE_AWG_QUICK` | Force using external awg-quick mode instead of direct netlink |
+| `NM_AWG_QUICK_PATH` | Custom path to awg-quick binary (default: looks in PATH) |
+
+### Setting Environment Variables for NetworkManager
+
+To configure these variables system-wide, use `systemctl edit` to create an override:
+
+```bash
+# Edit NetworkManager service environment
+sudo systemctl edit NetworkManager
+```
+
+Add the following content:
+
+```ini
+[Service]
+Environment="NM_FORCE_AWG_QUICK=1"
+```
+
+Or to specify a custom awg-quick path:
+
+```ini
+[Service]
+Environment="NM_FORCE_AWG_QUICK=1"
+Environment="NM_AWG_QUICK_PATH=/usr/bin/awg-quick"
+```
+
+After editing, restart NetworkManager:
+
+```bash
+sudo systemctl restart NetworkManager
+```
+
+### When to Use awg-quick Mode
+
+Use awg-quick mode (set `NM_FORCE_AWG_QUICK=1`) when:
+
+1. Using **amneziawg kernel module v1.0.20251004 or newer** (direct netlink may be incompatible)
+2. You prefer the `awg-quick` workflow for tunnel management
+3. Debugging connection issues (awg-quick provides more verbose output)
+
+---
+
+## Configuration File Example
+
+A standard WireGuard/AmneziaWG configuration file looks like this:
+
+```ini
+[Interface]
+# Your private key (required) - generate with: wg genkey
+PrivateKey = YAnL1JqN5iMHW2kHbNfT9xLqX5vBz1mQWc8p3Kf9R0E=
+
+# Listen port (optional, auto-assigned if omitted)
+ListenPort = 51820
+
+# IP addresses (optional, can be set via NetworkManager IP tabs)
+Address = 10.0.0.2/24
+
+# DNS servers (optional, can be set via NetworkManager DNS tab)
+DNS = 1.1.1.1, 8.8.8.8
+
+# MTU (optional)
+MTU = 1420
+
+# AmneziaWG protocol parameters (optional)
+# jc = 16
+# jmin = 134
+# jmax = 526
+# s1 = 34
+# s2 = 37
+# h1 = 644709644
+# h2 = 1603941500
+# h3 = 1896912457
+# h4 = 2099751415
+
+[Peer]
+# Server public key (required)
+PublicKey = XbK2mPw8nR4tY6vLqZ9hF1cJ3sA5gD7eB9uG2pK0M=
+
+# Server endpoint (required)
+Endpoint = vpn.example.com:51820
+
+# Allowed IPs (required - defines what traffic goes through VPN)
+AllowedIPs = 0.0.0.0/0, ::/0
+
+# Persistent keepalive (optional, in seconds)
+PersistentKeepalive = 25
+
+# Preshared key (optional, for post-quantum security)
+#PresharedKey = somebase64key=
+```
+
+To import this configuration into NetworkManager:
+
+```bash
+nmcli c import type amneziawg file /path/to/vpn.conf
+```
+
+---
+
+## D-Bus Configuration
+
+D-Bus policy is automatically installed to `/etc/dbus-1/system.d/nm-amneziawg-service.conf`.
+
+If you need to manually configure it, the file should contain:
+
+```xml
 <!DOCTYPE busconfig PUBLIC
  "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -66,113 +325,30 @@ The following is an example for the content of such a file:
         <allow send_destination="org.freedesktop.NetworkManager.amneziawg"/>
     </policy>
     <policy context="default">
-        <deny own_prefix="org.freedesktop.NetworkManager.amneziawg"/>
+        <deny own_prefix="org.freedesktop.NetworkDesktop.amneziawg"/>
         <deny send_destination="org.freedesktop.NetworkManager.amneziawg"/>
     </policy>
 </busconfig>
-~~~~
+```
 
-#### NetworkManager Plugin Configuration
+---
 
-NetworkManager has to be told where the plugins live in order to be able to call them. This is done via `service.name` files, which usually reside in `/etc/NetworkManager/VPN` or `/usr/lib/NetworkManager/VPN` (e.g. `/usr/lib/NetworkManager/VPN/nm-amneziawg-service.name`).
+## Viewing Logs
 
-An example for the content of these files would be:
-~~~~ini
-# This file is obsoleted by a file in /usr/local/lib/NetworkManager/VPN
+Check NetworkManager logs for debugging:
 
-[VPN Connection]
-name=amneziawg
-service=org.freedesktop.NetworkManager.amneziawg
-program=/usr/local/libexec/nm-amneziawg-service
-supports-multiple-connections=false
+```bash
+# View NetworkManager logs
+journalctl -u NetworkManager -f
 
-[libnm]
-plugin=/usr/local/lib/NetworkManager/libnm-vpn-plugin-amneziawg.so
+# Filter for amneziawg specifically
+journalctl -u NetworkManager | grep -i amneziawg
+```
 
-[GNOME]
-properties=/usr/local/lib/NetworkManager/libnm-amneziawg-properties
-supports-external-ui-mode=false
-supports-hints=false
-~~~~
+---
 
+## Resources
 
-
-## Knowledge
-
-
-### Service (the Plugin itself)
-
-The service is responsible for setting up a VPN connection with the supplied parameters. For this, it has to implement a [D-Bus interface](https://developer.gnome.org/NetworkManager/stable/gdbus-org.freedesktop.NetworkManager.VPN.Plugin.html) and listen to incoming requests, which will be sent by NetworkManager in due time (i.e. when the user tells NM to set up the appropriate VPN connection).  
-If the binary service is not running at the time when NM wants to set up the connection, it will try to start the binary ad hoc.
-
-In principle, this piece of software can be written in any language, but in order to make the implementation sane, there should at least exist convenient D-Bus bindings for the language. Further, there are parts of the code already implemented in C, which might make it more convenient to just stick to that.
-
-
-### Connection Editor Plugin
-
-The Connection Editor Plugin is responsible for providing a GUI inside NetworkManager where all relevant properties for a VPN connection can be specified. If you don't know what I'm talking about, just think about the GUI where you entered the information needed to connect to your local Wifi. That's probably pretty similar.
-
-The Editor Plugin is also responsible for providing means of importing and exporting VPN connections from and to external files in a custom format.
-
-NetworkManager integrates the VPN editors by looking up _shared objects_ in the above mentioned configuration file and accessing them at run-time.  
-This means however that the editor plugin GUI has to be provided by a shared object, which means that the editor cannot be written in just any language.
-
-
-### Storage of the Connections
-
-Saved connections are stored in `/etc/NetworkManager/system-connections`, with owner `root:root` and access permissions `0700`.  
-This guarantees that nobody can have a look at the saved system-wide connections (and their stored secrets) that isn't supposed to.
-
-An example of such a system-connection file would be (one can see that the user-input data is stored as key-value pairs with internally used keys in the vpn section):
-~~~~ini
-[connection]
-id=wiretest
-uuid=8298d5ea-73d5-499b-9376-57409a7a2331
-type=vpn
-autoconnect=false
-permissions=
-
-[vpn]
-local-ip4=192.168.1.2/24
-local-listen-port=51820
-local-private-key=CBomGS37YC4ak+J2+NPuHtmgIk6gC7yQZKHnboJd3F8=
-connection-h1=644709644
-connection-h2=1603941500
-connection-h3=1896912457
-connection-h4=2099751415
-connection-jc=16
-connection-jmax=526
-connection-jmin=134
-connection-s1=34
-connection-s2=37
-peer-allowed-ips=192.168.1.254
-peer-endpoint=8.16.32.11:51820
-peer-public-key=GRk7K3A3JCaoVN1ZhFEtEvyU6+g+FdGaCtSObIYvXX0=
-service-type=org.freedesktop.NetworkManager.amneziawg
-
-[vpn-secrets]
-password
-verysecurepassword
-
-[ipv4]
-dns-search=
-method=auto
-
-[ipv6]
-addr-gen-mode=stable-privacy
-dns-search=
-ip6-privacy=0
-method=auto
-~~~~
-
-
-
-
-# Resources
-
-NM VPN Plugin:  
-https://developer.gnome.org/libnm-glib/stable/libnm-glib-NMVPNPlugin.html  
-https://developer.gnome.org/NetworkManager/stable/gdbus-org.freedesktop.NetworkManager.VPN.Plugin.html  
-
-Settings VPN (sent via DBus on Connect(a{sa{sv}}) method):  
-https://developer.gnome.org/libnm/stable/NMSettingVpn.html#nm-setting-vpn-get-data-item
+- [NetworkManager VPN Plugin Interface](https://developer.gnome.org/NetworkManager/stable/gdbus-org.freedesktop.NetworkManager.VPN.Plugin.html)
+- [NMSettingVpn Documentation](https://developer.gnome.org/libnm/stable/NMSettingVpn.html)
+- [AmneziaWG Tools](https://github.com/amnezia-vpn/amneziawg-tools)
