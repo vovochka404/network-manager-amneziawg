@@ -507,7 +507,7 @@ set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION_FULL}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "NetworkManager VPN plugin for AmneziaWG")
 set(CPACK_PACKAGE_VENDOR "vovochka404")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Package Maintainer <maintainer@example.com>")
-set(CPACK_PACKAGE_URL "https://github.com/amnezia-vpn/network-manager-amneziawg")
+set(CPACK_PACKAGE_URL "https://github.com/vovochka404/network-manager-amneziawg")
 set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 
 # CPack configuration for RPM
@@ -521,7 +521,8 @@ set(CPACK_DEBIAN_PACKAGE_NAME "network-manager-amneziawg")
 set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION_FULL}")
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "NetworkManager VPN plugin for AmneziaWG")
 set(CPACK_DEBIAN_PACKAGE_SECTION "net")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "network-manager (>= 1.0), libglib2.0-0")
+set(CPACK_DEBIAN_INSTALL_PREFIX "/usr")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "network-manager (>= 1.14), libglib2.0-0")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
 include(CPack)

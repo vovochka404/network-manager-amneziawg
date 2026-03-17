@@ -1,0 +1,78 @@
+name: Build Release Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag'
+        required: true
+        default: '0.9.5'
+
+jobs:
+  build-rpm:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y cmake gcc g++ pkg-config intltool \
+            NetworkManager-libnm-devel gtk3-devel libnma-devel \
+            glib2-devel gettext rpm-build
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib64 \
+            -DWITH_GTK3=ON \
+            -DWITH_GTK4=OFF
+          cmake --build .
+          cpack -G RPM
+
+      - name: Upload RPM
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: build/NetworkManager-amneziawg-*.rpm
+          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}.rpm
+          asset_content_type: application/x-rpm
+
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc g++ pkg-config intltool \
+            libnm-dev libnma-dev libgtk-3-dev libglib2.0-dev \
+            gettext dpkg-dev debhelper
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DWITH_GTK3=ON \
+            -DWITH_GTK4=OFF
+          cmake --build .
+          cpack -G DEB
+
+      - name: Upload DEB
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: build/NetworkManager-amneziawg-*.deb
+          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}.deb
+          asset_content_type: application/vnd.debian.binary-package

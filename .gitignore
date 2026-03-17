@@ -64,3 +64,4 @@ CTestTestfile.cmake
 compile_commands.json
 *.cmake
 .cache/
+.github/workflows/builds/

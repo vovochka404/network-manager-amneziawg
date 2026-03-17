@@ -1,0 +1,110 @@
+name: CI Checks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  code-style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install clang-format
+        run: sudo apt-get install -y clang-format
+      
+      - name: Check code style
+        run: |
+          clang-format --style=file --dry-run --Werror \
+            src/*.c \
+            shared/*.c shared/*.h \
+            shared/awg/*.c shared/awg/*.h \
+            shared/nm-utils/*.c shared/nm-utils/*.h \
+            properties/*.c properties/*.h
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc pkg-config intltool \
+            libnm-dev libnma-dev libgtk-3-dev \
+            libnma-gtk4-dev libgtk-4-dev \
+            gettext libglib2.0-dev
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DWITH_GTK3=ON \
+            -DWITH_GTK4=OFF
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Build DEB package
+        run: |
+          cd build
+          cpack -G DEB
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: networkmanager-amneziawg-deb
+          path: build/*.deb
+          if-no-files-found: ignore
+
+  build-fedora:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          dnf install -y cmake gcc g++ pkg-config intltool \
+            NetworkManager-libnm-devel \
+            libnma-devel gtk3-devel \
+            libnma-gtk4-devel gtk4-devel \
+            glib2-devel gettext rpm-build
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=lib64 \
+            -DWITH_GTK3=ON \
+            -DWITH_GTK4=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Build RPM package
+        run: |
+          cd build
+          cpack -G RPM
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: networkmanager-amneziawg-rpm
+          path: build/*.rpm
+          if-no-files-found: ignore
