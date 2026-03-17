@@ -28,17 +28,15 @@
 #include "nm-amneziawg-editor-plugin.h"
 
 #include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "nm-utils/nm-vpn-plugin-utils.h"
 
-#include "import-export.h"
+#include "awg/awg-config.h"
+#include "awg/awg-nm-connection.h"
 
 #define AMNEZIAWG_PLUGIN_NAME "AmneziaWG"
-#define AMNEZIAWG_PLUGIN_DESC "Used to set up client-side AmneziaWG connections."
+#define AMNEZIAWG_PLUGIN_DESC N_("Used to set up client-side AmneziaWG connections.")
 
 /*****************************************************************************/
 
@@ -59,36 +57,62 @@ static NMConnection *
 import(NMVpnEditorPlugin *iface, const char *path, GError **error)
 {
     NMConnection *connection = NULL;
-    char *contents = NULL;
+    AWGDevice *device = NULL;
     char *ext;
-    gsize contents_len;
 
     ext = strrchr(path, '.');
 
-    if (!ext || (!g_str_has_suffix(ext, ".amneziawg") && !g_str_has_suffix(ext, ".awg") && !g_str_has_suffix(ext, ".cnf") && !g_str_has_suffix(ext, ".conf"))) { /* Special extension for testcases */
+    if (!ext || (!g_str_has_suffix(ext, ".amneziawg") && !g_str_has_suffix(ext, ".awg") && !g_str_has_suffix(ext, ".cnf") && !g_str_has_suffix(ext, ".conf"))) {
         g_set_error_literal(error,
                             NMV_EDITOR_PLUGIN_ERROR,
                             NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
-                            "Unknown AmneziaWG file extension");
-        goto out;
+                            _("Unknown AmneziaWG file extension"));
+        return NULL;
     }
 
-    if (!g_file_get_contents(path, &contents, &contents_len, error))
+    device = awg_device_new_from_config(path);
+    if (!device) {
+        g_set_error_literal(error,
+                            NMV_EDITOR_PLUGIN_ERROR,
+                            NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
+                            _("Failed to parse AmneziaWG config file"));
         return NULL;
+    }
 
-    connection = do_import(path, contents, contents_len, error);
+    connection = nm_simple_connection_new();
+    if (!awg_device_save_to_nm_connection(device, connection, error)) {
+        g_object_unref(connection);
+        connection = NULL;
+    }
 
-out:
-    g_free(contents);
+    g_object_unref(device);
     return connection;
 }
-
 static gboolean export(NMVpnEditorPlugin *iface,
                        const char *path,
                        NMConnection *connection,
                        GError **error)
 {
-    return do_export(path, connection, error);
+    AWGDevice *device;
+    gchar *config_str;
+
+    device = awg_device_new_from_nm_connection(connection, error);
+    if (!device)
+        return FALSE;
+
+    config_str = awg_device_create_config_string(device);
+    g_object_unref(device);
+
+    if (!config_str)
+        return FALSE;
+
+    if (!g_file_set_contents(path, config_str, -1, error)) {
+        g_free(config_str);
+        return FALSE;
+    }
+
+    g_free(config_str);
+    return TRUE;
 }
 
 static char *
@@ -112,8 +136,8 @@ static guint32
 get_capabilities(NMVpnEditorPlugin *iface)
 {
     return (NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT |
-            NM_VPN_EDITOR_PLUGIN_CAPABILITY_EXPORT);
-    // NM_VPN_EDITOR_PLUGIN_CAPABILITY_IPV6);
+            NM_VPN_EDITOR_PLUGIN_CAPABILITY_EXPORT |
+            NM_VPN_EDITOR_PLUGIN_CAPABILITY_IPV6);
 }
 
 static NMVpnEditor *

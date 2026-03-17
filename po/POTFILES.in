@@ -1,12 +1,10 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
 appdata/network-manager-amneziawg.metainfo.xml.in
-auth-dialog/main.c
 [type: gettext/glade]properties/nm-amneziawg-dialog.ui
 properties/nm-amneziawg-editor-plugin.c
-shared/import-export.c
+properties/nm-amneziawg-editor.c
 shared/nm-utils/nm-shared-utils.c
 shared/nm-utils/nm-vpn-plugin-utils.c
-shared/utils.c
+shared/awg/awg-validate.c
 src/nm-amneziawg-service.c
-

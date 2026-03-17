@@ -251,16 +251,16 @@ NM_G_ERROR_MSG(GError *error)
 #endif
 
 #if _NM_CC_SUPPORT_GENERIC
-#define _NM_CONSTCAST(type, obj)                  \
-    (_Generic((obj),                              \
-        void *: ((type *)(obj)),                  \
-        void *const: ((type *)(obj)),             \
-        const void *: ((const type *)(obj)),      \
-        const void *const: ((const type *)(obj)), \
-        const type *: (obj),                      \
-        const type *const: (obj),                 \
-        type *: (obj),                            \
-        type *const: (obj)))
+#define _NM_CONSTCAST(type, obj)                   \
+    (_Generic((obj),                               \
+         void *: ((type *)(obj)),                  \
+         void *const: ((type *)(obj)),             \
+         const void *: ((const type *)(obj)),      \
+         const void *const: ((const type *)(obj)), \
+         const type *: (obj),                      \
+         const type *const: (obj),                 \
+         type *: (obj),                            \
+         type *const: (obj)))
 #else
 /* _NM_CONSTCAST() is there to preserve constness of a pointer.
  * It uses C11's _Generic(). If that is not supported, we fall back
@@ -840,7 +840,7 @@ nm_clear_g_cancellable(GCancellable **cancellable)
 /* check if @flags has exactly one flag (@check) set. You should call this
  * only with @check being a compile time constant and a power of two. */
 #define NM_FLAGS_HAS(flags, check) \
-    (G_STATIC_ASSERT_EXPR((check) > 0 && ((check) & ((check)-1)) == 0), NM_FLAGS_ANY((flags), (check)))
+    (G_STATIC_ASSERT_EXPR((check) > 0 && ((check) & ((check) - 1)) == 0), NM_FLAGS_ANY((flags), (check)))
 
 #define NM_FLAGS_ANY(flags, check) ((((flags) & (check)) != 0) ? TRUE : FALSE)
 #define NM_FLAGS_ALL(flags, check) ((((flags) & (check)) == (check)) ? TRUE : FALSE)

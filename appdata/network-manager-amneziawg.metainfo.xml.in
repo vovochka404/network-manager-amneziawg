@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Copyright Lubomir Rintel 2016 -->
 <component type="addon">
   <id>network-manager-amneziawg</id>
   <project_license>GPL-2.0+</project_license>
@@ -20,22 +19,17 @@
 
   <description>
     <_p>Support for configuring AmneziaWG virtual private network connections.</_p>
-    <_p>AmneziaWG is a modern VPN client built for simplicity.</_p>
+    <_p>AmneziaWG is a modern VPN client built for security and simplicity.</_p>
   </description>
 
   <screenshots>
     <screenshot type="default">
-      <image width="524" height="808">https://iam.tj/browse/network-manager-wireguard/plain/appdata/wireguard.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>The Proxy tab</caption>
-      <image width="524" height="808">https://iam.tj/browse/network-manager-wireguard/plain/appdata/wireguard-advanced.png</image>
+      <image width="524" height="808">https://raw.githubusercontent.com/vovochka404/network-manager-amneziawg/refs/heads/master/appdata/amneziawg.png</image>
     </screenshot>
   </screenshots>
 
   <url type="homepage">https://github.com/vovochka404/network-manager-amneziawg</url>
   <url type="bugtracker">https://github.com/vovochka404/network-manager-amneziawg/issues</url>
-  <update_contact>ubuntu@iam.tj</update_contact>
   <translation type="gettext">NetworkManager-amneziawg</translation>
-  <_developer_name>Max Moser</_developer_name>
+  <_developer_name>Vladimir Perepechin</_developer_name>
 </component>

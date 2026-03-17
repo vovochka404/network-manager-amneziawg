@@ -1,5 +1,5 @@
 The files in the "shared/" directory are used by all components
-inside the VPN plugin repository (src, properties, auth-dialog).
+inside the VPN plugin repository (src, properties).
 
 The files in shared/nm-utils are copied from NetworkManager
 repository and used as is:
