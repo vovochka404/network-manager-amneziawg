@@ -10,6 +10,7 @@
  */
 
 #include "awg-device.h"
+#include "awg-validate.h"
 #include <NetworkManager.h>
 
 typedef struct _AWGDevicePeer AWGDevicePeer;
@@ -39,23 +40,32 @@ struct _AWGDevicePeer {
 
 struct AWGDevicePrivate {
     gchar *private_key;
+    gchar *private_key_base64;
     gchar *public_key;
+    gchar *public_key_base64;
     NMSettingSecretFlags private_key_flags;
     GInetAddress *address_v4;
     GInetAddress *address_v6;
     guint16 listen_port;
     GList *dns_v4;
     GList *dns_v6;
-    guint16 fw_mark;
+    guint32 fw_mark;
     guint16 jc;
     guint16 jmin;
     guint16 jmax;
     guint16 s1;
     guint16 s2;
-    guint32 h1;
-    guint32 h2;
-    guint32 h3;
-    guint32 h4;
+    guint16 s3;
+    guint16 s4;
+    gchar *h1;
+    gchar *h2;
+    gchar *h3;
+    gchar *h4;
+    gchar *i1;
+    gchar *i2;
+    gchar *i3;
+    gchar *i4;
+    gchar *i5;
     guint32 mtu;
     gchar *pre_up;
     gchar *post_up;
@@ -66,7 +76,9 @@ struct AWGDevicePrivate {
 
 struct AWGDevicePeerPrivate {
     gchar *public_key;
+    gchar *public_key_base64;
     gchar *shared_key;
+    gchar *shared_key_base64;
     NMSettingSecretFlags shared_key_flags;
     GList *allowed_ips; // list of AWGSubnet structs
     gchar *endpoint;
@@ -129,7 +141,9 @@ awg_device_init(AWGDevice *self)
     AWGDevicePrivate *priv = awg_device_get_instance_private(self);
 
     priv->private_key = NULL;
+    priv->private_key_base64 = NULL;
     priv->public_key = NULL;
+    priv->public_key_base64 = NULL;
     priv->address_v4 = NULL;
     priv->address_v6 = NULL;
     priv->fw_mark = 0;
@@ -141,10 +155,17 @@ awg_device_init(AWGDevice *self)
     priv->jmax = 0;
     priv->s1 = 0;
     priv->s2 = 0;
-    priv->h1 = 0;
-    priv->h2 = 0;
-    priv->h3 = 0;
-    priv->h4 = 0;
+    priv->s3 = 0;
+    priv->s4 = 0;
+    priv->h1 = NULL;
+    priv->h2 = NULL;
+    priv->h3 = NULL;
+    priv->h4 = NULL;
+    priv->i1 = NULL;
+    priv->i2 = NULL;
+    priv->i3 = NULL;
+    priv->i4 = NULL;
+    priv->i5 = NULL;
     priv->mtu = 0;
     priv->pre_up = NULL;
     priv->post_up = NULL;
@@ -160,12 +181,23 @@ awg_device_finalize(GObject *object)
     AWGDevicePrivate *priv = awg_device_get_instance_private(self);
 
     g_clear_pointer(&priv->private_key, g_free);
+    g_clear_pointer(&priv->private_key_base64, g_free);
     g_clear_pointer(&priv->public_key, g_free);
+    g_clear_pointer(&priv->public_key_base64, g_free);
     g_clear_object(&priv->address_v4);
     g_clear_object(&priv->address_v6);
     g_list_free_full(priv->peers, (GDestroyNotify)g_object_unref);
     g_list_free_full(priv->dns_v4, (GDestroyNotify)g_object_unref);
     g_list_free_full(priv->dns_v6, (GDestroyNotify)g_object_unref);
+    g_clear_pointer(&priv->h1, g_free);
+    g_clear_pointer(&priv->h2, g_free);
+    g_clear_pointer(&priv->h3, g_free);
+    g_clear_pointer(&priv->h4, g_free);
+    g_clear_pointer(&priv->i1, g_free);
+    g_clear_pointer(&priv->i2, g_free);
+    g_clear_pointer(&priv->i3, g_free);
+    g_clear_pointer(&priv->i4, g_free);
+    g_clear_pointer(&priv->i5, g_free);
     g_clear_pointer(&priv->pre_up, g_free);
     g_clear_pointer(&priv->post_up, g_free);
     g_clear_pointer(&priv->pre_down, g_free);
@@ -187,7 +219,9 @@ awg_device_peer_init(AWGDevicePeer *self)
 {
     AWGDevicePeerPrivate *priv = awg_device_peer_get_instance_private(self);
     priv->public_key = NULL;
+    priv->public_key_base64 = NULL;
     priv->shared_key = NULL;
+    priv->shared_key_base64 = NULL;
     priv->endpoint = NULL;
     priv->allowed_ips = NULL;
     priv->keep_alive = 0;
@@ -203,7 +237,9 @@ awg_device_peer_finalize(GObject *object)
     priv = awg_device_peer_get_instance_private(self);
 
     g_clear_pointer(&priv->public_key, g_free);
+    g_clear_pointer(&priv->public_key_base64, g_free);
     g_clear_pointer(&priv->shared_key, g_free);
+    g_clear_pointer(&priv->shared_key_base64, g_free);
     g_clear_pointer(&priv->endpoint, g_free);
     g_list_free_full(priv->allowed_ips, (GDestroyNotify)g_object_unref);
 
@@ -240,13 +276,6 @@ awg_key_from_base64(const gchar *base64_str)
     }
 
     return decoded_str;
-}
-
-static gchar *
-awg_key_to_base64(const gchar *key)
-{
-    gchar *encoded_str = g_base64_encode((guchar *)key, AWG_KEY_SIZE);
-    return encoded_str;
 }
 
 static gboolean
@@ -471,7 +500,9 @@ awg_device_set_private_key(AWGDevice *self, const gchar *primary_key)
     }
 
     g_clear_pointer(&priv->private_key, g_free);
+    g_clear_pointer(&priv->private_key_base64, g_free);
     priv->private_key = decoded_key;
+    priv->private_key_base64 = g_strdup(primary_key);
     return TRUE;
 }
 
@@ -482,23 +513,7 @@ awg_device_get_private_key(AWGDevice *self)
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
-    if (!priv->private_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->private_key);
-}
-
-gchar *
-awg_device_dup_private_key(AWGDevice *self)
-{
-    AWGDevicePrivate *priv;
-
-    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
-    priv = awg_device_get_instance_private(self);
-    if (!priv->private_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->private_key);
+    return priv->private_key_base64;
 }
 
 gboolean
@@ -517,7 +532,9 @@ awg_device_set_public_key(AWGDevice *self, const gchar *public_key)
     }
 
     g_clear_pointer(&priv->public_key, g_free);
+    g_clear_pointer(&priv->public_key_base64, g_free);
     priv->public_key = decoded_key;
+    priv->public_key_base64 = g_strdup(public_key);
     return TRUE;
 }
 
@@ -528,23 +545,7 @@ awg_device_get_public_key(AWGDevice *self)
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
-    if (!priv->public_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->public_key);
-}
-
-gchar *
-awg_device_dup_public_key(AWGDevice *self)
-{
-    AWGDevicePrivate *priv;
-
-    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
-    priv = awg_device_get_instance_private(self);
-    if (!priv->public_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->public_key);
+    return priv->public_key_base64;
 }
 
 NMSettingSecretFlags
@@ -672,19 +673,17 @@ awg_device_set_listen_port(AWGDevice *self, const guint64 port)
 gboolean
 awg_device_set_listen_port_from_string(AWGDevice *self, const gchar *str)
 {
-    gchar *endptr;
     guint64 port;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(str != NULL, FALSE);
 
-    port = strtoull(str, &endptr, 10);
-    if (port == ULLONG_MAX && errno == ERANGE) {
+    if (!g_ascii_string_to_unsigned(str, 10, 0, 65535, &port, NULL)) {
         g_warning("Invalid listen port number from string: %s", str);
         return FALSE;
     }
 
-    return awg_device_set_listen_port(self, port);
+    return awg_device_set_listen_port(self, (guint16)port);
 }
 
 gboolean
@@ -791,7 +790,7 @@ awg_device_get_listen_port(AWGDevice *self)
     ;
 }
 
-guint16
+guint32
 awg_device_get_fw_mark(AWGDevice *self)
 {
     AWGDevicePrivate *priv;
@@ -810,31 +809,29 @@ awg_device_set_fw_mark(AWGDevice *self, guint64 fw_mark)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (fw_mark > G_MAXUINT16) {
-        g_warning("fw_mark value too large: %lu", fw_mark);
+    if (fw_mark > G_MAXUINT32) {
+        g_warning("fw_mark value too large: %lu (max: %u)", fw_mark, G_MAXUINT32);
         return FALSE;
     }
 
-    priv->fw_mark = (guint16)fw_mark;
+    priv->fw_mark = (guint32)fw_mark;
     return TRUE;
 }
 
 gboolean
 awg_device_set_fw_mark_from_string(AWGDevice *self, const gchar *fw_mark_str)
 {
-    gchar *endptr;
     guint64 fw_mark;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(fw_mark_str != NULL, FALSE);
 
-    fw_mark = strtoull(fw_mark_str, &endptr, 10);
-    if (fw_mark == ULLONG_MAX && errno == ERANGE) {
+    if (!g_ascii_string_to_unsigned(fw_mark_str, 10, 0, UINT32_MAX, &fw_mark, NULL)) {
         g_warning("Invalid fw_mark string: %s", fw_mark_str);
         return FALSE;
     }
 
-    return awg_device_set_fw_mark(self, fw_mark);
+    return awg_device_set_fw_mark(self, (guint32)fw_mark);
 }
 
 guint16
@@ -856,8 +853,8 @@ awg_device_set_jc(AWGDevice *self, guint64 jc)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (jc > G_MAXUINT16) {
-        g_warning("jc value too large: %lu", jc);
+    if (jc > AWG_JC_MAX) {
+        g_warning("jc value too large: %lu (max: %d)", jc, AWG_JC_MAX);
         return FALSE;
     }
 
@@ -868,19 +865,17 @@ awg_device_set_jc(AWGDevice *self, guint64 jc)
 gboolean
 awg_device_set_jc_from_string(AWGDevice *self, const gchar *jc_str)
 {
-    gchar *endptr;
     guint64 jc;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(jc_str != NULL, FALSE);
 
-    jc = strtoull(jc_str, &endptr, 10);
-    if (jc == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid jc string: %s", jc_str);
+    if (!g_ascii_string_to_unsigned(jc_str, 10, 0, UINT16_MAX, &jc, NULL)) {
+        g_warning("Invalid jc: %s (expected: number 0-65535)", jc_str);
         return FALSE;
     }
 
-    return awg_device_set_jc(self, jc);
+    return awg_device_set_jc(self, (guint16)jc);
 }
 
 guint16
@@ -902,8 +897,8 @@ awg_device_set_jmin(AWGDevice *self, guint64 jmin)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (jmin > G_MAXUINT16) {
-        g_warning("jmin value too large: %lu", jmin);
+    if (jmin > AWG_JMIN_MAX) {
+        g_warning("jmin value too large: %lu (max: %d)", jmin, AWG_JMIN_MAX);
         return FALSE;
     }
 
@@ -914,19 +909,17 @@ awg_device_set_jmin(AWGDevice *self, guint64 jmin)
 gboolean
 awg_device_set_jmin_from_string(AWGDevice *self, const gchar *jmin_str)
 {
-    gchar *endptr;
     guint64 jmin;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(jmin_str != NULL, FALSE);
 
-    jmin = strtoull(jmin_str, &endptr, 10);
-    if (jmin == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid jmin string: %s", jmin_str);
+    if (!g_ascii_string_to_unsigned(jmin_str, 10, 0, UINT16_MAX, &jmin, NULL)) {
+        g_warning("Invalid jmin: %s (expected: number 0-65535)", jmin_str);
         return FALSE;
     }
 
-    return awg_device_set_jmin(self, jmin);
+    return awg_device_set_jmin(self, (guint16)jmin);
 }
 
 guint16
@@ -948,8 +941,8 @@ awg_device_set_jmax(AWGDevice *self, guint64 jmax)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (jmax > G_MAXUINT16) {
-        g_warning("jmax value too large: %lu", jmax);
+    if (jmax > AWG_JMAX_MAX) {
+        g_warning("jmax value too large: %lu (max: %d)", jmax, AWG_JMAX_MAX);
         return FALSE;
     }
 
@@ -960,19 +953,17 @@ awg_device_set_jmax(AWGDevice *self, guint64 jmax)
 gboolean
 awg_device_set_jmax_from_string(AWGDevice *self, const gchar *jmax_str)
 {
-    gchar *endptr;
     guint64 jmax;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(jmax_str != NULL, FALSE);
 
-    jmax = strtoull(jmax_str, &endptr, 10);
-    if (jmax == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid jmax string: %s", jmax_str);
+    if (!g_ascii_string_to_unsigned(jmax_str, 10, 0, UINT16_MAX, &jmax, NULL)) {
+        g_warning("Invalid jmax: %s (expected: number 0-65534)", jmax_str);
         return FALSE;
     }
 
-    return awg_device_set_jmax(self, jmax);
+    return awg_device_set_jmax(self, (guint16)jmax);
 }
 
 guint16
@@ -994,8 +985,8 @@ awg_device_set_s1(AWGDevice *self, guint64 s1)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (s1 > G_MAXUINT16) {
-        g_warning("s1 value too large: %lu", s1);
+    if (s1 > AWG_JUNK_SIZE_MAX) {
+        g_warning("s1 value too large: %lu (max: %d)", s1, AWG_JUNK_SIZE_MAX);
         return FALSE;
     }
 
@@ -1006,19 +997,17 @@ awg_device_set_s1(AWGDevice *self, guint64 s1)
 gboolean
 awg_device_set_s1_from_string(AWGDevice *self, const gchar *s1_str)
 {
-    gchar *endptr;
     guint64 s1;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(s1_str != NULL, FALSE);
 
-    s1 = strtoull(s1_str, &endptr, 10);
-    if (s1 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid s1 string: %s", s1_str);
+    if (!g_ascii_string_to_unsigned(s1_str, 10, 0, UINT16_MAX, &s1, NULL)) {
+        g_warning("Invalid s1: %s (expected: number 0-65535)", s1_str);
         return FALSE;
     }
 
-    return awg_device_set_s1(self, s1);
+    return awg_device_set_s1(self, (guint16)s1);
 }
 
 guint16
@@ -1040,8 +1029,8 @@ awg_device_set_s2(AWGDevice *self, guint64 s2)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (s2 > G_MAXUINT16) {
-        g_warning("s2 value too large: %lu", s2);
+    if (s2 > AWG_JUNK_SIZE_MAX) {
+        g_warning("s2 value too large: %lu (max: %d)", s2, AWG_JUNK_SIZE_MAX);
         return FALSE;
     }
 
@@ -1052,203 +1041,422 @@ awg_device_set_s2(AWGDevice *self, guint64 s2)
 gboolean
 awg_device_set_s2_from_string(AWGDevice *self, const gchar *s2_str)
 {
-    gchar *endptr;
     guint64 s2;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     g_return_val_if_fail(s2_str != NULL, FALSE);
 
-    s2 = strtoull(s2_str, &endptr, 10);
-    if (s2 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid s2 string: %s", s2_str);
+    if (!g_ascii_string_to_unsigned(s2_str, 10, 0, UINT16_MAX, &s2, NULL)) {
+        g_warning("Invalid s2: %s (expected: number 0-65535)", s2_str);
         return FALSE;
     }
 
-    return awg_device_set_s2(self, s2);
+    return awg_device_set_s2(self, (guint16)s2);
 }
 
-guint32
-awg_device_get_h1(AWGDevice *self)
+guint16
+awg_device_get_s3(AWGDevice *self)
 {
     AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->s3;
+}
+
+gboolean
+awg_device_set_s3(AWGDevice *self, guint64 s3)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (s3 > AWG_S3_MAX) {
+        g_warning("s3 value too large: %lu (max: %d)", s3, AWG_S3_MAX);
+        return FALSE;
+    }
+
+    priv->s3 = (guint16)s3;
+    return TRUE;
+}
+
+gboolean
+awg_device_set_s3_from_string(AWGDevice *self, const gchar *s3_str)
+{
+    guint64 s3;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    g_return_val_if_fail(s3_str != NULL, FALSE);
+
+    if (!g_ascii_string_to_unsigned(s3_str, 10, 0, AWG_S3_MAX, &s3, NULL)) {
+        g_warning("Invalid s3: %s (expected: number 0-65479)", s3_str);
+        return FALSE;
+    }
+
+    return awg_device_set_s3(self, (guint16)s3);
+}
+
+guint16
+awg_device_get_s4(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->s4;
+}
+
+gboolean
+awg_device_set_s4(AWGDevice *self, guint64 s4)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (s4 > AWG_S4_MAX) {
+        g_warning("s4 value too large: %lu (max: %d)", s4, AWG_S4_MAX);
+        return FALSE;
+    }
+
+    priv->s4 = (guint16)s4;
+    return TRUE;
+}
+
+gboolean
+awg_device_set_s4_from_string(AWGDevice *self, const gchar *s4_str)
+{
+    guint64 s4;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    g_return_val_if_fail(s4_str != NULL, FALSE);
+
+    if (!g_ascii_string_to_unsigned(s4_str, 10, 0, AWG_S4_MAX, &s4, NULL)) {
+        g_warning("Invalid s4: %s (expected: number 0-65503)", s4_str);
+        return FALSE;
+    }
+
+    return awg_device_set_s4(self, (guint16)s4);
+}
+
+const gchar *
+awg_device_get_h1(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
 
     return priv->h1;
 }
 
 gboolean
-awg_device_set_h1(AWGDevice *self, guint64 h1)
+awg_device_set_h1(AWGDevice *self, const gchar *h1)
 {
     AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (h1 > G_MAXUINT32) {
-        g_warning("h1 value too large: %lu", h1);
+    if (!h1 || !*h1) {
+        g_clear_pointer(&priv->h1, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_magic_header(h1)) {
+        g_warning("Invalid h1 format: %s (expected: single number or range, e.g., 1 or 1-100)", h1);
         return FALSE;
     }
 
-    priv->h1 = (guint32)h1;
+    g_clear_pointer(&priv->h1, g_free);
+    priv->h1 = g_strdup(h1);
     return TRUE;
 }
 
-gboolean
-awg_device_set_h1_from_string(AWGDevice *self, const gchar *h1_str)
-{
-    gchar *endptr;
-    guint64 h1;
-
-    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
-    g_return_val_if_fail(h1_str != NULL, FALSE);
-
-    h1 = strtoull(h1_str, &endptr, 10);
-    if (h1 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid h1 string: %s", h1_str);
-        return FALSE;
-    }
-
-    return awg_device_set_h1(self, h1);
-}
-
-guint32
+const gchar *
 awg_device_get_h2(AWGDevice *self)
 {
     AWGDevicePrivate *priv;
 
-    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
 
     return priv->h2;
 }
 
 gboolean
-awg_device_set_h2(AWGDevice *self, guint64 h2)
+awg_device_set_h2(AWGDevice *self, const gchar *h2)
 {
     AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (h2 > G_MAXUINT32) {
-        g_warning("h2 value too large: %lu", h2);
+    if (!h2 || !*h2) {
+        g_clear_pointer(&priv->h2, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_magic_header(h2)) {
+        g_warning("Invalid h2 format: %s (expected: single number or range, e.g., 1 or 1-100)", h2);
         return FALSE;
     }
 
-    priv->h2 = (guint32)h2;
+    g_clear_pointer(&priv->h2, g_free);
+    priv->h2 = g_strdup(h2);
     return TRUE;
 }
 
-gboolean
-awg_device_set_h2_from_string(AWGDevice *self, const gchar *h2_str)
-{
-    gchar *endptr;
-    guint64 h2;
-
-    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
-    g_return_val_if_fail(h2_str != NULL, FALSE);
-
-    h2 = strtoull(h2_str, &endptr, 10);
-    if (h2 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid h2 string: %s", h2_str);
-        return FALSE;
-    }
-
-    return awg_device_set_h2(self, h2);
-}
-
-guint32
+const gchar *
 awg_device_get_h3(AWGDevice *self)
 {
     AWGDevicePrivate *priv;
 
-    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
 
     return priv->h3;
 }
 
 gboolean
-awg_device_set_h3(AWGDevice *self, guint64 h3)
+awg_device_set_h3(AWGDevice *self, const gchar *h3)
 {
     AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (h3 > G_MAXUINT32) {
-        g_warning("h3 value too large: %lu", h3);
+    if (!h3 || !*h3) {
+        g_clear_pointer(&priv->h3, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_magic_header(h3)) {
+        g_warning("Invalid h3 format: %s (expected: single number or range, e.g., 1 or 1-100)", h3);
         return FALSE;
     }
 
-    priv->h3 = (guint32)h3;
+    g_clear_pointer(&priv->h3, g_free);
+    priv->h3 = g_strdup(h3);
     return TRUE;
 }
 
-gboolean
-awg_device_set_h3_from_string(AWGDevice *self, const gchar *h3_str)
-{
-    gchar *endptr;
-    guint64 h3;
-
-    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
-    g_return_val_if_fail(h3_str != NULL, FALSE);
-
-    h3 = strtoull(h3_str, &endptr, 10);
-    if (h3 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid h3 string: %s", h3_str);
-        return FALSE;
-    }
-
-    return awg_device_set_h3(self, h3);
-}
-
-guint32
+const gchar *
 awg_device_get_h4(AWGDevice *self)
 {
     AWGDevicePrivate *priv;
 
-    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
     priv = awg_device_get_instance_private(self);
 
     return priv->h4;
 }
 
 gboolean
-awg_device_set_h4(AWGDevice *self, guint64 h4)
+awg_device_set_h4(AWGDevice *self, const gchar *h4)
 {
     AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (h4 > G_MAXUINT32) {
-        g_warning("h4 value too large: %lu", h4);
+    if (!h4 || !*h4) {
+        g_clear_pointer(&priv->h4, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_magic_header(h4)) {
+        g_warning("Invalid h4 format: %s (expected: single number or range, e.g., 1 or 1-100)", h4);
         return FALSE;
     }
 
-    priv->h4 = (guint32)h4;
+    g_clear_pointer(&priv->h4, g_free);
+    priv->h4 = g_strdup(h4);
     return TRUE;
 }
 
-gboolean
-awg_device_set_h4_from_string(AWGDevice *self, const gchar *str)
+const gchar *
+awg_device_get_i1(AWGDevice *self)
 {
-    gchar *endptr;
-    guint64 h4;
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->i1;
+}
+
+gchar *
+awg_device_dup_i1(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return g_strdup(priv->i1);
+}
+
+gboolean
+awg_device_set_i1(AWGDevice *self, const gchar *i1)
+{
+    AWGDevicePrivate *priv;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
-    g_return_val_if_fail(str != NULL, FALSE);
+    priv = awg_device_get_instance_private(self);
 
-    h4 = strtoull(str, &endptr, 10);
-    if (h4 == ULLONG_MAX && errno == ERANGE) {
-        g_warning("Invalid h4 string: %s", str);
+    if (!i1 || !*i1) {
+        g_clear_pointer(&priv->i1, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_i_packet(i1)) {
+        g_warning("Invalid i1 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i1);
         return FALSE;
     }
 
-    return awg_device_set_h4(self, h4);
+    g_clear_pointer(&priv->i1, g_free);
+    priv->i1 = g_strdup(i1);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_i2(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->i2;
+}
+
+gboolean
+awg_device_set_i2(AWGDevice *self, const gchar *i2)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!i2 || !*i2) {
+        g_clear_pointer(&priv->i2, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_i_packet(i2)) {
+        g_warning("Invalid i2 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i2);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->i2, g_free);
+    priv->i2 = g_strdup(i2);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_i3(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->i3;
+}
+
+gboolean
+awg_device_set_i3(AWGDevice *self, const gchar *i3)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!i3 || !*i3) {
+        g_clear_pointer(&priv->i3, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_i_packet(i3)) {
+        g_warning("Invalid i3 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i3);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->i3, g_free);
+    priv->i3 = g_strdup(i3);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_i4(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->i4;
+}
+
+gboolean
+awg_device_set_i4(AWGDevice *self, const gchar *i4)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!i4 || !*i4) {
+        g_clear_pointer(&priv->i4, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_i_packet(i4)) {
+        g_warning("Invalid i4 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i4);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->i4, g_free);
+    priv->i4 = g_strdup(i4);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_i5(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->i5;
+}
+
+gboolean
+awg_device_set_i5(AWGDevice *self, const gchar *i5)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!i5 || !*i5) {
+        g_clear_pointer(&priv->i5, g_free);
+        return TRUE;
+    }
+
+    if (!awg_validate_i_packet(i5)) {
+        g_warning("Invalid i5 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i5);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->i5, g_free);
+    priv->i5 = g_strdup(i5);
+    return TRUE;
 }
 
 guint32
@@ -1282,8 +1490,7 @@ awg_device_set_mtu(AWGDevice *self, guint32 mtu)
 gboolean
 awg_device_set_mtu_from_string(AWGDevice *self, const gchar *str)
 {
-    guint32 mtu;
-    gchar *endptr;
+    guint64 mtu;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
 
@@ -1291,18 +1498,12 @@ awg_device_set_mtu_from_string(AWGDevice *self, const gchar *str)
         return TRUE;
     }
 
-    mtu = strtoul(str, &endptr, 10);
-    if (mtu == ULONG_MAX && errno == ERANGE) {
-        g_warning("Invalid mtu string: %s", str);
+    if (!g_ascii_string_to_unsigned(str, 10, 0, 1500, &mtu, NULL)) {
+        g_warning("Invalid mtu: %s (expected: 0 or 68-1500)", str);
         return FALSE;
     }
 
-    if (*endptr != '\0') {
-        g_warning("Invalid mtu string: %s", str);
-        return FALSE;
-    }
-
-    return awg_device_set_mtu(self, mtu);
+    return awg_device_set_mtu(self, (guint32)mtu);
 }
 
 gboolean
@@ -1472,21 +1673,19 @@ awg_device_is_valid(AWGDevice *self)
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    if (!(
-            priv->private_key != NULL &&
-            priv->jc > 0 &&
-            priv->jmin > 0 &&
-            priv->jmax > 0 &&
-            priv->s1 > 0 &&
-            priv->s2 > 0 &&
-            priv->h1 > 0 &&
-            priv->h2 > 0 &&
-            priv->h3 > 0 &&
-            priv->h4 > 0)) {
+    if (!priv->private_key) {
         return FALSE;
     }
 
     if (g_list_length(priv->peers) == 0) {
+        return FALSE;
+    }
+
+    if (!awg_validate_magic_headers_no_overlap(priv->h1, priv->h2, priv->h3, priv->h4)) {
+        return FALSE;
+    }
+
+    if (!awg_validate_jmin_jmax(priv->jmin, priv->jmax)) {
         return FALSE;
     }
 
@@ -1528,7 +1727,9 @@ awg_device_peer_set_public_key(AWGDevicePeer *self,
     }
 
     g_clear_pointer(&priv->public_key, g_free);
+    g_clear_pointer(&priv->public_key_base64, g_free);
     priv->public_key = decoded_key;
+    priv->public_key_base64 = g_strdup(public_key);
     return TRUE;
 }
 
@@ -1539,23 +1740,7 @@ awg_device_peer_get_public_key(AWGDevicePeer *self)
 
     g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
     priv = awg_device_peer_get_instance_private(self);
-    if (!priv->public_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->public_key);
-}
-
-gchar *
-awg_device_peer_dup_public_key(AWGDevicePeer *self)
-{
-    AWGDevicePeerPrivate *priv;
-
-    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
-    priv = awg_device_peer_get_instance_private(self);
-    if (!priv->public_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->public_key);
+    return priv->public_key_base64;
 }
 
 gboolean
@@ -1570,6 +1755,7 @@ awg_device_peer_set_shared_key(AWGDevicePeer *self,
 
     if (!shared_key || !*shared_key) {
         g_clear_pointer(&priv->shared_key, g_free);
+        g_clear_pointer(&priv->shared_key_base64, g_free);
         return TRUE;
     }
 
@@ -1580,7 +1766,9 @@ awg_device_peer_set_shared_key(AWGDevicePeer *self,
     }
 
     g_clear_pointer(&priv->shared_key, g_free);
+    g_clear_pointer(&priv->shared_key_base64, g_free);
     priv->shared_key = decoded_key;
+    priv->shared_key_base64 = g_strdup(shared_key);
     return TRUE;
 }
 
@@ -1591,23 +1779,7 @@ awg_device_peer_get_shared_key(AWGDevicePeer *self)
 
     g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
     priv = awg_device_peer_get_instance_private(self);
-    if (!priv->shared_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->shared_key);
-}
-
-gchar *
-awg_device_peer_dup_shared_key(AWGDevicePeer *self)
-{
-    AWGDevicePeerPrivate *priv;
-
-    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
-    priv = awg_device_peer_get_instance_private(self);
-    if (!priv->shared_key) {
-        return NULL;
-    }
-    return awg_key_to_base64(priv->shared_key);
+    return priv->shared_key_base64;
 }
 
 NMSettingSecretFlags
@@ -1720,7 +1892,6 @@ awg_device_peer_set_keep_alive_interval(AWGDevicePeer *self, guint64 interval)
 gboolean
 awg_device_peer_set_keep_alive_interval_from_string(AWGDevicePeer *self, const gchar *str)
 {
-    gchar *endptr;
     guint64 interval;
 
     g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), FALSE);
@@ -1730,13 +1901,12 @@ awg_device_peer_set_keep_alive_interval_from_string(AWGDevicePeer *self, const g
         return awg_device_peer_set_keep_alive_interval(self, 0);
     }
 
-    interval = strtoull(str, &endptr, 10);
-    if (interval == ULLONG_MAX && errno == ERANGE) {
+    if (!g_ascii_string_to_unsigned(str, 10, 0, UINT16_MAX, &interval, NULL)) {
         g_warning("Invalid keep alive interval: %s", str);
         return FALSE;
     }
 
-    return awg_device_peer_set_keep_alive_interval(self, interval);
+    return awg_device_peer_set_keep_alive_interval(self, (guint16)interval);
 }
 
 guint16
