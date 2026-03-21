@@ -301,6 +301,7 @@ add_executable(nm-amneziawg-netlink-test tests/test-netlink.c
     shared/awg/awg-connection-manager-dummy.c
     shared/awg/awg-connection-manager-external.c
     shared/awg/awg-connection-manager-netlink.c
+    shared/awg/awg-validate.c
     shared/amneziawg.c
 )
 target_include_directories(nm-amneziawg-netlink-test PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR})

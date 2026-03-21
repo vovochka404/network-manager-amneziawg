@@ -46,10 +46,10 @@ test_awg_device_new_from_config_ipv4(void)
     g_assert_cmpint(awg_device_get_jmax(device), ==, 30);
     g_assert_cmpint(awg_device_get_s1(device), ==, 10);
     g_assert_cmpint(awg_device_get_s2(device), ==, 20);
-    g_assert_cmpint(awg_device_get_h1(device), ==, 1);
-    g_assert_cmpint(awg_device_get_h2(device), ==, 2);
-    g_assert_cmpint(awg_device_get_h3(device), ==, 3);
-    g_assert_cmpint(awg_device_get_h4(device), ==, 4);
+    g_assert_cmpstr(awg_device_get_h1(device), ==, "1");
+    g_assert_cmpstr(awg_device_get_h2(device), ==, "2");
+    g_assert_cmpstr(awg_device_get_h3(device), ==, "3");
+    g_assert_cmpstr(awg_device_get_h4(device), ==, "4");
     g_assert_cmpint(awg_device_get_mtu(device), ==, 1420);
 
     const GList *peers = awg_device_get_peers_list(device);
@@ -421,15 +421,6 @@ test_awg_validate_ip6_invalid(void)
 }
 
 static void
-test_awg_validate_dns_valid(void)
-{
-    g_assert_true(awg_validate_dns(""));
-    g_assert_true(awg_validate_dns("8.8.8.8"));
-    g_assert_true(awg_validate_dns("8.8.8.8, 8.8.4.4"));
-    g_assert_true(awg_validate_dns("2001:4860:4860::8888"));
-}
-
-static void
 test_awg_validate_port_valid(void)
 {
     g_assert_true(awg_validate_port(""));
@@ -457,6 +448,25 @@ test_awg_validate_jc_valid(void)
     g_assert_true(awg_validate_jc("0"));
     g_assert_true(awg_validate_jc("1"));
     g_assert_true(awg_validate_jc("65535"));
+}
+
+static void
+test_awg_validate_jmin_valid(void)
+{
+    g_assert_true(awg_validate_jmin(""));
+    g_assert_true(awg_validate_jmin("0"));
+    g_assert_true(awg_validate_jmin("1"));
+    g_assert_true(awg_validate_jmin("65535"));
+}
+
+static void
+test_awg_validate_jmax_valid(void)
+{
+    g_assert_true(awg_validate_jmax(""));
+    g_assert_true(awg_validate_jmax("0"));
+    g_assert_true(awg_validate_jmax("1"));
+    g_assert_true(awg_validate_jmax("65534"));
+    g_assert_false(awg_validate_jmax("65535"));
 }
 
 static void
@@ -519,61 +529,6 @@ test_awg_endpoint_ipv6_empty_brackets(void)
 }
 
 static void
-test_awg_dup_private_key(void)
-{
-    AWGDevice *device = awg_device_new();
-    g_assert_nonnull(device);
-
-    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
-
-    const gchar *key = awg_device_dup_private_key(device);
-    g_assert_nonnull(key);
-    g_assert_cmpstr(key, ==, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
-    g_free((gchar *)key);
-
-    key = awg_device_get_private_key(device);
-    g_assert_nonnull(key);
-
-    g_object_unref(device);
-}
-
-static void
-test_awg_dup_public_key(void)
-{
-    AWGDevice *device = awg_device_new();
-    g_assert_nonnull(device);
-
-    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
-    awg_device_set_public_key(device, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0=");
-
-    gchar *pubkey = awg_device_dup_public_key(device);
-    g_assert_nonnull(pubkey);
-    g_free(pubkey);
-
-    g_object_unref(device);
-}
-
-static void
-test_awg_peer_dup_keys(void)
-{
-    AWGDevicePeer *peer = awg_device_peer_new();
-    g_assert_nonnull(peer);
-
-    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
-    g_assert_true(awg_device_peer_set_shared_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
-
-    gchar *pubkey = awg_device_peer_dup_public_key(peer);
-    g_assert_nonnull(pubkey);
-    g_free(pubkey);
-
-    gchar *sharedkey = awg_device_peer_dup_shared_key(peer);
-    g_assert_nonnull(sharedkey);
-    g_free(sharedkey);
-
-    g_object_unref(peer);
-}
-
-static void
 test_awg_config_string_no_dns_leak(void)
 {
     AWGDevice *device = awg_device_new();
@@ -586,10 +541,10 @@ test_awg_config_string_no_dns_leak(void)
     awg_device_set_jmax(device, 30);
     awg_device_set_s1(device, 10);
     awg_device_set_s2(device, 20);
-    awg_device_set_h1(device, 1);
-    awg_device_set_h2(device, 2);
-    awg_device_set_h3(device, 3);
-    awg_device_set_h4(device, 4);
+    awg_device_set_h1(device, "1");
+    awg_device_set_h2(device, "2");
+    awg_device_set_h3(device, "3");
+    awg_device_set_h4(device, "4");
 
     AWGDevicePeer *peer = awg_device_peer_new();
     g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
@@ -620,10 +575,10 @@ test_awg_config_string_with_dns(void)
     awg_device_set_jmax(device, 30);
     awg_device_set_s1(device, 10);
     awg_device_set_s2(device, 20);
-    awg_device_set_h1(device, 1);
-    awg_device_set_h2(device, 2);
-    awg_device_set_h3(device, 3);
-    awg_device_set_h4(device, 4);
+    awg_device_set_h1(device, "1");
+    awg_device_set_h2(device, "2");
+    awg_device_set_h3(device, "3");
+    awg_device_set_h4(device, "4");
 
     AWGDevicePeer *peer = awg_device_peer_new();
     g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
@@ -638,6 +593,432 @@ test_awg_config_string_with_dns(void)
     g_free(config_str);
 
     g_object_unref(device);
+}
+
+static void
+test_awg_device_new_from_config_extended(void)
+{
+    gchar *config_path = get_test_config_path("test-config-extended.conf");
+    AWGDevice *device = awg_device_new_from_config(config_path);
+
+    g_assert_nonnull(device);
+
+    g_assert_cmpint(awg_device_get_jc(device), ==, 3);
+    g_assert_cmpint(awg_device_get_jmin(device), ==, 15);
+    g_assert_cmpint(awg_device_get_jmax(device), ==, 30);
+    g_assert_cmpint(awg_device_get_s1(device), ==, 10);
+    g_assert_cmpint(awg_device_get_s2(device), ==, 20);
+    g_assert_cmpint(awg_device_get_s3(device), ==, 30);
+    g_assert_cmpint(awg_device_get_s4(device), ==, 40);
+
+    g_assert_cmpstr(awg_device_get_h1(device), ==, "1-100");
+    g_assert_cmpstr(awg_device_get_h2(device), ==, "101-200");
+    g_assert_cmpstr(awg_device_get_h3(device), ==, "201-300");
+    g_assert_cmpstr(awg_device_get_h4(device), ==, "301-400");
+
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16");
+    g_assert_cmpstr(awg_device_get_i2(device), ==, "rc10");
+    g_assert_cmpstr(awg_device_get_i3(device), ==, "b0xDEADBEEF");
+    g_assert_cmpstr(awg_device_get_i4(device), ==, "r16<c");
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "rc5<t");
+
+    g_object_unref(device);
+    g_free(config_path);
+}
+
+static void
+test_awg_s3_s4_setters(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    g_assert_cmpint(awg_device_get_s3(device), ==, 0);
+    g_assert_cmpint(awg_device_get_s4(device), ==, 0);
+
+    g_assert_true(awg_device_set_s3(device, 100));
+    g_assert_cmpint(awg_device_get_s3(device), ==, 100);
+
+    g_assert_true(awg_device_set_s4(device, 200));
+    g_assert_cmpint(awg_device_get_s4(device), ==, 200);
+
+    g_assert_true(awg_device_set_s3(device, 0));
+    g_assert_cmpint(awg_device_get_s3(device), ==, 0);
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_i1_i5_setters(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    g_assert_null(awg_device_get_i1(device));
+    g_assert_null(awg_device_get_i5(device));
+
+    g_assert_true(awg_device_set_i1(device, "r16"));
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16");
+
+    g_assert_true(awg_device_set_i2(device, "rc10"));
+    g_assert_cmpstr(awg_device_get_i2(device), ==, "rc10");
+
+    g_assert_true(awg_device_set_i3(device, "b0xDEADBEEF"));
+    g_assert_cmpstr(awg_device_get_i3(device), ==, "b0xDEADBEEF");
+
+    g_assert_true(awg_device_set_i4(device, "r16<c"));
+    g_assert_cmpstr(awg_device_get_i4(device), ==, "r16<c");
+
+    g_assert_true(awg_device_set_i5(device, "c"));
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "c");
+
+    g_assert_true(awg_device_set_i1(device, NULL));
+    g_assert_null(awg_device_get_i1(device));
+
+    g_assert_true(awg_device_set_i1(device, ""));
+    g_assert_null(awg_device_get_i1(device));
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_h1_h4_string_values(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    g_assert_true(awg_device_set_h1(device, "1-100"));
+    g_assert_cmpstr(awg_device_get_h1(device), ==, "1-100");
+
+    g_assert_true(awg_device_set_h2(device, "200"));
+    g_assert_cmpstr(awg_device_get_h2(device), ==, "200");
+
+    g_assert_true(awg_device_set_h3(device, "1-50"));
+    g_assert_cmpstr(awg_device_get_h3(device), ==, "1-50");
+
+    g_assert_true(awg_device_set_h4(device, "100"));
+    g_assert_cmpstr(awg_device_get_h4(device), ==, "100");
+
+    g_assert_true(awg_device_set_h1(device, NULL));
+    g_assert_null(awg_device_get_h1(device));
+
+    g_assert_true(awg_device_set_h1(device, ""));
+    g_assert_null(awg_device_get_h1(device));
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_h1_h4_with_spaces(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    g_assert_true(awg_device_set_h1(device, "1-100"));
+    g_assert_cmpstr(awg_device_get_h1(device), ==, "1-100");
+
+    g_assert_true(awg_device_set_h2(device, "50"));
+    g_assert_cmpstr(awg_device_get_h2(device), ==, "50");
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_i1_i5_with_spaces(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    g_assert_true(awg_device_set_i1(device, "r16<c"));
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16<c");
+
+    g_assert_true(awg_device_set_i5(device, "r16<c "));
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "r16<c ");
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_validate_awg_string(void)
+{
+    g_assert_true(awg_validate_awg_string(NULL));
+    g_assert_true(awg_validate_awg_string(""));
+    g_assert_true(awg_validate_awg_string("short string"));
+    g_assert_true(awg_validate_awg_string("a"));
+
+    gchar *too_long_str = g_malloc(5 * 1024 + 2);
+    memset(too_long_str, 'a', 5 * 1024 + 1);
+    too_long_str[5 * 1024 + 1] = '\0';
+    g_assert_false(awg_validate_awg_string(too_long_str));
+    g_free(too_long_str);
+
+    gchar *valid_str = g_malloc(5 * 1024);
+    memset(valid_str, 'b', 5 * 1024 - 1);
+    valid_str[5 * 1024 - 1] = '\0';
+    g_assert_true(awg_validate_awg_string(valid_str));
+    g_free(valid_str);
+
+    gchar *exact_max = g_malloc(5 * 1024);
+    memset(exact_max, 'c', 5 * 1024 - 1);
+    exact_max[5 * 1024 - 1] = '\0';
+    g_assert_true(awg_validate_awg_string(exact_max));
+    g_free(exact_max);
+}
+
+static void
+test_awg_validate_magic_header_valid(void)
+{
+    g_assert_true(awg_validate_magic_header(NULL));
+    g_assert_true(awg_validate_magic_header(""));
+    g_assert_true(awg_validate_magic_header(" "));
+
+    g_assert_true(awg_validate_magic_header("1"));
+    g_assert_true(awg_validate_magic_header("42"));
+    g_assert_true(awg_validate_magic_header("100"));
+
+    g_assert_true(awg_validate_magic_header("1-100"));
+    g_assert_true(awg_validate_magic_header("100-200"));
+    g_assert_true(awg_validate_magic_header("0-100"));
+    g_assert_true(awg_validate_magic_header("1-1"));
+}
+
+static void
+test_awg_validate_magic_header_invalid(void)
+{
+    g_assert_false(awg_validate_magic_header("abc"));
+    g_assert_false(awg_validate_magic_header("1abc"));
+    g_assert_false(awg_validate_magic_header("abc-100"));
+    g_assert_false(awg_validate_magic_header("1-"));
+    g_assert_false(awg_validate_magic_header("-100"));
+    g_assert_false(awg_validate_magic_header("100-1"));
+    g_assert_false(awg_validate_magic_header("-1"));
+}
+
+static void
+test_awg_validate_i_packet_valid(void)
+{
+    g_assert_true(awg_validate_i_packet(NULL));
+    g_assert_true(awg_validate_i_packet(""));
+    g_assert_true(awg_validate_i_packet(" "));
+
+    g_assert_true(awg_validate_i_packet("r16"));
+    g_assert_true(awg_validate_i_packet("rc10"));
+    g_assert_true(awg_validate_i_packet("rd8"));
+    g_assert_true(awg_validate_i_packet("c"));
+    g_assert_true(awg_validate_i_packet("t"));
+    g_assert_true(awg_validate_i_packet("b0xDEADBEEF"));
+    g_assert_true(awg_validate_i_packet("b0xAABBCCDD"));
+
+    g_assert_true(awg_validate_i_packet("r16<c"));
+    g_assert_true(awg_validate_i_packet("b0xDEADBEEF<r16<c"));
+    g_assert_true(awg_validate_i_packet("r16<c<t"));
+    g_assert_true(awg_validate_i_packet("rc10<rd5<c"));
+
+    g_assert_true(awg_validate_i_packet("r16<c "));
+    g_assert_true(awg_validate_i_packet(" r16 "));
+}
+
+static void
+test_awg_validate_i_packet_invalid(void)
+{
+    g_assert_false(awg_validate_i_packet("invalid"));
+    g_assert_false(awg_validate_i_packet("packet_content"));
+    g_assert_false(awg_validate_i_packet("b0xGGGG"));
+    g_assert_false(awg_validate_i_packet("bDEAD"));
+    g_assert_false(awg_validate_i_packet("b0x1"));
+    g_assert_false(awg_validate_i_packet("rc"));
+    g_assert_false(awg_validate_i_packet("rd"));
+    g_assert_false(awg_validate_i_packet("rcabc"));
+    g_assert_false(awg_validate_i_packet("rdxyz"));
+    g_assert_false(awg_validate_i_packet("r"));
+    g_assert_false(awg_validate_i_packet("unknown"));
+
+    gchar *too_long = g_malloc(5 * 1024 + 100);
+    memset(too_long, 'a', 5 * 1024 + 99);
+    too_long[5 * 1024 + 99] = '\0';
+    g_assert_false(awg_validate_i_packet(too_long));
+    g_free(too_long);
+}
+
+static void
+test_awg_validate_s3_valid(void)
+{
+    g_assert_true(awg_validate_s3(NULL));
+    g_assert_true(awg_validate_s3(""));
+    g_assert_true(awg_validate_s3("0"));
+    g_assert_true(awg_validate_s3("1"));
+    g_assert_true(awg_validate_s3("100"));
+    g_assert_true(awg_validate_s3("65479"));
+
+    g_assert_false(awg_validate_s3("65480"));
+    g_assert_false(awg_validate_s3("65535"));
+}
+
+static void
+test_awg_validate_s4_valid(void)
+{
+    g_assert_true(awg_validate_s4(NULL));
+    g_assert_true(awg_validate_s4(""));
+    g_assert_true(awg_validate_s4("0"));
+    g_assert_true(awg_validate_s4("1"));
+    g_assert_true(awg_validate_s4("100"));
+    g_assert_true(awg_validate_s4("65503"));
+
+    g_assert_false(awg_validate_s4("65504"));
+    g_assert_false(awg_validate_s4("65535"));
+}
+
+static void
+test_awg_validate_magic_headers_no_overlap(void)
+{
+    g_assert_true(awg_validate_magic_headers_no_overlap("", "", "", ""));
+    g_assert_true(awg_validate_magic_headers_no_overlap("1", "2", "3", "4"));
+    g_assert_true(awg_validate_magic_headers_no_overlap("1-10", "11-20", "21-30", "31-40"));
+    g_assert_true(awg_validate_magic_headers_no_overlap("1-10", "20-30", "", ""));
+    g_assert_true(awg_validate_magic_headers_no_overlap("", "11-20", "", ""));
+
+    g_assert_false(awg_validate_magic_headers_no_overlap("1-10", "5-15", "", ""));
+    g_assert_false(awg_validate_magic_headers_no_overlap("1-10", "2", "", ""));
+    g_assert_false(awg_validate_magic_headers_no_overlap("1-10", "11-20", "15-25", ""));
+    g_assert_false(awg_validate_magic_headers_no_overlap("1", "2", "3", "2"));
+}
+
+static void
+test_awg_validate_jmin_jmax(void)
+{
+    g_assert_true(awg_validate_jmin_jmax(0, 0));
+    g_assert_true(awg_validate_jmin_jmax(0, 1));
+    g_assert_true(awg_validate_jmin_jmax(1, 10));
+    g_assert_true(awg_validate_jmin_jmax(100, 100));
+    g_assert_true(awg_validate_jmin_jmax(65534, 65535));
+
+    g_assert_false(awg_validate_jmin_jmax(10, 5));
+    g_assert_false(awg_validate_jmin_jmax(100, 50));
+}
+
+static void
+test_awg_config_string_with_s3_s4(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    awg_device_set_address_from_string(device, "10.0.0.2/32");
+    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+    awg_device_set_s3(device, 30);
+    awg_device_set_s4(device, 40);
+
+    AWGDevicePeer *peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "10.0.0.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    gchar *config_str = awg_device_create_config_string(device);
+    g_assert_nonnull(config_str);
+
+    g_assert_nonnull(strstr(config_str, "S3 = 30"));
+    g_assert_nonnull(strstr(config_str, "S4 = 40"));
+
+    g_free(config_str);
+    g_object_unref(device);
+}
+
+static void
+test_awg_config_string_with_i1_i5(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    awg_device_set_address_from_string(device, "10.0.0.2/32");
+    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+    awg_device_set_i1(device, "r16");
+    awg_device_set_i2(device, "rc10");
+    awg_device_set_i3(device, "b0xDEADBEEF");
+    awg_device_set_i4(device, "r16<c");
+    awg_device_set_i5(device, "rc5<t");
+
+    AWGDevicePeer *peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "10.0.0.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    gchar *config_str = awg_device_create_config_string(device);
+    g_assert_nonnull(config_str);
+
+    g_assert_nonnull(strstr(config_str, "I1 = r16"));
+    g_assert_nonnull(strstr(config_str, "I2 = rc10"));
+    g_assert_nonnull(strstr(config_str, "I3 = b0xDEADBEEF"));
+    g_assert_nonnull(strstr(config_str, "I4 = r16<c"));
+    g_assert_nonnull(strstr(config_str, "I5 = rc5<t"));
+
+    g_free(config_str);
+    g_object_unref(device);
+}
+
+static void
+test_awg_config_string_h1_h4_strings(void)
+{
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+
+    awg_device_set_address_from_string(device, "10.0.0.2/32");
+    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+    awg_device_set_h1(device, "1-100");
+    awg_device_set_h2(device, "200");
+    awg_device_set_h3(device, "1-50");
+    awg_device_set_h4(device, "100");
+
+    AWGDevicePeer *peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "10.0.0.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    gchar *config_str = awg_device_create_config_string(device);
+    g_assert_nonnull(config_str);
+
+    g_assert_nonnull(strstr(config_str, "H1 = 1-100"));
+    g_assert_nonnull(strstr(config_str, "H2 = 200"));
+    g_assert_nonnull(strstr(config_str, "H3 = 1-50"));
+    g_assert_nonnull(strstr(config_str, "H4 = 100"));
+
+    g_free(config_str);
+    g_object_unref(device);
+}
+
+static void
+test_awg_device_save_load_extended(void)
+{
+    gchar *config_path = get_test_config_path("test-config-extended.conf");
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    g_assert_nonnull(device);
+
+    gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-extended.conf", NULL);
+    gboolean saved = awg_device_save_to_file(device, output_path);
+    g_assert_true(saved);
+
+    g_object_unref(device);
+
+    AWGDevice *device2 = awg_device_new_from_config(output_path);
+    g_assert_nonnull(device2);
+
+    g_assert_cmpint(awg_device_get_s3(device2), ==, 30);
+    g_assert_cmpint(awg_device_get_s4(device2), ==, 40);
+
+    g_assert_cmpstr(awg_device_get_h1(device2), ==, "1-100");
+    g_assert_cmpstr(awg_device_get_h4(device2), ==, "301-400");
+
+    g_assert_cmpstr(awg_device_get_i1(device2), ==, "r16");
+    g_assert_cmpstr(awg_device_get_i5(device2), ==, "rc5<t");
+
+    g_object_unref(device2);
+
+    unlink(output_path);
+    g_free(output_path);
+    g_free(config_path);
 }
 
 int
@@ -668,21 +1049,38 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/validate/ip4-invalid", test_awg_validate_ip4_invalid);
     g_test_add_func("/awg/validate/ip6-valid", test_awg_validate_ip6_valid);
     g_test_add_func("/awg/validate/ip6-invalid", test_awg_validate_ip6_invalid);
-    g_test_add_func("/awg/validate/dns-valid", test_awg_validate_dns_valid);
     g_test_add_func("/awg/validate/port-valid", test_awg_validate_port_valid);
     g_test_add_func("/awg/validate/mtu-valid", test_awg_validate_mtu_valid);
     g_test_add_func("/awg/validate/jc-valid", test_awg_validate_jc_valid);
+    g_test_add_func("/awg/validate/jmin-valid", test_awg_validate_jmin_valid);
+    g_test_add_func("/awg/validate/jmax-valid", test_awg_validate_jmax_valid);
     g_test_add_func("/awg/validate/base64-valid", test_awg_validate_base64_valid);
     g_test_add_func("/awg/validate/fqdn-valid", test_awg_validate_fqdn_valid);
     g_test_add_func("/awg/validate/subnet-valid", test_awg_validate_subnet_valid);
     g_test_add_func("/awg/validate/allowed-ips-valid", test_awg_validate_allowed_ips_valid);
     g_test_add_func("/awg/validate/endpoint-valid", test_awg_validate_endpoint_valid);
     g_test_add_func("/awg/endpoint/ipv6-empty-brackets", test_awg_endpoint_ipv6_empty_brackets);
-    g_test_add_func("/awg/dup/private-key", test_awg_dup_private_key);
-    g_test_add_func("/awg/dup/public-key", test_awg_dup_public_key);
-    g_test_add_func("/awg/dup/peer-keys", test_awg_peer_dup_keys);
     g_test_add_func("/awg/config/no-dns-leak", test_awg_config_string_no_dns_leak);
     g_test_add_func("/awg/config/with-dns", test_awg_config_string_with_dns);
+    g_test_add_func("/awg/config/extended", test_awg_device_new_from_config_extended);
+    g_test_add_func("/awg/config/save-load-extended", test_awg_device_save_load_extended);
+    g_test_add_func("/awg/config/s3-s4", test_awg_config_string_with_s3_s4);
+    g_test_add_func("/awg/config/i1-i5", test_awg_config_string_with_i1_i5);
+    g_test_add_func("/awg/config/h1-h4-strings", test_awg_config_string_h1_h4_strings);
+    g_test_add_func("/awg/device/s3-s4-setters", test_awg_s3_s4_setters);
+    g_test_add_func("/awg/device/i1-i5-setters", test_awg_i1_i5_setters);
+    g_test_add_func("/awg/device/h1-h4-strings", test_awg_h1_h4_string_values);
+    g_test_add_func("/awg/device/h1-h4-spaces", test_awg_h1_h4_with_spaces);
+    g_test_add_func("/awg/device/i1-i5-spaces", test_awg_i1_i5_with_spaces);
+    g_test_add_func("/awg/validate/awg-string", test_awg_validate_awg_string);
+    g_test_add_func("/awg/validate/magic-header-valid", test_awg_validate_magic_header_valid);
+    g_test_add_func("/awg/validate/magic-header-invalid", test_awg_validate_magic_header_invalid);
+    g_test_add_func("/awg/validate/i-packet-valid", test_awg_validate_i_packet_valid);
+    g_test_add_func("/awg/validate/i-packet-invalid", test_awg_validate_i_packet_invalid);
+    g_test_add_func("/awg/validate/s3-valid", test_awg_validate_s3_valid);
+    g_test_add_func("/awg/validate/s4-valid", test_awg_validate_s4_valid);
+    g_test_add_func("/awg/validate/magic-headers-no-overlap", test_awg_validate_magic_headers_no_overlap);
+    g_test_add_func("/awg/validate/jmin-jmax", test_awg_validate_jmin_jmax);
 
     return g_test_run();
 }
