@@ -47,7 +47,7 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
     const GInetAddress *addr;
     const GList *peers;
     guint16 port;
-    guint16 fw_mark;
+    guint32 fw_mark;
     guint i;
 
     g_return_val_if_fail(AWG_IS_DEVICE(device), FALSE);
@@ -159,20 +159,48 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S2, s2_str);
     }
     {
-        g_autofree gchar *h1_str = g_strdup_printf("%u", awg_device_get_h1(device));
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1, h1_str);
+        g_autofree gchar *s3_str = g_strdup_printf("%u", awg_device_get_s3(device));
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3, s3_str);
     }
     {
-        g_autofree gchar *h2_str = g_strdup_printf("%u", awg_device_get_h2(device));
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2, h2_str);
+        g_autofree gchar *s4_str = g_strdup_printf("%u", awg_device_get_s4(device));
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4, s4_str);
     }
-    {
-        g_autofree gchar *h3_str = g_strdup_printf("%u", awg_device_get_h3(device));
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3, h3_str);
+    value = awg_device_get_h1(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1, value);
     }
-    {
-        g_autofree gchar *h4_str = g_strdup_printf("%u", awg_device_get_h4(device));
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4, h4_str);
+    value = awg_device_get_h2(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2, value);
+    }
+    value = awg_device_get_h3(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3, value);
+    }
+    value = awg_device_get_h4(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4, value);
+    }
+    value = awg_device_get_i1(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1, value);
+    }
+    value = awg_device_get_i2(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2, value);
+    }
+    value = awg_device_get_i3(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3, value);
+    }
+    value = awg_device_get_i4(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4, value);
+    }
+    value = awg_device_get_i5(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, value);
     }
 
     guint32 mtu = awg_device_get_mtu(device);
@@ -207,16 +235,16 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         gchar *key;
 
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY, i);
-        g_autofree gchar *peer_pubkey = awg_device_peer_dup_public_key(peer);
-        if (peer_pubkey) {
-            nm_setting_vpn_add_data_item(s_vpn, key, peer_pubkey);
+        value = awg_device_peer_get_public_key(peer);
+        if (value) {
+            nm_setting_vpn_add_data_item(s_vpn, key, value);
         }
         g_free(key);
 
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-        g_autofree gchar *peer_sharedkey = awg_device_peer_dup_shared_key(peer);
-        if (peer_sharedkey) {
-            nm_setting_vpn_add_secret(s_vpn, key, peer_sharedkey);
+        value = awg_device_peer_get_shared_key(peer);
+        if (value) {
+            nm_setting_vpn_add_secret(s_vpn, key, value);
         }
         g_free(key);
 
@@ -330,24 +358,59 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
         awg_device_set_s2_from_string(device, value);
     }
 
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3);
+    if (value) {
+        awg_device_set_s3_from_string(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4);
+    if (value) {
+        awg_device_set_s4_from_string(device, value);
+    }
+
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1);
     if (value) {
-        awg_device_set_h1_from_string(device, value);
+        awg_device_set_h1(device, value);
     }
 
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2);
     if (value) {
-        awg_device_set_h2_from_string(device, value);
+        awg_device_set_h2(device, value);
     }
 
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3);
     if (value) {
-        awg_device_set_h3_from_string(device, value);
+        awg_device_set_h3(device, value);
     }
 
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4);
     if (value) {
-        awg_device_set_h4_from_string(device, value);
+        awg_device_set_h4(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1);
+    if (value) {
+        awg_device_set_i1(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2);
+    if (value) {
+        awg_device_set_i2(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3);
+    if (value) {
+        awg_device_set_i3(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4);
+    if (value) {
+        awg_device_set_i4(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5);
+    if (value) {
+        awg_device_set_i5(device, value);
     }
 
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MTU);
