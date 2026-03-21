@@ -62,6 +62,7 @@
                 <property name="can-focus">True</property>
                 <property name="receives-default">True</property>
                 <property name="use-underline">True</property>
+                <property name="sensitive">False</property>
               </object>
               <packing>
                 <property name="expand">True</property>

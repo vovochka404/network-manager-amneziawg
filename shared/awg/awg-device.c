@@ -1643,6 +1643,27 @@ awg_device_remove_peer(AWGDevice *self, guint index)
     return TRUE;
 }
 
+gboolean
+awg_device_replace_peer(AWGDevice *self, guint index, AWGDevicePeer *new_peer)
+{
+    AWGDevicePrivate *priv;
+    GList *link;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    g_return_val_if_fail(AWG_IS_DEVICE_PEER(new_peer), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    link = g_list_nth(priv->peers, index);
+    if (!link) {
+        return FALSE;
+    }
+
+    g_object_unref(link->data);
+    link->data = g_object_ref(new_peer);
+
+    return TRUE;
+}
+
 const GList *
 awg_device_get_peers_list(AWGDevice *self)
 {
@@ -1708,6 +1729,46 @@ AWGDevicePeer *
 awg_device_peer_new(void)
 {
     return g_object_new(AWG_TYPE_DEVICE_PEER, NULL);
+}
+
+AWGDevicePeer *
+awg_device_peer_new_clone(AWGDevicePeer *peer)
+{
+    AWGDevicePeerPrivate *priv;
+    AWGDevicePeer *clone;
+    AWGDevicePeerPrivate *clone_priv;
+    const GList *l;
+
+    g_return_val_if_fail(AWG_IS_DEVICE_PEER(peer), NULL);
+
+    clone = awg_device_peer_new();
+    priv = awg_device_peer_get_instance_private(peer);
+    clone_priv = awg_device_peer_get_instance_private(clone);
+
+    if (priv->public_key_base64)
+        awg_device_peer_set_public_key(clone, priv->public_key_base64);
+
+    if (priv->shared_key_base64)
+        awg_device_peer_set_shared_key(clone, priv->shared_key_base64);
+
+    clone_priv->shared_key_flags = priv->shared_key_flags;
+
+    for (l = priv->allowed_ips; l; l = l->next) {
+        AWGSubNet *subnet = l->data;
+        gchar *subnet_str = awg_subnet_to_string(subnet);
+        if (subnet_str) {
+            awg_device_peer_set_allowed_ips_from_string(clone, subnet_str);
+            g_free(subnet_str);
+        }
+    }
+
+    if (priv->endpoint)
+        awg_device_peer_set_endpoint(clone, priv->endpoint);
+
+    awg_device_peer_set_keep_alive_interval(clone, priv->keep_alive);
+    awg_device_peer_set_advanced_security(clone, priv->advanced_security);
+
+    return clone;
 }
 
 gboolean

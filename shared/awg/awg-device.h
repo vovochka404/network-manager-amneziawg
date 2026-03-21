@@ -126,12 +126,14 @@ const gchar *awg_device_get_post_down(AWGDevice *self);
 
 gboolean awg_device_add_peer(AWGDevice *self, AWGDevicePeer *peer);
 gboolean awg_device_remove_peer(AWGDevice *self, guint index);
+gboolean awg_device_replace_peer(AWGDevice *self, guint index, AWGDevicePeer *new_peer);
 const GList *awg_device_get_peers_list(AWGDevice *self);
 guint awg_device_get_peers_count(AWGDevice *self);
 gboolean awg_device_is_valid(AWGDevice *self);
 void awg_device_free(AWGDevice *device);
 
 AWGDevicePeer *awg_device_peer_new(void);
+AWGDevicePeer *awg_device_peer_new_clone(AWGDevicePeer *peer);
 void awg_device_peer_free(AWGDevicePeer *peer);
 gboolean awg_device_peer_is_valid(AWGDevicePeer *self);
 

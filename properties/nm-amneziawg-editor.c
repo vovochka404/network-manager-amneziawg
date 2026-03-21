@@ -57,7 +57,9 @@ typedef struct {
     gboolean new_connection;
     NMConnection *connection;
     AWGDevice *device;
-    guint selected_peer_index;
+    gint selected_peer_index;
+    AWGDevicePeer *dialog_peer;
+    gint dialog_peer_index;
 } AmneziaWGEditorPrivate;
 
 /*****************************************************************************/
@@ -519,17 +521,73 @@ peer_dialog_show_psk_toggled(GtkWidget *widget, PeerDialogData *data)
     gtk_entry_set_visibility(data->entry_psk, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
+static gboolean
+peer_dialog_validate_fields(PeerDialogData *data)
+{
+    const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
+    const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
+    const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
+    NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(data->peer);
+
+    gboolean valid = TRUE;
+
+    if (!check_peer_public_key(public_key)) {
+        valid = FALSE;
+    }
+
+    if (!check_peer_endpoint(endpoint)) {
+        valid = FALSE;
+    }
+
+    if (!(psk_flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED))) {
+        if (!awg_validate_base64(psk) && psk && psk[0]) {
+            valid = FALSE;
+        }
+    }
+
+    return valid;
+}
+
+static void
+peer_dialog_update_apply_button(PeerDialogData *data)
+{
+    const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
+    const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
+
+    if (!check_peer_public_key(public_key)) {
+        gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_public_key)), "error");
+    } else {
+        gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_public_key)), "error");
+    }
+
+    if (!check_peer_endpoint(endpoint)) {
+        gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_endpoint)), "error");
+    } else {
+        gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_endpoint)), "error");
+    }
+
+    gboolean valid = peer_dialog_validate_fields(data);
+    gtk_widget_set_sensitive(GTK_WIDGET(data->button_apply), valid);
+}
+
+static void
+peer_dialog_entry_changed(GtkWidget *widget, PeerDialogData *data)
+{
+    peer_dialog_update_apply_button(data);
+}
+
 typedef struct {
     AmneziaWGEditor *editor;
-    AWGDevicePeer *peer;
-    gboolean is_new;
 } PeerDialogInfo;
 
 static void
 peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info);
 
+static void
+peers_treeview_rebuild(AmneziaWGEditor *self);
+
 static GtkWidget *
-peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, AmneziaWGEditor *editor)
+peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *editor)
 {
     PeerDialogData *data;
     PeerDialogInfo *info;
@@ -555,7 +613,6 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, Am
     data = g_new0(PeerDialogData, 1);
     data->peer = g_object_ref(peer);
     data->dialog = dialog;
-    data->is_new = is_new;
     data->entry_public_key = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_public_key"));
     data->entry_allowed_ips = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_allowed_ips"));
     data->entry_endpoint = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_endpoint"));
@@ -572,8 +629,6 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, Am
 
     info = g_new0(PeerDialogInfo, 1);
     info->editor = editor;
-    info->peer = peer;
-    info->is_new = is_new;
     g_signal_connect_data(G_OBJECT(dialog), "response", G_CALLBACK(peer_dialog_response), info, (GClosureNotify)g_free, 0);
 
     gtk_spin_button_set_range(data->spin_keepalive, 0, 65535);
@@ -585,12 +640,16 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, Am
     }
 
     peer_dialog_update_ui(data);
+    peer_dialog_update_apply_button(data);
 
     g_signal_connect(data->button_apply, "clicked", G_CALLBACK(peer_dialog_apply_clicked), data);
     if (button_cancel)
         g_signal_connect(button_cancel, "clicked", G_CALLBACK(peer_dialog_cancel_clicked), data);
     if (data->toggle_show_psk)
         g_signal_connect(data->toggle_show_psk, "toggled", G_CALLBACK(peer_dialog_show_psk_toggled), data);
+
+    g_signal_connect(data->entry_public_key, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
+    g_signal_connect(data->entry_endpoint, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
 
     gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
     gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(toplevel));
@@ -602,6 +661,9 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, Am
 static void
 peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info)
 {
+    AmneziaWGEditor *self = info->editor;
+    AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+
     if (response_id == GTK_RESPONSE_APPLY) {
         PeerDialogData *data = g_object_get_data(G_OBJECT(dialog), "peer-data");
         if (data) {
@@ -643,18 +705,22 @@ peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info)
             }
 
             gtk_widget_hide(GTK_WIDGET(data->info_bar));
+
             peer_dialog_update_peer(data);
-        }
-        g_signal_emit_by_name(info->editor, "changed");
-    } else if (response_id == GTK_RESPONSE_CANCEL || response_id == GTK_RESPONSE_DELETE_EVENT) {
-        if (info->is_new) {
-            AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(info->editor);
-            guint count = awg_device_get_peers_count(priv->device);
-            if (count > 0) {
-                awg_device_remove_peer(priv->device, count - 1);
+
+            if (priv->dialog_peer_index >= 0) {
+                awg_device_replace_peer(priv->device, priv->dialog_peer_index, data->peer);
+            } else {
+                awg_device_add_peer(priv->device, data->peer);
             }
+
+            peers_treeview_rebuild(self);
         }
+        g_signal_emit_by_name(self, "changed");
     }
+
+    g_clear_object(&priv->dialog_peer);
+    priv->dialog_peer_index = -1;
 
 #if GTK_CHECK_VERSION(4, 0, 0)
     gtk_window_destroy(GTK_WINDOW(dialog));
@@ -669,7 +735,6 @@ peer_add_button_clicked(GtkButton *button, gpointer user_data)
 {
     AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
     AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
-    AWGDevicePeer *peer;
     GtkWidget *dialog;
 #if GTK_CHECK_VERSION(4, 0, 0)
     GtkRoot *toplevel = gtk_widget_get_root(priv->widget);
@@ -677,30 +742,15 @@ peer_add_button_clicked(GtkButton *button, gpointer user_data)
     GtkWidget *toplevel = gtk_widget_get_toplevel(priv->widget);
 #endif
 
-    peer = awg_device_peer_new();
-    awg_device_add_peer(priv->device, peer);
+    priv->dialog_peer = awg_device_peer_new();
+    priv->dialog_peer_index = -1;
 
-    priv->selected_peer_index = awg_device_get_peers_count(priv->device) - 1;
-
-    GtkWidget *treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
-    if (treeview) {
-        GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
-        if (GTK_IS_LIST_STORE(model)) {
-            GtkTreeIter iter;
-            gtk_list_store_append(GTK_LIST_STORE(model), &iter);
-            gtk_list_store_set(GTK_LIST_STORE(model), &iter, 0, "(new peer)", -1);
-        }
-    }
-
-    dialog = peer_dialog_create(GTK_WIDGET(toplevel), peer, TRUE, self);
+    dialog = peer_dialog_create(GTK_WIDGET(toplevel), priv->dialog_peer, self);
     if (!dialog) {
-        g_object_unref(peer);
+        g_object_unref(priv->dialog_peer);
+        priv->dialog_peer = NULL;
         return;
     }
-
-    GtkWidget *remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
-    if (remove_btn)
-        gtk_widget_set_sensitive(remove_btn, TRUE);
 
     gtk_widget_show(dialog);
 }
@@ -727,21 +777,24 @@ peers_treeview_row_activated(GtkTreeView *tree_view, GtkTreePath *path, GtkTreeV
     AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
     GtkWidget *dialog;
     AWGDevicePeer *peer;
-    const GList *peers;
     gint *indices;
-    guint idx;
+    GtkTreeModel *model;
+    GtkTreeIter iter;
 
+    model = gtk_tree_view_get_model(tree_view);
     indices = gtk_tree_path_get_indices(path);
     if (!indices)
         return;
 
-    idx = indices[0];
-    peers = awg_device_get_peers_list(priv->device);
-    peer = AWG_DEVICE_PEER(g_list_nth_data((GList *)peers, idx));
+    if (!gtk_tree_model_get_iter(model, &iter, path))
+        return;
+
+    gtk_tree_model_get(model, &iter, 1, &peer, -1);
     if (!peer)
         return;
 
-    priv->selected_peer_index = idx;
+    priv->dialog_peer = awg_device_peer_new_clone(peer);
+    priv->dialog_peer_index = indices[0];
 
 #if GTK_CHECK_VERSION(4, 0, 0)
     GtkRoot *toplevel = gtk_widget_get_root(priv->widget);
@@ -749,11 +802,51 @@ peers_treeview_row_activated(GtkTreeView *tree_view, GtkTreePath *path, GtkTreeV
     GtkWidget *toplevel = gtk_widget_get_toplevel(priv->widget);
 #endif
 
-    dialog = peer_dialog_create(GTK_WIDGET(toplevel), peer, FALSE, self);
-    if (!dialog)
+    dialog = peer_dialog_create(GTK_WIDGET(toplevel), priv->dialog_peer, self);
+    if (!dialog) {
+        g_object_unref(priv->dialog_peer);
+        priv->dialog_peer = NULL;
+        priv->dialog_peer_index = -1;
         return;
+    }
 
     gtk_widget_show(dialog);
+}
+
+static void
+peers_treeview_rebuild(AmneziaWGEditor *self)
+{
+    AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+
+    GtkWidget *treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
+    if (!treeview)
+        return;
+
+    GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
+    if (!GTK_IS_TREE_STORE(model))
+        return;
+
+    gtk_tree_store_clear(GTK_TREE_STORE(model));
+
+    const GList *peers = awg_device_get_peers_list(priv->device);
+    for (const GList *l = peers; l; l = l->next) {
+        AWGDevicePeer *p = AWG_DEVICE_PEER(l->data);
+        const gchar *pk = awg_device_peer_get_public_key(p);
+        const gchar *ep = awg_device_peer_get_endpoint(p);
+        GtkTreeIter iter;
+        gtk_tree_store_append(GTK_TREE_STORE(model), &iter, NULL);
+        if (ep && ep[0] && pk && pk[0]) {
+            gchar *label = g_strdup_printf("%s - %.8s...", ep, pk);
+            gtk_tree_store_set(GTK_TREE_STORE(model), &iter, 0, label, 1, p, -1);
+            g_free(label);
+        } else if (ep && ep[0]) {
+            gtk_tree_store_set(GTK_TREE_STORE(model), &iter, 0, ep, 1, p, -1);
+        } else if (pk && pk[0]) {
+            gtk_tree_store_set(GTK_TREE_STORE(model), &iter, 0, pk, 1, p, -1);
+        } else {
+            gtk_tree_store_set(GTK_TREE_STORE(model), &iter, 0, "(new peer)", 1, p, -1);
+        }
+    }
 }
 
 // Callback: remove peer button clicked
@@ -762,57 +855,50 @@ peer_remove_button_clicked(GtkButton *button, gpointer user_data)
 {
     AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
     AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+    GtkWidget *treeview;
+    GtkTreeModel *model;
+    GtkTreeSelection *selection;
+    GtkTreeIter iter;
     guint count;
 
-    count = awg_device_get_peers_count(priv->device);
-    if (count == 0)
+    treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
+    if (!treeview)
         return;
 
-    awg_device_remove_peer(priv->device, priv->selected_peer_index);
+    model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
+    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+    if (!gtk_tree_selection_get_selected(selection, &model, &iter))
+        return;
 
-    if (priv->selected_peer_index > 0) {
-        priv->selected_peer_index--;
-    }
-
-    count = awg_device_get_peers_count(priv->device);
-    if (count == 0) {
-        AWGDevicePeer *peer = awg_device_peer_new();
-        awg_device_add_peer(priv->device, peer);
-        g_object_unref(peer);
-    }
-
-    GtkWidget *treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
-    if (treeview) {
-        GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
-        if (GTK_IS_LIST_STORE(model)) {
-            gtk_list_store_clear(GTK_LIST_STORE(model));
-            const GList *peers = awg_device_get_peers_list(priv->device);
-            for (const GList *l = peers; l; l = l->next) {
-                AWGDevicePeer *p = AWG_DEVICE_PEER(l->data);
-                const gchar *public_key = awg_device_peer_get_public_key(p);
-                const gchar *endpoint = awg_device_peer_get_endpoint(p);
-                GtkTreeIter iter;
-                gtk_list_store_append(GTK_LIST_STORE(model), &iter);
-                if (public_key && public_key[0]) {
-                    gtk_list_store_set(GTK_LIST_STORE(model), &iter, 0, public_key, -1);
-                } else if (endpoint && endpoint[0]) {
-                    gtk_list_store_set(GTK_LIST_STORE(model), &iter, 0, endpoint, -1);
-                } else {
-                    gtk_list_store_set(GTK_LIST_STORE(model), &iter, 0, "(new peer)", -1);
-                }
-            }
+    gtk_tree_model_get(model, &iter, 1, &priv->dialog_peer, -1);
+    if (priv->dialog_peer) {
+        guint idx = 0;
+        GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
+        if (path) {
+            gint *indices = gtk_tree_path_get_indices(path);
+            if (indices)
+                idx = indices[0];
+            gtk_tree_path_free(path);
         }
+
+        awg_device_remove_peer(priv->device, idx);
+        g_object_unref(priv->dialog_peer);
+        priv->dialog_peer = NULL;
+        priv->dialog_peer_index = -1;
+
+        peers_treeview_rebuild(self);
+
+        count = awg_device_get_peers_count(priv->device);
+        GtkWidget *remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
+        if (remove_btn)
+            gtk_widget_set_sensitive(remove_btn, count > 0);
+
+        GtkWidget *warning_label = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_warning_label"));
+        if (warning_label)
+            gtk_widget_set_visible(warning_label, count == 0);
+
+        g_signal_emit_by_name(self, "changed");
     }
-
-    GtkWidget *remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
-    if (remove_btn)
-        gtk_widget_set_sensitive(remove_btn, count > 0);
-
-    GtkWidget *warning_label = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_warning_label"));
-    if (warning_label)
-        gtk_widget_set_visible(warning_label, count == 0);
-
-    g_signal_emit_by_name(self, "changed");
 }
 
 static gboolean
@@ -824,6 +910,8 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     priv->connection = g_object_ref(connection);
 
     priv->selected_peer_index = 0;
+    priv->dialog_peer_index = -1;
+    priv->dialog_peer = NULL;
 
     fill_interface_from_connection(self);
 
@@ -933,11 +1021,13 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
     if (widget) {
         GtkTreeView *treeview = GTK_TREE_VIEW(widget);
-        GtkListStore *store = gtk_list_store_new(1, G_TYPE_STRING);
+        GtkTreeStore *store = gtk_tree_store_new(2, G_TYPE_STRING, G_TYPE_POINTER);
         gtk_tree_view_set_model(treeview, GTK_TREE_MODEL(store));
+        g_object_unref(store);
 
         GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
         GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(_("Peer"), renderer, "text", 0, NULL);
+        gtk_tree_view_column_set_resizable(column, TRUE);
         gtk_tree_view_append_column(treeview, column);
 
         const GList *peers = awg_device_get_peers_list(priv->device);
@@ -946,17 +1036,17 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
             const gchar *public_key = awg_device_peer_get_public_key(peer);
             const gchar *endpoint = awg_device_peer_get_endpoint(peer);
             GtkTreeIter iter;
-            gtk_list_store_append(store, &iter);
+            gtk_tree_store_append(store, &iter, NULL);
             if (endpoint && endpoint[0] && public_key && public_key[0]) {
                 gchar *label = g_strdup_printf("%s - %.8s...", endpoint, public_key);
-                gtk_list_store_set(store, &iter, 0, label, -1);
+                gtk_tree_store_set(store, &iter, 0, label, 1, peer, -1);
                 g_free(label);
             } else if (endpoint && endpoint[0]) {
-                gtk_list_store_set(store, &iter, 0, endpoint, -1);
+                gtk_tree_store_set(store, &iter, 0, endpoint, 1, peer, -1);
             } else if (public_key && public_key[0]) {
-                gtk_list_store_set(store, &iter, 0, public_key, -1);
+                gtk_tree_store_set(store, &iter, 0, public_key, 1, peer, -1);
             } else {
-                gtk_list_store_set(store, &iter, 0, "(new peer)", -1);
+                gtk_tree_store_set(store, &iter, 0, "(new peer)", 1, peer, -1);
             }
         }
 
@@ -969,12 +1059,6 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
     if (widget) {
         gtk_widget_set_sensitive(widget, FALSE);
-    }
-
-    if (awg_device_get_peers_count(priv->device) == 0) {
-        AWGDevicePeer *peer = awg_device_peer_new();
-        awg_device_add_peer(priv->device, peer);
-        g_object_unref(peer);
     }
 
     return TRUE;
