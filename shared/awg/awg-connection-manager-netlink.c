@@ -455,7 +455,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         dev->flags |= WGDEVICE_HAS_LISTEN_PORT;
     }
 
-    guint16 fw_mark = awg_device_get_fw_mark(priv->device);
+    guint32 fw_mark = awg_device_get_fw_mark(priv->device);
     if (fw_mark > 0) {
         dev->fwmark = fw_mark;
         dev->flags |= WGDEVICE_HAS_FWMARK;
@@ -486,25 +486,61 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         dev->response_packet_junk_size = s2;
         dev->flags |= WGDEVICE_HAS_S2;
     }
-    guint32 h1 = awg_device_get_h1(priv->device);
-    if (h1 > 0) {
-        dev->init_packet_magic_header = h1;
+    guint16 s3 = awg_device_get_s3(priv->device);
+    if (s3 > 0) {
+        dev->cookie_reply_packet_junk_size = s3;
+        dev->flags |= WGDEVICE_HAS_S3;
+    }
+    guint16 s4 = awg_device_get_s4(priv->device);
+    if (s4 > 0) {
+        dev->transport_packet_junk_size = s4;
+        dev->flags |= WGDEVICE_HAS_S4;
+    }
+
+    const gchar *h1 = awg_device_get_h1(priv->device);
+    if (h1 && h1[0]) {
+        dev->init_packet_magic_header = g_strdup(h1);
         dev->flags |= WGDEVICE_HAS_H1;
     }
-    guint32 h2 = awg_device_get_h2(priv->device);
-    if (h2 > 0) {
-        dev->response_packet_magic_header = h2;
+    const gchar *h2 = awg_device_get_h2(priv->device);
+    if (h2 && h2[0]) {
+        dev->response_packet_magic_header = g_strdup(h2);
         dev->flags |= WGDEVICE_HAS_H2;
     }
-    guint32 h3 = awg_device_get_h3(priv->device);
-    if (h3 > 0) {
-        dev->underload_packet_magic_header = h3;
+    const gchar *h3 = awg_device_get_h3(priv->device);
+    if (h3 && h3[0]) {
+        dev->underload_packet_magic_header = g_strdup(h3);
         dev->flags |= WGDEVICE_HAS_H3;
     }
-    guint32 h4 = awg_device_get_h4(priv->device);
-    if (h4 > 0) {
-        dev->transport_packet_magic_header = h4;
+    const gchar *h4 = awg_device_get_h4(priv->device);
+    if (h4 && h4[0]) {
+        dev->transport_packet_magic_header = g_strdup(h4);
         dev->flags |= WGDEVICE_HAS_H4;
+    }
+    const gchar *i1 = awg_device_get_i1(priv->device);
+    if (i1 && i1[0]) {
+        dev->i1 = g_strdup(i1);
+        dev->flags |= WGDEVICE_HAS_I1;
+    }
+    const gchar *i2 = awg_device_get_i2(priv->device);
+    if (i2 && i2[0]) {
+        dev->i2 = g_strdup(i2);
+        dev->flags |= WGDEVICE_HAS_I2;
+    }
+    const gchar *i3 = awg_device_get_i3(priv->device);
+    if (i3 && i3[0]) {
+        dev->i3 = g_strdup(i3);
+        dev->flags |= WGDEVICE_HAS_I3;
+    }
+    const gchar *i4 = awg_device_get_i4(priv->device);
+    if (i4 && i4[0]) {
+        dev->i4 = g_strdup(i4);
+        dev->flags |= WGDEVICE_HAS_I4;
+    }
+    const gchar *i5 = awg_device_get_i5(priv->device);
+    if (i5 && i5[0]) {
+        dev->i5 = g_strdup(i5);
+        dev->flags |= WGDEVICE_HAS_I5;
     }
 
     dev->flags |= WGDEVICE_REPLACE_PEERS;
@@ -606,6 +642,11 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         if (keep_alive > 0) {
             new_peer->persistent_keepalive_interval = keep_alive;
             new_peer->flags |= WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL;
+        }
+
+        if (awg_device_peer_get_advanced_security(awg_peer)) {
+            new_peer->awg = true;
+            new_peer->flags |= WGPEER_HAS_ADVANCED_SECURITY;
         }
 
         if (!dev->first_peer) {

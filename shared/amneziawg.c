@@ -27,7 +27,7 @@
 /* wireguard.h netlink uapi: */
 
 #define WG_GENL_NAME "amneziawg"
-#define WG_GENL_VERSION 1
+#define WG_GENL_VERSION 2
 
 enum wg_cmd {
     WG_CMD_GET_DEVICE,
@@ -57,14 +57,22 @@ enum wgdevice_attribute {
     WGDEVICE_A_H2,
     WGDEVICE_A_H3,
     WGDEVICE_A_H4,
+    WGDEVICE_A_PEER,
+    WGDEVICE_A_S3,
+    WGDEVICE_A_S4,
+    WGDEVICE_A_I1,
+    WGDEVICE_A_I2,
+    WGDEVICE_A_I3,
+    WGDEVICE_A_I4,
+    WGDEVICE_A_I5,
     __WGDEVICE_A_LAST
 };
 
 enum wgpeer_flag {
     WGPEER_F_REMOVE_ME = 1U << 0,
     WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
-    WGPEER_F_HAS_ADVANCED_SECURITY = 1U << 3,
-    WGPEER_F_HAS_AWG = 1U << 5
+    WGPEER_F_UPDATE_ONLY = 1U << 2,
+    WGPEER_F_HAS_AWG = 1U << 3
 };
 enum wgpeer_attribute {
     WGPEER_A_UNSPEC,
@@ -78,7 +86,6 @@ enum wgpeer_attribute {
     WGPEER_A_TX_BYTES,
     WGPEER_A_ALLOWEDIPS,
     WGPEER_A_PROTOCOL_VERSION,
-    WGPEER_A_ADVANCED_SECURITY,
     WGPEER_A_AWG,
     __WGPEER_A_LAST
 };
@@ -1156,14 +1163,28 @@ again:
             mnl_attr_put_u16(nlh, WGDEVICE_A_S1, dev->init_packet_junk_size);
         if (dev->flags & WGDEVICE_HAS_S2)
             mnl_attr_put_u16(nlh, WGDEVICE_A_S2, dev->response_packet_junk_size);
-        if (dev->flags & WGDEVICE_HAS_H1)
-            mnl_attr_put_u32(nlh, WGDEVICE_A_H1, dev->init_packet_magic_header);
-        if (dev->flags & WGDEVICE_HAS_H2)
-            mnl_attr_put_u32(nlh, WGDEVICE_A_H2, dev->response_packet_magic_header);
-        if (dev->flags & WGDEVICE_HAS_H3)
-            mnl_attr_put_u32(nlh, WGDEVICE_A_H3, dev->underload_packet_magic_header);
-        if (dev->flags & WGDEVICE_HAS_H4)
-            mnl_attr_put_u32(nlh, WGDEVICE_A_H4, dev->transport_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_S3)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_S3, dev->cookie_reply_packet_junk_size);
+        if (dev->flags & WGDEVICE_HAS_S4)
+            mnl_attr_put_u16(nlh, WGDEVICE_A_S4, dev->transport_packet_junk_size);
+        if (dev->flags & WGDEVICE_HAS_H1 && dev->init_packet_magic_header)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_H1, dev->init_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H2 && dev->response_packet_magic_header)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_H2, dev->response_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H3 && dev->underload_packet_magic_header)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_H3, dev->underload_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_H4 && dev->transport_packet_magic_header)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_H4, dev->transport_packet_magic_header);
+        if (dev->flags & WGDEVICE_HAS_I1 && dev->i1)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_I1, dev->i1);
+        if (dev->flags & WGDEVICE_HAS_I2 && dev->i2)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_I2, dev->i2);
+        if (dev->flags & WGDEVICE_HAS_I3 && dev->i3)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_I3, dev->i3);
+        if (dev->flags & WGDEVICE_HAS_I4 && dev->i4)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_I4, dev->i4);
+        if (dev->flags & WGDEVICE_HAS_I5 && dev->i5)
+            mnl_attr_put_strz(nlh, WGDEVICE_A_I5, dev->i5);
         if (dev->flags & WGDEVICE_REPLACE_PEERS)
             flags |= WGDEVICE_F_REPLACE_PEERS;
         if (flags)
@@ -1204,10 +1225,8 @@ again:
         }
         if (peer->flags & WGPEER_HAS_ADVANCED_SECURITY) {
             if (peer->awg) {
-                struct nlattr *awg_nest = mnl_attr_nest_start_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_AWG);
-                if (awg_nest) {
-                    mnl_attr_nest_end(nlh, awg_nest);
-                }
+                if (!mnl_attr_put_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_AWG, 0, NULL))
+                    goto toobig_peers;
             }
             flags |= WGPEER_F_HAS_AWG;
         }
@@ -1467,6 +1486,120 @@ parse_device(const struct nlattr *attr, void *data)
         break;
     case WGDEVICE_A_PEERS:
         return mnl_attr_parse_nested(attr, parse_peers, device);
+    case WGDEVICE_A_JC:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->junk_packet_count = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_JC;
+        }
+        break;
+    case WGDEVICE_A_JMIN:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->junk_packet_min_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_JMIN;
+        }
+        break;
+    case WGDEVICE_A_JMAX:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->junk_packet_max_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_JMAX;
+        }
+        break;
+    case WGDEVICE_A_S1:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->init_packet_junk_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_S1;
+        }
+        break;
+    case WGDEVICE_A_S2:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->response_packet_junk_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_S2;
+        }
+        break;
+    case WGDEVICE_A_S3:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->cookie_reply_packet_junk_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_S3;
+        }
+        break;
+    case WGDEVICE_A_S4:
+        if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            device->transport_packet_junk_size = mnl_attr_get_u16(attr);
+            device->flags |= WGDEVICE_HAS_S4;
+        }
+        break;
+    case WGDEVICE_A_H1:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->init_packet_magic_header);
+            device->init_packet_magic_header = strdup(mnl_attr_get_str(attr));
+            if (device->init_packet_magic_header)
+                device->flags |= WGDEVICE_HAS_H1;
+        }
+        break;
+    case WGDEVICE_A_H2:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->response_packet_magic_header);
+            device->response_packet_magic_header = strdup(mnl_attr_get_str(attr));
+            if (device->response_packet_magic_header)
+                device->flags |= WGDEVICE_HAS_H2;
+        }
+        break;
+    case WGDEVICE_A_H3:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->underload_packet_magic_header);
+            device->underload_packet_magic_header = strdup(mnl_attr_get_str(attr));
+            if (device->underload_packet_magic_header)
+                device->flags |= WGDEVICE_HAS_H3;
+        }
+        break;
+    case WGDEVICE_A_H4:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->transport_packet_magic_header);
+            device->transport_packet_magic_header = strdup(mnl_attr_get_str(attr));
+            if (device->transport_packet_magic_header)
+                device->flags |= WGDEVICE_HAS_H4;
+        }
+        break;
+    case WGDEVICE_A_I1:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->i1);
+            device->i1 = strdup(mnl_attr_get_str(attr));
+            if (device->i1)
+                device->flags |= WGDEVICE_HAS_I1;
+        }
+        break;
+    case WGDEVICE_A_I2:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->i2);
+            device->i2 = strdup(mnl_attr_get_str(attr));
+            if (device->i2)
+                device->flags |= WGDEVICE_HAS_I2;
+        }
+        break;
+    case WGDEVICE_A_I3:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->i3);
+            device->i3 = strdup(mnl_attr_get_str(attr));
+            if (device->i3)
+                device->flags |= WGDEVICE_HAS_I3;
+        }
+        break;
+    case WGDEVICE_A_I4:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->i4);
+            device->i4 = strdup(mnl_attr_get_str(attr));
+            if (device->i4)
+                device->flags |= WGDEVICE_HAS_I4;
+        }
+        break;
+    case WGDEVICE_A_I5:
+        if (!mnl_attr_validate(attr, MNL_TYPE_NUL_STRING)) {
+            free(device->i5);
+            device->i5 = strdup(mnl_attr_get_str(attr));
+            if (device->i5)
+                device->flags |= WGDEVICE_HAS_I5;
+        }
+        break;
     }
 
     return MNL_CB_OK;
@@ -1586,6 +1719,16 @@ wg_free_device(wg_device *dev)
             free(allowedip);
         free(peer);
     }
+
+    free(dev->init_packet_magic_header);
+    free(dev->response_packet_magic_header);
+    free(dev->underload_packet_magic_header);
+    free(dev->transport_packet_magic_header);
+    free(dev->i1);
+    free(dev->i2);
+    free(dev->i3);
+    free(dev->i4);
+    free(dev->i5);
 
     free(dev);
 }

@@ -80,6 +80,13 @@ enum wg_device_flags {
     WGDEVICE_HAS_H2 = 1U << 11,
     WGDEVICE_HAS_H3 = 1U << 12,
     WGDEVICE_HAS_H4 = 1U << 13,
+    WGDEVICE_HAS_S3 = 1U << 14,
+    WGDEVICE_HAS_S4 = 1U << 15,
+    WGDEVICE_HAS_I1 = 1U << 16,
+    WGDEVICE_HAS_I2 = 1U << 17,
+    WGDEVICE_HAS_I3 = 1U << 18,
+    WGDEVICE_HAS_I4 = 1U << 19,
+    WGDEVICE_HAS_I5 = 1U << 20
 };
 
 typedef struct wg_device {
@@ -99,10 +106,17 @@ typedef struct wg_device {
     uint16_t junk_packet_max_size;
     uint16_t init_packet_junk_size;
     uint16_t response_packet_junk_size;
-    uint32_t init_packet_magic_header;
-    uint32_t response_packet_magic_header;
-    uint32_t underload_packet_magic_header;
-    uint32_t transport_packet_magic_header;
+    uint16_t cookie_reply_packet_junk_size;
+    uint16_t transport_packet_junk_size;
+    char *init_packet_magic_header;
+    char *response_packet_magic_header;
+    char *underload_packet_magic_header;
+    char *transport_packet_magic_header;
+    char *i1;
+    char *i2;
+    char *i3;
+    char *i4;
+    char *i5;
 
     struct wg_peer *first_peer, *last_peer;
 } wg_device;
