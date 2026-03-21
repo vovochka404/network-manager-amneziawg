@@ -67,3 +67,17 @@ awg_connection_manager_disconnect(AWGConnectionManager *self, GError **error)
 
     return TRUE;
 }
+
+gboolean
+awg_connection_manager_manages_routes(AWGConnectionManager *self)
+{
+    AWGConnectionManagerInterface *iface;
+
+    g_return_val_if_fail(AWG_IS_CONNECTION_MANAGER(self), FALSE);
+
+    iface = AWG_CONNECTION_MANAGER_GET_IFACE(self);
+    if (iface->manages_routes)
+        return iface->manages_routes(self);
+
+    return FALSE;
+}

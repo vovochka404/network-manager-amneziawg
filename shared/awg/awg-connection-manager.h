@@ -35,12 +35,14 @@ struct _AWGConnectionManagerInterface {
 
     gboolean (*connect)(AWGConnectionManager *self, GError **error);
     gboolean (*disconnect)(AWGConnectionManager *self, GError **error);
+    gboolean (*manages_routes)(AWGConnectionManager *self);
 };
 
 AWGConnectionManager *awg_connection_manager_auto_new(const gchar *interface_name, AWGDevice *device);
 
 gboolean awg_connection_manager_connect(AWGConnectionManager *self, GError **error);
 gboolean awg_connection_manager_disconnect(AWGConnectionManager *self, GError **error);
+gboolean awg_connection_manager_manages_routes(AWGConnectionManager *self);
 
 G_END_DECLS
 
