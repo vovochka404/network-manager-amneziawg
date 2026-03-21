@@ -23,6 +23,7 @@ awg_device_new_from_config(const char *config_path)
     AWGDevice *device = NULL;
     AWGDevicePeer *peer = NULL;
     gchar **parts = NULL;
+    gboolean success = TRUE;
     GFile *file = g_file_new_for_path(config_path);
     GInputStream *input_stream = (GInputStream *)g_file_read(file, NULL, &error);
 
@@ -38,7 +39,6 @@ awg_device_new_from_config(const char *config_path)
 
     while ((line = g_data_input_stream_read_line_utf8(data_input_stream, NULL, NULL, &error)) != NULL) {
         line = g_strstrip(line);
-        // Обработка каждой строки из файла
         if (!*line || (*line == '#' && !g_str_has_prefix(line, AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED))) {
             continue;
         }
@@ -73,69 +73,51 @@ awg_device_new_from_config(const char *config_path)
 
         if (is_interface_section) {
             if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRIVATE_KEY) == 0) {
-                if (!awg_device_set_private_key(device, value)) {
-                    g_warning("Invalid interface private key format: %s", value);
-                }
+                success &= awg_device_set_private_key(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PUBLIC_KEY) == 0 || g_strcmp0(key, AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED) == 0) {
-                if (!awg_device_set_public_key(device, value)) {
-                    g_warning("Invalid interface public key format: %s", value);
-                }
+                success &= awg_device_set_public_key(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_ADDRESS) == 0) {
-                if (!awg_device_set_address_from_string(device, value)) {
-                    g_warning("Invalid interface address format: %s", value);
-                }
+                success &= awg_device_set_address_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_LISTEN_PORT) == 0) {
-                if (!awg_device_set_listen_port_from_string(device, value)) {
-                    g_warning("Invalid interface listen port format: %s", value);
-                }
+                success &= awg_device_set_listen_port_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_DNS) == 0) {
-                if (!awg_device_set_dns_from_string(device, value)) {
-                    g_warning("Invalid interface dns format: %s", value);
-                }
+                success &= awg_device_set_dns_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_FW_MARK) == 0) {
-                if (!awg_device_set_fw_mark_from_string(device, value)) {
-                    g_warning("Invalid interface fw mark format: %s", value);
-                }
+                success &= awg_device_set_fw_mark_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JC) == 0) {
-                if (!awg_device_set_jc_from_string(device, value)) {
-                    g_warning("Invalid interface jc format: %s", value);
-                }
+                success &= awg_device_set_jc_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JMIN) == 0) {
-                if (!awg_device_set_jmin_from_string(device, value)) {
-                    g_warning("Invalid interface jmin format: %s", value);
-                }
+                success &= awg_device_set_jmin_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JMAX) == 0) {
-                if (!awg_device_set_jmax_from_string(device, value)) {
-                    g_warning("Invalid interface jmax format: %s", value);
-                }
+                success &= awg_device_set_jmax_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S1) == 0) {
-                if (!awg_device_set_s1_from_string(device, value)) {
-                    g_warning("Invalid interface s1 format: %s", value);
-                }
+                success &= awg_device_set_s1_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S2) == 0) {
-                if (!awg_device_set_s2_from_string(device, value)) {
-                    g_warning("Invalid interface s2 format: %s", value);
-                }
+                success &= awg_device_set_s2_from_string(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S3) == 0) {
+                success &= awg_device_set_s3_from_string(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S4) == 0) {
+                success &= awg_device_set_s4_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H1) == 0) {
-                if (!awg_device_set_h1_from_string(device, value)) {
-                    g_warning("Invalid interface h1 format: %s", value);
-                }
+                success &= awg_device_set_h1(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H2) == 0) {
-                if (!awg_device_set_h2_from_string(device, value)) {
-                    g_warning("Invalid interface h2 format: %s", value);
-                }
+                success &= awg_device_set_h2(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H3) == 0) {
-                if (!awg_device_set_h3_from_string(device, value)) {
-                    g_warning("Invalid interface h3 format: %s", value);
-                }
+                success &= awg_device_set_h3(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H4) == 0) {
-                if (!awg_device_set_h4_from_string(device, value)) {
-                    g_warning("Invalid interface h4 format: %s", value);
-                }
+                success &= awg_device_set_h4(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I1) == 0) {
+                success &= awg_device_set_i1(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I2) == 0) {
+                success &= awg_device_set_i2(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I3) == 0) {
+                success &= awg_device_set_i3(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I4) == 0) {
+                success &= awg_device_set_i4(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I5) == 0) {
+                success &= awg_device_set_i5(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MTU) == 0) {
-                if (!awg_device_set_mtu_from_string(device, value)) {
-                    g_warning("Invalid interface mtu format: %s", value);
-                }
+                success &= awg_device_set_mtu_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRE_UP) == 0) {
                 awg_device_set_pre_up(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_POST_UP) == 0) {
@@ -147,25 +129,15 @@ awg_device_new_from_config(const char *config_path)
             }
         } else if (is_peer_section) {
             if (g_strcmp0(key, AWG_CONFIG_PEER_ENDPOINT) == 0) {
-                if (!awg_device_peer_set_endpoint(peer, value)) {
-                    g_warning("Invalid peer endpoint format: %s", value);
-                }
+                success &= awg_device_peer_set_endpoint(peer, value);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_PUBLIC_KEY) == 0) {
-                if (!awg_device_peer_set_public_key(peer, value)) {
-                    g_warning("Invalid peer public key format: %s", value);
-                }
+                success &= awg_device_peer_set_public_key(peer, value);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_PRESHARED_KEY) == 0) {
-                if (!awg_device_peer_set_shared_key(peer, value)) {
-                    g_warning("Invalid peer public key format: %s", value);
-                }
+                success &= awg_device_peer_set_shared_key(peer, value);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ALLOWED_IPS) == 0) {
-                if (!awg_device_peer_set_allowed_ips_from_string(peer, value)) {
-                    g_warning("Invalid peer public key format: %s", value);
-                }
+                success &= awg_device_peer_set_allowed_ips_from_string(peer, value);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_KEEP_ALIVE) == 0) {
-                if (!awg_device_peer_set_keep_alive_interval_from_string(peer, value)) {
-                    g_warning("Invalid peer public key format: %s", value);
-                }
+                success &= awg_device_peer_set_keep_alive_interval_from_string(peer, value);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ADVANCED_SECURITY) == 0) {
                 if (g_strcmp0(value, "on") == 0) {
                     awg_device_peer_set_advanced_security(peer, TRUE);
@@ -173,6 +145,7 @@ awg_device_new_from_config(const char *config_path)
                     awg_device_peer_set_advanced_security(peer, FALSE);
                 } else {
                     g_warning("Invalid peer advanced security value: %s (on / off allowed)", value);
+                    success = FALSE;
                 }
             }
         }
@@ -196,7 +169,7 @@ awg_device_new_from_config(const char *config_path)
     g_object_unref(input_stream);
     g_object_unref(file);
 
-    if (!awg_device_is_valid(device)) {
+    if (!success || !awg_device_is_valid(device)) {
         g_warning("Invalid AWG device configuration.");
         g_clear_object(&device);
     }
@@ -207,7 +180,7 @@ awg_device_new_from_config(const char *config_path)
 gchar *
 awg_device_create_config_string(AWGDevice *device)
 {
-    g_autofree gchar *str_value = NULL;
+    const gchar *value = NULL;
     guint16 uint_value = 0;
     AWGDevicePeer *peer = NULL;
     const GInetAddress *address = NULL;
@@ -218,14 +191,14 @@ awg_device_create_config_string(AWGDevice *device)
     g_string_append(config, "\n");
 
     // Append device settings
-    str_value = awg_device_dup_private_key(device);
-    if (str_value) {
-        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_PRIVATE_KEY, str_value);
+    value = awg_device_get_private_key(device);
+    if (value) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_PRIVATE_KEY, value);
     }
 
-    str_value = awg_device_dup_public_key(device);
-    if (str_value) {
-        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED, str_value);
+    value = awg_device_get_public_key(device);
+    if (value) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED, value);
     }
 
     address = awg_device_get_address_v4(device);
@@ -281,19 +254,55 @@ awg_device_create_config_string(AWGDevice *device)
         g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_FW_MARK, uint_value);
     }
 
+    guint32 mtu = awg_device_get_mtu(device);
+    if (mtu > 0) {
+        g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_MTU, mtu);
+    }
+
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JC, awg_device_get_jc(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JMIN, awg_device_get_jmin(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JMAX, awg_device_get_jmax(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S1, awg_device_get_s1(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S2, awg_device_get_s2(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_H1, awg_device_get_h1(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_H2, awg_device_get_h2(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_H3, awg_device_get_h3(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_H4, awg_device_get_h4(device));
+    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S3, awg_device_get_s3(device));
+    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S4, awg_device_get_s4(device));
 
-    guint32 mtu = awg_device_get_mtu(device);
-    if (mtu > 0) {
-        g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_MTU, mtu);
+    const gchar *h1 = awg_device_get_h1(device);
+    if (h1 && *h1) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_H1, h1);
+    }
+    const gchar *h2 = awg_device_get_h2(device);
+    if (h2 && *h2) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_H2, h2);
+    }
+    const gchar *h3 = awg_device_get_h3(device);
+    if (h3 && *h3) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_H3, h3);
+    }
+    const gchar *h4 = awg_device_get_h4(device);
+    if (h4 && *h4) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_H4, h4);
+    }
+
+    const gchar *i1 = awg_device_get_i1(device);
+    if (i1 && *i1) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I1, i1);
+    }
+    const gchar *i2 = awg_device_get_i2(device);
+    if (i2 && *i2) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I2, i2);
+    }
+    const gchar *i3 = awg_device_get_i3(device);
+    if (i3 && *i3) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I3, i3);
+    }
+    const gchar *i4 = awg_device_get_i4(device);
+    if (i4 && *i4) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I4, i4);
+    }
+    const gchar *i5 = awg_device_get_i5(device);
+    if (i5 && *i5) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I5, i5);
     }
 
     const gchar *pre_up = awg_device_get_pre_up(device);
@@ -325,17 +334,17 @@ awg_device_create_config_string(AWGDevice *device)
             g_string_append(config, "\n");
 
             peer = (AWGDevicePeer *)iter->data;
-            str_value = awg_device_peer_dup_public_key(peer);
-            if (str_value) {
-                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_PUBLIC_KEY, str_value);
+            value = awg_device_peer_get_public_key(peer);
+            if (value) {
+                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_PUBLIC_KEY, value);
             }
-            str_value = awg_device_peer_dup_shared_key(peer);
-            if (str_value) {
-                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_PRESHARED_KEY, str_value);
+            value = awg_device_peer_get_shared_key(peer);
+            if (value) {
+                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_PRESHARED_KEY, value);
             }
-            str_value = (gchar *)awg_device_peer_get_endpoint(peer);
-            if (str_value) {
-                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ENDPOINT, str_value);
+            value = awg_device_peer_get_endpoint(peer);
+            if (value) {
+                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ENDPOINT, value);
             }
             uint_value = awg_device_peer_get_keep_alive_interval(peer);
             if (uint_value) {
@@ -343,9 +352,9 @@ awg_device_create_config_string(AWGDevice *device)
             } else {
                 g_string_append_printf(config, "%s = off\n", AWG_CONFIG_PEER_KEEP_ALIVE);
             }
-            str_value = awg_device_peer_get_allowed_ips_as_string(peer);
-            if (str_value) {
-                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ALLOWED_IPS, str_value);
+            value = awg_device_peer_get_allowed_ips_as_string(peer);
+            if (value) {
+                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ALLOWED_IPS, value);
             }
             if (awg_device_peer_get_advanced_security(peer)) {
                 g_string_append_printf(config, "%s = on\n", AWG_CONFIG_PEER_ADVANCED_SECURITY);
