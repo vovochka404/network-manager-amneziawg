@@ -33,6 +33,7 @@
 #include "nm-utils/nm-vpn-plugin-utils.h"
 
 #include "awg/awg-config.h"
+#include "awg/awg-device.h"
 #include "awg/awg-nm-connection.h"
 
 #define AMNEZIAWG_PLUGIN_NAME "AmneziaWG"

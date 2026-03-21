@@ -65,6 +65,9 @@ option(WITH_GTK4 "Build with GTK4 support (requires libnma-gtk4)" OFF)
 
 include(GNUInstallDirs)
 
+set(CMAKE_BUILD_RPATH "$ORIGIN")
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+
 # Set default prefix to /usr for system packages (RPM)
 if(NOT DEFINED CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install prefix" FORCE)
@@ -333,7 +336,7 @@ target_compile_options(nm-vpn-plugin-amneziawg-utils PRIVATE
 target_link_libraries(nm-vpn-plugin-amneziawg-utils PRIVATE ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
 set_target_properties(nm-vpn-plugin-amneziawg-utils PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(nm-vpn-plugin-amneziawg-core OBJECT
+add_library(nm-vpn-plugin-amneziawg-core SHARED
     shared/nm-utils/nm-vpn-plugin-utils.c
     shared/nm-utils/nm-vpn-plugin-utils.h
     shared/nm-utils/nm-vpn-plugin-macros.h
@@ -350,14 +353,16 @@ target_compile_options(nm-vpn-plugin-amneziawg-core PRIVATE
 target_link_libraries(nm-vpn-plugin-amneziawg-core PRIVATE
     nm-vpn-plugin-amneziawg-utils ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS}
 )
-set_target_properties(nm-vpn-plugin-amneziawg-core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(nm-vpn-plugin-amneziawg-core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+target_link_options(nm-vpn-plugin-amneziawg-core PRIVATE)
 
 add_library(nm-vpn-plugin-amneziawg SHARED)
 target_sources(nm-vpn-plugin-amneziawg PRIVATE
-    $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-core>
     $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-utils>
 )
-target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${COMMON_LDFLAGS} ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
 set_target_properties(nm-vpn-plugin-amneziawg PROPERTIES
     OUTPUT_NAME "nm-vpn-plugin-amneziawg"
 )
@@ -365,7 +370,7 @@ target_link_options(nm-vpn-plugin-amneziawg PRIVATE
         "-Wl,--version-script=${CMAKE_SOURCE_DIR}/properties/nm-vpn-plugin-amneziawg.ver"
 )
 install(TARGETS nm-amneziawg-service RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
-install(TARGETS nm-vpn-plugin-amneziawg LIBRARY DESTINATION ${NM_PLUGIN_DIR})
+install(TARGETS nm-vpn-plugin-amneziawg-core nm-vpn-plugin-amneziawg LIBRARY DESTINATION ${NM_PLUGIN_DIR})
 
 install(FILES nm-amneziawg-service.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system.d)
 install(FILES ${CMAKE_BINARY_DIR}/nm-amneziawg-service.name DESTINATION ${NM_VPN_SERVICE_DIR})
