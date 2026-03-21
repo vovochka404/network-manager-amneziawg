@@ -88,9 +88,27 @@ check_interface_junk_size_entry(const char *str)
 }
 
 static gboolean
-check_interface_magic_header_size(const char *str)
+check_interface_i_packet(const char *str)
 {
-    return awg_validate_header_size(str);
+    return awg_validate_i_packet(str);
+}
+
+static gboolean
+check_interface_s3(const char *str)
+{
+    return awg_validate_s3(str);
+}
+
+static gboolean
+check_interface_s4(const char *str)
+{
+    return awg_validate_s4(str);
+}
+
+static gboolean
+check_interface_magic_header(const char *str)
+{
+    return awg_validate_magic_header(str);
 }
 
 static gboolean
@@ -115,6 +133,12 @@ static gboolean
 check_peer_endpoint(const char *str)
 {
     return awg_validate_endpoint(str) && str && str[0];
+}
+
+static gboolean
+check_peer_allowed_ips(const char *str)
+{
+    return awg_validate_allowed_ips(str);
 }
 
 // used in 'check()', matches the functions above
@@ -195,16 +219,69 @@ check_validity(AmneziaWGEditor *self, GError **error)
     if (!check(priv, "interface_s2_entry", check_interface_junk_size_entry, AWG_CONFIG_DEVICE_S2, FALSE, error)) {
         success = FALSE;
     }
-    if (!check(priv, "interface_h1_entry", check_interface_magic_header_size, AWG_CONFIG_DEVICE_H1, FALSE, error)) {
+    if (!check(priv, "interface_s3_entry", check_interface_s3, AWG_CONFIG_DEVICE_S3, FALSE, error)) {
         success = FALSE;
     }
-    if (!check(priv, "interface_h2_entry", check_interface_magic_header_size, AWG_CONFIG_DEVICE_H2, FALSE, error)) {
+    if (!check(priv, "interface_s4_entry", check_interface_s4, AWG_CONFIG_DEVICE_S4, FALSE, error)) {
         success = FALSE;
     }
-    if (!check(priv, "interface_h3_entry", check_interface_magic_header_size, AWG_CONFIG_DEVICE_H3, FALSE, error)) {
+    if (!check(priv, "interface_h1_entry", check_interface_magic_header, AWG_CONFIG_DEVICE_H1, FALSE, error)) {
         success = FALSE;
     }
-    if (!check(priv, "interface_h4_entry", check_interface_magic_header_size, AWG_CONFIG_DEVICE_H4, FALSE, error)) {
+    if (!check(priv, "interface_h2_entry", check_interface_magic_header, AWG_CONFIG_DEVICE_H2, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_h3_entry", check_interface_magic_header, AWG_CONFIG_DEVICE_H3, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_h4_entry", check_interface_magic_header, AWG_CONFIG_DEVICE_H4, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_i1_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I1, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_i2_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I2, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_i3_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I3, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_i4_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I4, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_i5_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I5, FALSE, error)) {
+        success = FALSE;
+    }
+
+    if (!awg_validate_magic_headers_no_overlap(
+            AWG_EDITABLE_GET_TEXT(gtk_builder_get_object(priv->builder, "interface_h1_entry")),
+            AWG_EDITABLE_GET_TEXT(gtk_builder_get_object(priv->builder, "interface_h2_entry")),
+            AWG_EDITABLE_GET_TEXT(gtk_builder_get_object(priv->builder, "interface_h3_entry")),
+            AWG_EDITABLE_GET_TEXT(gtk_builder_get_object(priv->builder, "interface_h4_entry")))) {
+        GtkWidget *w1 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h1_entry"));
+        GtkWidget *w2 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h2_entry"));
+        GtkWidget *w3 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h3_entry"));
+        GtkWidget *w4 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h4_entry"));
+        gtk_style_context_add_class(gtk_widget_get_style_context(w1), "error");
+        gtk_style_context_add_class(gtk_widget_get_style_context(w2), "error");
+        gtk_style_context_add_class(gtk_widget_get_style_context(w3), "error");
+        gtk_style_context_add_class(gtk_widget_get_style_context(w4), "error");
+        if (error && !*error) {
+            g_set_error_literal(error, NMV_EDITOR_PLUGIN_ERROR, 0, _("H1-H4 magic header ranges must not overlap"));
+        }
+        success = FALSE;
+    }
+
+    guint16 jmin = gtk_spin_button_get_value(GTK_SPIN_BUTTON(gtk_builder_get_object(priv->builder, "interface_jmin_entry")));
+    guint16 jmax = gtk_spin_button_get_value(GTK_SPIN_BUTTON(gtk_builder_get_object(priv->builder, "interface_jmax_entry")));
+    if (!awg_validate_jmin_jmax(jmin, jmax)) {
+        GtkWidget *w1 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_jmin_entry"));
+        GtkWidget *w2 = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_jmax_entry"));
+        gtk_style_context_add_class(gtk_widget_get_style_context(w1), "error");
+        gtk_style_context_add_class(gtk_widget_get_style_context(w2), "error");
+        if (error && !*error) {
+            g_set_error_literal(error, NMV_EDITOR_PLUGIN_ERROR, 0, _("JMax must be greater than or equal to JMin"));
+        }
         success = FALSE;
     }
 
@@ -324,6 +401,12 @@ fill_interface_from_connection(AmneziaWGEditor *self)
     str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S2);
     set_widget_text(priv->builder, "interface_s2_entry", str ?: "");
 
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3);
+    set_widget_text(priv->builder, "interface_s3_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4);
+    set_widget_text(priv->builder, "interface_s4_entry", str ?: "");
+
     str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1);
     set_widget_text(priv->builder, "interface_h1_entry", str ?: "");
 
@@ -335,6 +418,21 @@ fill_interface_from_connection(AmneziaWGEditor *self)
 
     str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4);
     set_widget_text(priv->builder, "interface_h4_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1);
+    set_widget_text(priv->builder, "interface_i1_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2);
+    set_widget_text(priv->builder, "interface_i2_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3);
+    set_widget_text(priv->builder, "interface_i3_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4);
+    set_widget_text(priv->builder, "interface_i4_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5);
+    set_widget_text(priv->builder, "interface_i5_entry", str ?: "");
 }
 
 typedef struct {
@@ -349,6 +447,7 @@ typedef struct {
     GtkLabel *label_info;
     GtkButton *button_apply;
     GtkToggleButton *toggle_show_psk;
+    GtkToggleButton *toggle_advanced_security;
     gboolean is_new;
 } PeerDialogData;
 
@@ -370,6 +469,8 @@ peer_dialog_update_ui(PeerDialogData *data)
 
     guint16 ka = awg_device_peer_get_keep_alive_interval(data->peer);
     gtk_spin_button_set_value(data->spin_keepalive, ka);
+
+    gtk_toggle_button_set_active(data->toggle_advanced_security, awg_device_peer_get_advanced_security(data->peer));
 }
 
 static void
@@ -396,6 +497,8 @@ peer_dialog_update_peer(PeerDialogData *data)
 
     gint keepalive = gtk_spin_button_get_value_as_int(data->spin_keepalive);
     awg_device_peer_set_keep_alive_interval(data->peer, keepalive);
+
+    awg_device_peer_set_advanced_security(data->peer, gtk_toggle_button_get_active(data->toggle_advanced_security));
 }
 
 static void
@@ -462,6 +565,7 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, gboolean is_new, Am
     data->label_info = GTK_LABEL(gtk_builder_get_object(builder, "peer_dialog_label_info"));
     data->button_apply = GTK_BUTTON(gtk_builder_get_object(builder, "peer_dialog_button_apply"));
     data->toggle_show_psk = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "peer_dialog_show_psk"));
+    data->toggle_advanced_security = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "peer_dialog_advanced_security"));
     button_cancel = GTK_WIDGET(gtk_builder_get_object(builder, "peer_dialog_button_cancel"));
 
     g_object_set_data_full(G_OBJECT(dialog), "peer-data", data, (GDestroyNotify)peer_dialog_data_free);
@@ -515,6 +619,11 @@ peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info)
             }
             if (!check_peer_endpoint(endpoint)) {
                 g_string_append(error_msg, _("Endpoint is required and must be valid (host:port)"));
+                valid = FALSE;
+            }
+            const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
+            if (!check_peer_allowed_ips(allowed_ips)) {
+                g_string_append(error_msg, _("Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"));
                 valid = FALSE;
             }
 
@@ -767,6 +876,14 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     if (widget)
         g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
 
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_s3_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_s4_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h1_entry"));
     if (widget)
         g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
@@ -780,6 +897,26 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
         g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
 
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h4_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_i1_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_i2_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_i3_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_i4_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_i5_entry"));
     if (widget)
         g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
 
@@ -940,6 +1077,18 @@ save_interface_to_connection(AmneziaWGEditor *self)
     }
     g_free(str);
 
+    str = get_widget_text(priv->builder, "interface_s3_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_s4_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4, str);
+    }
+    g_free(str);
+
     str = get_widget_text(priv->builder, "interface_h1_entry");
     if (str && str[0]) {
         nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1, str);
@@ -961,6 +1110,36 @@ save_interface_to_connection(AmneziaWGEditor *self)
     str = get_widget_text(priv->builder, "interface_h4_entry");
     if (str && str[0]) {
         nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_i1_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_i2_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_i3_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_i4_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4, str);
+    }
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_i5_entry");
+    if (str && str[0]) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, str);
     }
     g_free(str);
 
