@@ -383,7 +383,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
             gchar *dns_str = g_inet_address_to_string(dns_addr);
             if (dns_str) {
                 val = g_variant_new_string(dns_str);
-                g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_DNS, val);
+                g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_DNS, val);
                 g_free(dns_str);
                 has_dns = TRUE;
             }
