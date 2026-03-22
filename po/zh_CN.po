@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: network-manager-amneziawg\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-15 17:20+1000\n"
+"POT-Creation-Date: 2026-03-22 15:04+1000\n"
 "PO-Revision-Date: 2026-03-15 17:20+1000\n"
 "Last-Translator: \n"
 "Language-Team: LLM auto translation\n"
@@ -12,210 +12,477 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: nm-amneziawg-editor-plugin.c:69
+#: properties/nm-amneziawg-editor-plugin.c:70
 msgid "Unknown AmneziaWG file extension"
 msgstr "未知的 AmneziaWG 文件扩展名"
 
-#: nm-amneziawg-editor-plugin.c:78
+#: properties/nm-amneziawg-editor-plugin.c:79
 msgid "Failed to parse AmneziaWG config file"
 msgstr "无法解析 AmneziaWG 配置文件"
 
-#: nm-amneziawg-editor.c:501
+#: properties/nm-amneziawg-editor.c:272
+msgid "H1-H4 magic header ranges must not overlap"
+msgstr "H1-H4 魔法头范围不能重叠"
+
+#: properties/nm-amneziawg-editor.c:285
+msgid "JMax must be greater than or equal to JMin"
+msgstr "JMax 必须大于或等于 JMin"
+
+#: properties/nm-amneziawg-editor.c:712
 msgid "Public key is required and must be valid base64\n"
 msgstr "公钥是必需的且必须是有效的 base64\n"
 
-#: nm-amneziawg-editor.c:505
+#: properties/nm-amneziawg-editor.c:716
 msgid "Endpoint is required and must be valid (host:port)"
 msgstr "端点是必需的且必须是有效的 (主机:端口)"
 
-#: nm-amneziawg-editor.c:784
+#: properties/nm-amneziawg-editor.c:721
+msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
+msgstr "Allowed IPs 必须是有效的子网（例如 10.0.0.0/24）"
+
+#: properties/nm-amneziawg-editor.c:727
+msgid "Preshared key must be valid base64 or empty"
+msgstr "预共享密钥必须是有效的 base64 或为空"
+
+#: properties/nm-amneziawg-editor.c:1047
+#: properties/nm-amneziawg-editor.c:1060
+#, c-format
+msgid "Delete peer \"%s\"?"
+msgstr "删除对端 \"%s\"？"
+
+#: properties/nm-amneziawg-editor.c:1232
 msgid "Peer"
 msgstr "对端"
 
-#: nm-amneziawg-editor.c:1039
+#: properties/nm-amneziawg-editor.c:1530
 msgid "Could not create amneziawg object"
 msgstr "无法创建 amneziawg 对象"
 
-#: nm-amneziawg-editor.c:1058
+#: properties/nm-amneziawg-editor.c:1549
 msgid "could not load UI widget"
 msgstr "无法加载 UI 组件"
 
-#: nm-amneziawg-dialog.ui:73
+#: src/nm-amneziawg-service.c:479
+#: src/nm-amneziawg-service.c:480
+msgid "Private key is required"
+msgstr "需要私钥"
+
+#: shared/nm-utils/nm-shared-utils.c:615
+#, c-format
+msgid "object class '%s' has no property named '%s'"
+msgstr "对象类 '%s' 没有名为 '%s' 的属性"
+
+#: shared/nm-utils/nm-shared-utils.c:622
+#, c-format
+msgid "property '%s' of object class '%s' is not writable"
+msgstr "对象类 '%s' 的属性 '%s' 不可写"
+
+#: shared/nm-utils/nm-shared-utils.c:629
+#, c-format
+msgid ""
+"construct property \"%s\" for object '%s' can't be set after construction"
+msgstr "对象 '%s' 的构造属性 \"%s\" 无法在构造后设置"
+
+#: shared/nm-utils/nm-shared-utils.c:637
+#, c-format
+msgid "'%s::%s' is not a valid property name; '%s' is not a GObject subtype"
+msgstr "'%s::%s' 不是有效的属性名；'%s' 不是 GObject 子类型"
+
+#: shared/nm-utils/nm-shared-utils.c:646
+#, c-format
+msgid "unable to set property '%s' of type '%s' from value of type '%s'"
+msgstr "无法从类型 '%3$s' 的值设置类型 '%2$s' 的属性 '%1$s'"
+
+#: shared/nm-utils/nm-shared-utils.c:656
+#, c-format
+msgid ""
+"value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
+"type '%s'"
+msgstr "类型 '%2$s' 的值 \"%1$s\" 对于类型 '%4$s' 的属性 '%3$s' 无效或超出范围"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:80
+#, c-format
+msgid "missing plugin file \"%s\""
+msgstr "缺少插件文件 \"%s\""
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:86
+#, c-format
+msgid "cannot load editor plugin: %s"
+msgstr "无法加载编辑器插件：%s"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:95
+#, c-format
+msgid "cannot load factory %s from plugin: %s"
+msgstr "无法从插件加载工厂 %s：%s"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:121
+msgid "unknown error creating editor instance"
+msgstr "创建编辑器实例时发生未知错误"
+
+#: properties/nm-amneziawg-dialog.ui:33
 msgid "Edit AmneziaWG Peer"
 msgstr "编辑 AmneziaWG 对端"
 
-#: nm-amneziawg-dialog.ui:89
+#: properties/nm-amneziawg-dialog.ui:46
 msgid "_Cancel"
 msgstr "取消(_C)"
 
-#: nm-amneziawg-dialog.ui:103
+#: properties/nm-amneziawg-dialog.ui:60
 msgid "_Apply"
 msgstr "应用(_A)"
 
-#: nm-amneziawg-dialog.ui:158
+#: properties/nm-amneziawg-dialog.ui:143
 msgid "Public Key:"
 msgstr "公钥："
 
-#: nm-amneziawg-dialog.ui:181
-msgid "Allowed IPs:"
-msgstr "允许的 IP："
-
-#: nm-amneziawg-dialog.ui:204
-msgid "Endpoint:"
-msgstr "端点："
-
-#: nm-amneziawg-dialog.ui:227
-msgid "Preshared Key:"
-msgstr "预共享密钥："
-
-#: nm-amneziawg-dialog.ui:248
-msgid "Show preshared key"
-msgstr "显示预共享密钥"
-
-#: nm-amneziawg-dialog.ui:265
-msgid "Persistent Keepalive:"
-msgstr "持久保活："
-
-#: nm-amneziawg-dialog.ui:306
-msgid "Interface"
-msgstr "接口"
-
-#: nm-amneziawg-dialog.ui:326
-msgid "Listen Port:"
-msgstr "监听端口："
-
-#: nm-amneziawg-dialog.ui:365
-msgid "Private Key:"
-msgstr "私钥："
-
-#: nm-amneziawg-dialog.ui:389
-msgid "Show private key"
-msgstr "显示私钥"
-
-#: nm-amneziawg-dialog.ui:417
-msgid "MTU:"
-msgstr "MTU："
-
-#: nm-amneziawg-dialog.ui:459
-msgid "FwMark:"
-msgstr "防火墙标记："
-
-#: nm-amneziawg-dialog.ui:498
-msgid "Jc:"
-msgstr "Jc："
-
-#: nm-amneziawg-dialog.ui:540
-msgid "JMin:"
-msgstr "JMin："
-
-#: nm-amneziawg-dialog.ui:582
-msgid "JMax:"
-msgstr "JMax："
-
-#: nm-amneziawg-dialog.ui:624
-msgid "S1:"
-msgstr "S1："
-
-#: nm-amneziawg-dialog.ui:666
-msgid "S2:"
-msgstr "S2："
-
-#: nm-amneziawg-dialog.ui:708
-msgid "H1:"
-msgstr "H1："
-
-#: nm-amneziawg-dialog.ui:750
-msgid "H2:"
-msgstr "H2："
-
-#: nm-amneziawg-dialog.ui:792
-msgid "H3:"
-msgstr "H3："
-
-#: nm-amneziawg-dialog.ui:834
-msgid "H4:"
-msgstr "H4："
-
-#: nm-amneziawg-dialog.ui:888
-msgid "Peers"
-msgstr "对端"
-
-#: nm-amneziawg-dialog.ui:910
-msgid "Add"
-msgstr "添加"
-
-#: nm-amneziawg-dialog.ui:923
-msgid "Remove"
-msgstr "移除"
-
-#: nm-amneziawg-dialog.ui:172
+#: properties/nm-amneziawg-dialog.ui:154
 msgid "Base64-encoded 32-byte public key of the peer."
 msgstr "对端的 Base64 编码 32 字节公钥。"
 
-#: nm-amneziawg-dialog.ui:195
-msgid "Comma-separated list of IP addresses and prefixes to route through the peer (e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
-msgstr "要通过对端路由的 IP 地址和前缀列表，用逗号分隔（例如：10.0.0.0/24, 0.0.0.0/0 表示所有 IPv4）。"
+#: properties/nm-amneziawg-dialog.ui:167
+msgid "Allowed IPs:"
+msgstr "允许的 IP："
 
-#: nm-amneziawg-dialog.ui:218
+#: properties/nm-amneziawg-dialog.ui:178
+msgid ""
+"Comma-separated list of IP addresses and prefixes to route through the peer "
+"(e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
+msgstr ""
+"要通过对端路由的 IP 地址和前缀列表，用逗号分隔（例如：10.0.0.0/24, 0.0.0.0/0 "
+"表示所有 IPv4）。"
+
+#: properties/nm-amneziawg-dialog.ui:191
+msgid "Endpoint:"
+msgstr "端点："
+
+#: properties/nm-amneziawg-dialog.ui:202
 msgid "Host:port of the peer endpoint (e.g., vpn.example.com:51820)."
 msgstr "对端端点的主机:端口（例如：vpn.example.com:51820）。"
 
-#: nm-amneziawg-dialog.ui:244
+#: properties/nm-amneziawg-dialog.ui:215
+msgid "Preshared Key:"
+msgstr "预共享密钥："
+
+#: properties/nm-amneziawg-dialog.ui:226
 msgid "Optional base64-encoded 32-byte preshared key for extra security."
 msgstr "可选的 Base64 编码 32 字节预共享密钥，用于额外安全。"
 
-#: nm-amneziawg-dialog.ui:284
-msgid "Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+#: properties/nm-amneziawg-dialog.ui:237
+msgid "Show preshared key"
+msgstr "显示预共享密钥"
+
+#: properties/nm-amneziawg-dialog.ui:254
+msgid "Persistent Keepalive:"
+msgstr "持久保活："
+
+#: properties/nm-amneziawg-dialog.ui:265
+msgid ""
+"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
 msgstr "持久保活数据包之间的秒数（0 = 禁用，建议 25）。"
 
-#: nm-amneziawg-dialog.ui:396
+#: properties/nm-amneziawg-dialog.ui:277
+msgid "_Advanced Security"
+msgstr "高级安全(_A)"
+
+#: properties/nm-amneziawg-dialog.ui:281
+msgid ""
+"Enable advanced security features for this peer (junk packets, headers, "
+"etc.)."
+msgstr "为该对端启用高级安全功能（垃圾数据包、头部等）。"
+
+#: properties/nm-amneziawg-dialog.ui:357
+msgid "Interface"
+msgstr "接口"
+
+#: properties/nm-amneziawg-dialog.ui:377
+msgid "Listen Port:"
+msgstr "监听端口："
+
+#: properties/nm-amneziawg-dialog.ui:391
 msgid "UDP port to listen on (0 = random port)."
 msgstr "监听的 UDP 端口（0 = 随机端口）。"
 
-#: nm-amneziawg-dialog.ui:434
+#: properties/nm-amneziawg-dialog.ui:417
+msgid "Private Key:"
+msgstr "私钥："
+
+#: properties/nm-amneziawg-dialog.ui:431
 msgid "Base64-encoded 32-byte private key for the interface."
 msgstr "接口的 Base64 编码 32 字节私钥。"
 
-#: nm-amneziawg-dialog.ui:490
+#: properties/nm-amneziawg-dialog.ui:442
+msgid "Show private key"
+msgstr "显示私钥"
+
+#: properties/nm-amneziawg-dialog.ui:475
+msgid "MTU:"
+msgstr "MTU："
+
+#: properties/nm-amneziawg-dialog.ui:489
 msgid "MTU of the interface (0 = auto-detect, typical values 1280-1500)."
 msgstr "接口的 MTU（0 = 自动检测，典型值 1280-1500）。"
 
-#: nm-amneziawg-dialog.ui:531
-msgid "Firewall mark for the interface (optional, used for routing/firewall rules)."
+#: properties/nm-amneziawg-dialog.ui:515
+msgid "FwMark:"
+msgstr "防火墙标记："
+
+#: properties/nm-amneziawg-dialog.ui:529
+msgid ""
+"Firewall mark for the interface (optional, used for routing/firewall rules)."
 msgstr "接口的防火墙标记（可选，用于路由/防火墙规则）。"
 
-#: nm-amneziawg-dialog.ui:573
+#: properties/nm-amneziawg-dialog.ui:591
+msgid "Jc:"
+msgstr "Jc："
+
+#: properties/nm-amneziawg-dialog.ui:605
 msgid "Junk packet count - number of random junk sizes to use."
 msgstr "垃圾数据包计数 - 使用的随机垃圾大小数量。"
 
-#: nm-amneziawg-dialog.ui:615
-msgid "Minimum junk packet size in bytes."
-msgstr "最小垃圾数据包大小（字节）。"
+#: properties/nm-amneziawg-dialog.ui:636
+msgid "JMax:"
+msgstr "JMax："
 
-#: nm-amneziawg-dialog.ui:657
+#: properties/nm-amneziawg-dialog.ui:650
 msgid "Maximum junk packet size in bytes."
 msgstr "最大垃圾数据包大小（字节）。"
 
-#: nm-amneziawg-dialog.ui:699
+#: properties/nm-amneziawg-dialog.ui:677
+msgid "JMin:"
+msgstr "JMin："
+
+#: properties/nm-amneziawg-dialog.ui:691
+msgid "Minimum junk packet size in bytes."
+msgstr "最小垃圾数据包大小（字节）。"
+
+#: properties/nm-amneziawg-dialog.ui:722
+msgid "Junk Packets"
+msgstr "垃圾数据包"
+
+#: properties/nm-amneziawg-dialog.ui:761
+msgid "S1:"
+msgstr "S1："
+
+#: properties/nm-amneziawg-dialog.ui:775
 msgid "First noise packet size."
 msgstr "第一个噪声数据包大小。"
 
-#: nm-amneziawg-dialog.ui:741
+#: properties/nm-amneziawg-dialog.ui:801
+msgid "S2:"
+msgstr "S2："
+
+#: properties/nm-amneziawg-dialog.ui:815
 msgid "Second noise packet size."
 msgstr "第二个噪声数据包大小。"
 
-#: nm-amneziawg-dialog.ui:783
-msgid "First handshake packet magic header value."
-msgstr "第一次握手数据包魔术头值。"
+#: properties/nm-amneziawg-dialog.ui:841
+msgid "S3:"
+msgstr "S3："
 
-#: nm-amneziawg-dialog.ui:825
-msgid "Second handshake packet magic header value."
-msgstr "第二次握手数据包魔术头值。"
+#: properties/nm-amneziawg-dialog.ui:855
+msgid "Cookie reply packet junk size (max 65479)."
+msgstr "Cookie 回复数据包垃圾大小（最大 65479）。"
 
-#: nm-amneziawg-dialog.ui:867
-msgid "Third handshake packet magic header value."
-msgstr "第三次握手数据包魔术头值。"
+#: properties/nm-amneziawg-dialog.ui:881
+msgid "S4:"
+msgstr "S4："
 
-#: nm-amneziawg-dialog.ui:909
-msgid "Fourth handshake packet magic header value."
-msgstr "第四次握手数据包魔术头值。"
+#: properties/nm-amneziawg-dialog.ui:895
+msgid "Transport packet junk size (max 65503)."
+msgstr "传输数据包垃圾大小（最大 65503）。"
+
+#: properties/nm-amneziawg-dialog.ui:918
+#, fuzzy
+msgid "Noise Packet Sizes"
+msgstr "第一个噪声数据包大小。"
+
+#: properties/nm-amneziawg-dialog.ui:961
+msgid "H1:"
+msgstr "H1："
+
+#: properties/nm-amneziawg-dialog.ui:975
+msgid ""
+"First handshake packet magic header. Format: single number (e.g., 1) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"第一个握手数据包魔法头。格式：单个数字（例如 1）或范围（例如 100-200）。H1-"
+"H4 范围不能重叠。"
+
+#: properties/nm-amneziawg-dialog.ui:1000
+msgid "H2:"
+msgstr "H2："
+
+#: properties/nm-amneziawg-dialog.ui:1014
+msgid ""
+"Second handshake packet magic header. Format: single number (e.g., 2) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"第二个握手数据包魔法头。格式：单个数字（例如 2）或范围（例如 100-200）。H1-"
+"H4 范围不能重叠。"
+
+#: properties/nm-amneziawg-dialog.ui:1051
+msgid "H3:"
+msgstr "H3："
+
+#: properties/nm-amneziawg-dialog.ui:1065
+msgid ""
+"Third handshake packet magic header. Format: single number (e.g., 3) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"第三个握手数据包魔法头。格式：单个数字（例如 3）或范围（例如 100-200）。H1-"
+"H4 范围不能重叠。"
+
+#: properties/nm-amneziawg-dialog.ui:1090
+msgid "H4:"
+msgstr "H4："
+
+#: properties/nm-amneziawg-dialog.ui:1104
+msgid ""
+"Fourth handshake packet magic header. Format: single number (e.g., 4) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"第四个握手数据包魔法头。格式：单个数字（例如 4）或范围（例如 100-200）。H1-"
+"H4 范围不能重叠。"
+
+#: properties/nm-amneziawg-dialog.ui:1133
+msgid "Magic Headers"
+msgstr "魔法头"
+
+#: properties/nm-amneziawg-dialog.ui:1172
+msgid "I1:"
+msgstr "I1："
+
+#: properties/nm-amneziawg-dialog.ui:1186
+msgid ""
+"First init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"第一个初始化数据包内容。格式：用 < 分隔的标签（例如 r16、b0xDEADBEEF、"
+"r16<c）。标签：r<num>（随机字节）、rc<num>（随机字母）、rd<num>（随机数字）、"
+"c（计数器）、t（时间戳）、b0x<hex>（二进制）。"
+
+#: properties/nm-amneziawg-dialog.ui:1210
+msgid "I2:"
+msgstr "I2："
+
+#: properties/nm-amneziawg-dialog.ui:1224
+msgid ""
+"Second init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"第二个初始化数据包内容。格式：用 < 分隔的标签（例如 r16、b0xDEADBEEF、"
+"r16<c）。标签：r<num>（随机字节）、rc<num>（随机字母）、rd<num>（随机数字）、"
+"c（计数器）、t（时间戳）、b0x<hex>（二进制）。"
+
+#: properties/nm-amneziawg-dialog.ui:1248
+msgid "I3:"
+msgstr "I3："
+
+#: properties/nm-amneziawg-dialog.ui:1262
+msgid ""
+"Third init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"第三个初始化数据包内容。格式：用 < 分隔的标签（例如 r16、b0xDEADBEEF、"
+"r16<c）。标签：r<num>（随机字节）、rc<num>（随机字母）、rd<num>（随机数字）、"
+"c（计数器）、t（时间戳）、b0x<hex>（二进制）。"
+
+#: properties/nm-amneziawg-dialog.ui:1286
+msgid "I4:"
+msgstr "I4："
+
+#: properties/nm-amneziawg-dialog.ui:1300
+msgid ""
+"Fourth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"第四个初始化数据包内容。格式：用 < 分隔的标签（例如 r16、b0xDEADBEEF、"
+"r16<c）。标签：r<num>（随机字节）、rc<num>（随机字母）、rd<num>（随机数字）、"
+"c（计数器）、t（时间戳）、b0x<hex>（二进制）。"
+
+#: properties/nm-amneziawg-dialog.ui:1324
+msgid "I5:"
+msgstr "I5："
+
+#: properties/nm-amneziawg-dialog.ui:1338
+msgid ""
+"Fifth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"第五个初始化数据包内容。格式：用 < 分隔的标签（例如 r16、b0xDEADBEEF、"
+"r16<c）。标签：r<num>（随机字节）、rc<num>（随机字母）、rd<num>（随机数字）、"
+"c（计数器）、t（时间戳）、b0x<hex>（二进制）。"
+
+#: properties/nm-amneziawg-dialog.ui:1360
+msgid "Init Packet Content"
+msgstr "初始化数据包内容"
+
+#: properties/nm-amneziawg-dialog.ui:1379
+msgid "AmneziaWG Obfuscation"
+msgstr "AmneziaWG 混淆"
+
+#: properties/nm-amneziawg-dialog.ui:1409
+msgid "Peers"
+msgstr "对端"
+
+#: properties/nm-amneziawg-dialog.ui:1428
+msgid "Add"
+msgstr "添加"
+
+#: properties/nm-amneziawg-dialog.ui:1441
+msgid "Edit"
+msgstr "编辑"
+
+#: properties/nm-amneziawg-dialog.ui:1455
+msgid "Remove"
+msgstr "移除"
+
+#~ msgid "First handshake packet magic header value."
+#~ msgstr "第一次握手数据包魔术头值。"
+
+#~ msgid "Second handshake packet magic header value."
+#~ msgstr "第二次握手数据包魔术头值。"
+
+#~ msgid "Third handshake packet magic header value."
+#~ msgstr "第三次握手数据包魔术头值。"
+
+#~ msgid "Fourth handshake packet magic header value."
+#~ msgstr "第四次握手数据包魔术头值。"
+
+#~ msgid "Third noise packet size."
+#~ msgstr "第三个噪声数据包大小。"
+
+#~ msgid "Fourth noise packet size."
+#~ msgstr "第四个噪声数据包大小。"
+
+#~ msgid "First handshake packet magic header value (arbitrary string)."
+#~ msgstr "第一次握手数据包魔术头值（任意字符串）。"
+
+#~ msgid "Second handshake packet magic header value (arbitrary string)."
+#~ msgstr "第二次握手数据包魔术头值（任意字符串）。"
+
+#~ msgid "Third handshake packet magic header value (arbitrary string)."
+#~ msgstr "第三次握手数据包魔术头值（任意字符串）。"
+
+#~ msgid "Fourth handshake packet magic header value (arbitrary string)."
+#~ msgstr "第四次握手数据包魔术头值（任意字符串）。"
+
+#~ msgid "First initiation packet content (arbitrary string)."
+#~ msgstr "第一个发起数据包内容（任意字符串）。"
+
+#~ msgid "Second initiation packet content (arbitrary string)."
+#~ msgstr "第二个发起数据包内容（任意字符串）。"
+
+#~ msgid "Third initiation packet content (arbitrary string)."
+#~ msgstr "第三个发起数据包内容（任意字符串）。"
+
+#~ msgid "Fourth initiation packet content (arbitrary string)."
+#~ msgstr "第四个发起数据包内容（任意字符串）。"
+
+#~ msgid "Fifth initiation packet content (arbitrary string)."
+#~ msgstr "第五个发起数据包内容（任意字符串）。"

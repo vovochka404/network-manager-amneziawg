@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: network-manager-amneziawg master\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-15 17:20+1000\n"
+"POT-Creation-Date: 2026-03-22 15:04+1000\n"
 "PO-Revision-Date: 2012-09-23 01:34-0400\n"
 "Language-Team: LLM auto translation\n"
 "Language: en_GB\n"
@@ -13,262 +13,484 @@ msgstr ""
 "X-Generator: Virtaal 0.7.1\n"
 "X-Project-Style: gnome\n"
 
-#: nm-amneziawg-editor-plugin.c:69
+#: properties/nm-amneziawg-editor-plugin.c:70
 msgid "Unknown AmneziaWG file extension"
 msgstr "Unknown AmneziaWG file extension"
 
-#: nm-amneziawg-editor-plugin.c:78
+#: properties/nm-amneziawg-editor-plugin.c:79
 msgid "Failed to parse AmneziaWG config file"
 msgstr "Failed to parse AmneziaWG config file"
 
-#: nm-amneziawg-editor.c:501
+#: properties/nm-amneziawg-editor.c:272
+msgid "H1-H4 magic header ranges must not overlap"
+msgstr "H1-H4 magic header ranges must not overlap"
+
+#: properties/nm-amneziawg-editor.c:285
+msgid "JMax must be greater than or equal to JMin"
+msgstr "JMax must be greater than or equal to JMin"
+
+#: properties/nm-amneziawg-editor.c:712
 msgid "Public key is required and must be valid base64\n"
 msgstr "Public key is required and must be valid base64\n"
 
-#: nm-amneziawg-editor.c:505
+#: properties/nm-amneziawg-editor.c:716
 msgid "Endpoint is required and must be valid (host:port)"
 msgstr "Endpoint is required and must be valid (host:port)"
 
-#: nm-amneziawg-editor.c:784
+#: properties/nm-amneziawg-editor.c:721
+msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
+msgstr "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
+
+#: properties/nm-amneziawg-editor.c:727
+msgid "Preshared key must be valid base64 or empty"
+msgstr "Preshared key must be valid base64 or empty"
+
+#: properties/nm-amneziawg-editor.c:1047
+#: properties/nm-amneziawg-editor.c:1060
+#, c-format
+msgid "Delete peer \"%s\"?"
+msgstr "Delete peer \"%s\"?"
+
+#: properties/nm-amneziawg-editor.c:1232
 msgid "Peer"
 msgstr "Peer"
 
-#: nm-amneziawg-editor.c:1039
+#: properties/nm-amneziawg-editor.c:1530
 msgid "Could not create amneziawg object"
 msgstr "Could not create amneziawg object"
 
-#: nm-amneziawg-editor.c:1058
+#: properties/nm-amneziawg-editor.c:1549
 msgid "could not load UI widget"
 msgstr "could not load UI widget"
 
-#: nm-shared-utils.c:615
+#: src/nm-amneziawg-service.c:479
+#: src/nm-amneziawg-service.c:480
+msgid "Private key is required"
+msgstr "Private key is required"
+
+#: shared/nm-utils/nm-shared-utils.c:615
 #, c-format
 msgid "object class '%s' has no property named '%s'"
-msgstr ""
+msgstr "object class '%s' has no property named '%s'"
 
-#: nm-shared-utils.c:622
+#: shared/nm-utils/nm-shared-utils.c:622
 #, c-format
 msgid "property '%s' of object class '%s' is not writable"
-msgstr ""
+msgstr "property '%s' of object class '%s' is not writable"
 
-#: nm-shared-utils.c:629
+#: shared/nm-utils/nm-shared-utils.c:629
 #, c-format
 msgid ""
 "construct property \"%s\" for object '%s' can't be set after construction"
 msgstr ""
+"construct property \"%s\" for object '%s' can't be set after construction"
 
-#: nm-shared-utils.c:637
+#: shared/nm-utils/nm-shared-utils.c:637
 #, c-format
 msgid "'%s::%s' is not a valid property name; '%s' is not a GObject subtype"
-msgstr ""
+msgstr "'%s::%s' is not a valid property name; '%s' is not a GObject subtype"
 
-#: nm-shared-utils.c:646
+#: shared/nm-utils/nm-shared-utils.c:646
 #, c-format
 msgid "unable to set property '%s' of type '%s' from value of type '%s'"
-msgstr ""
+msgstr "unable to set property '%s' of type '%s' from value of type '%s'"
 
-#: nm-shared-utils.c:656
+#: shared/nm-utils/nm-shared-utils.c:656
 #, c-format
 msgid ""
 "value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
 "type '%s'"
 msgstr ""
+"value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
+"type '%s'"
 
-#: nm-vpn-plugin-utils.c:80
+#: shared/nm-utils/nm-vpn-plugin-utils.c:80
 #, c-format
 msgid "missing plugin file \"%s\""
-msgstr ""
+msgstr "missing plugin file \"%s\""
 
-#: nm-vpn-plugin-utils.c:86
+#: shared/nm-utils/nm-vpn-plugin-utils.c:86
 #, c-format
 msgid "cannot load editor plugin: %s"
-msgstr ""
+msgstr "cannot load editor plugin: %s"
 
-#: nm-vpn-plugin-utils.c:95
+#: shared/nm-utils/nm-vpn-plugin-utils.c:95
 #, c-format
 msgid "cannot load factory %s from plugin: %s"
-msgstr ""
+msgstr "cannot load factory %s from plugin: %s"
 
-#: nm-vpn-plugin-utils.c:121
+#: shared/nm-utils/nm-vpn-plugin-utils.c:121
 msgid "unknown error creating editor instance"
-msgstr ""
+msgstr "unknown error creating editor instance"
 
-#: nm-amneziawg-dialog.ui:73
+#: properties/nm-amneziawg-dialog.ui:33
 msgid "Edit AmneziaWG Peer"
 msgstr "Edit AmneziaWG Peer"
 
-#: nm-amneziawg-dialog.ui:89
+#: properties/nm-amneziawg-dialog.ui:46
 msgid "_Cancel"
 msgstr "_Cancel"
 
-#: nm-amneziawg-dialog.ui:103
+#: properties/nm-amneziawg-dialog.ui:60
 msgid "_Apply"
 msgstr "_Apply"
 
-#: nm-amneziawg-dialog.ui:158
+#: properties/nm-amneziawg-dialog.ui:143
 msgid "Public Key:"
 msgstr "Public Key:"
 
-#: nm-amneziawg-dialog.ui:181
-msgid "Allowed IPs:"
-msgstr "Allowed IPs:"
-
-#: nm-amneziawg-dialog.ui:204
-msgid "Endpoint:"
-msgstr "Endpoint:"
-
-#: nm-amneziawg-dialog.ui:227
-msgid "Preshared Key:"
-msgstr "Preshared Key:"
-
-#: nm-amneziawg-dialog.ui:248
-msgid "Show preshared key"
-msgstr "Show preshared key"
-
-#: nm-amneziawg-dialog.ui:265
-msgid "Persistent Keepalive:"
-msgstr "Persistent Keepalive:"
-
-#: nm-amneziawg-dialog.ui:306
-msgid "Interface"
-msgstr "Interface"
-
-#: nm-amneziawg-dialog.ui:326
-msgid "Listen Port:"
-msgstr "Listen Port:"
-
-#: nm-amneziawg-dialog.ui:365
-msgid "Private Key:"
-msgstr "Private Key:"
-
-#: nm-amneziawg-dialog.ui:389
-msgid "Show private key"
-msgstr "Show private key"
-
-#: nm-amneziawg-dialog.ui:417
-msgid "MTU:"
-msgstr "MTU:"
-
-#: nm-amneziawg-dialog.ui:459
-msgid "FwMark:"
-msgstr "FwMark:"
-
-#: nm-amneziawg-dialog.ui:498
-msgid "Jc:"
-msgstr "Jc:"
-
-#: nm-amneziawg-dialog.ui:540
-msgid "JMin:"
-msgstr "JMin:"
-
-#: nm-amneziawg-dialog.ui:582
-msgid "JMax:"
-msgstr "JMax:"
-
-#: nm-amneziawg-dialog.ui:624
-msgid "S1:"
-msgstr "S1:"
-
-#: nm-amneziawg-dialog.ui:666
-msgid "S2:"
-msgstr "S2:"
-
-#: nm-amneziawg-dialog.ui:708
-msgid "H1:"
-msgstr "H1:"
-
-#: nm-amneziawg-dialog.ui:750
-msgid "H2:"
-msgstr "H2:"
-
-#: nm-amneziawg-dialog.ui:792
-msgid "H3:"
-msgstr "H3:"
-
-#: nm-amneziawg-dialog.ui:834
-msgid "H4:"
-msgstr "H4:"
-
-#: nm-amneziawg-dialog.ui:888
-msgid "Peers"
-msgstr "Peers"
-
-#: nm-amneziawg-dialog.ui:910
-msgid "Add"
-msgstr "Add"
-
-#: nm-amneziawg-dialog.ui:923
-msgid "Remove"
-msgstr "Remove"
-
-#: nm-amneziawg-dialog.ui:172
+#: properties/nm-amneziawg-dialog.ui:154
 msgid "Base64-encoded 32-byte public key of the peer."
 msgstr "Base64-encoded 32-byte public key of the peer."
 
-#: nm-amneziawg-dialog.ui:195
-msgid "Comma-separated list of IP addresses and prefixes to route through the peer (e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
-msgstr "Comma-separated list of IP addresses and prefixes to route through the peer (e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
+#: properties/nm-amneziawg-dialog.ui:167
+msgid "Allowed IPs:"
+msgstr "Allowed IPs:"
 
-#: nm-amneziawg-dialog.ui:218
+#: properties/nm-amneziawg-dialog.ui:178
+msgid ""
+"Comma-separated list of IP addresses and prefixes to route through the peer "
+"(e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
+msgstr ""
+"Comma-separated list of IP addresses and prefixes to route through the peer "
+"(e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
+
+#: properties/nm-amneziawg-dialog.ui:191
+msgid "Endpoint:"
+msgstr "Endpoint:"
+
+#: properties/nm-amneziawg-dialog.ui:202
 msgid "Host:port of the peer endpoint (e.g., vpn.example.com:51820)."
 msgstr "Host:port of the peer endpoint (e.g., vpn.example.com:51820)."
 
-#: nm-amneziawg-dialog.ui:244
+#: properties/nm-amneziawg-dialog.ui:215
+msgid "Preshared Key:"
+msgstr "Preshared Key:"
+
+#: properties/nm-amneziawg-dialog.ui:226
 msgid "Optional base64-encoded 32-byte preshared key for extra security."
 msgstr "Optional base64-encoded 32-byte preshared key for extra security."
 
-#: nm-amneziawg-dialog.ui:284
-msgid "Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
-msgstr "Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+#: properties/nm-amneziawg-dialog.ui:237
+msgid "Show preshared key"
+msgstr "Show preshared key"
 
-#: nm-amneziawg-dialog.ui:396
+#: properties/nm-amneziawg-dialog.ui:254
+msgid "Persistent Keepalive:"
+msgstr "Persistent Keepalive:"
+
+#: properties/nm-amneziawg-dialog.ui:265
+msgid ""
+"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+msgstr ""
+"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+
+#: properties/nm-amneziawg-dialog.ui:277
+msgid "_Advanced Security"
+msgstr "_Advanced Security"
+
+#: properties/nm-amneziawg-dialog.ui:281
+msgid ""
+"Enable advanced security features for this peer (junk packets, headers, "
+"etc.)."
+msgstr ""
+"Enable advanced security features for this peer (junk packets, headers, "
+"etc.)."
+
+#: properties/nm-amneziawg-dialog.ui:357
+msgid "Interface"
+msgstr "Interface"
+
+#: properties/nm-amneziawg-dialog.ui:377
+msgid "Listen Port:"
+msgstr "Listen Port:"
+
+#: properties/nm-amneziawg-dialog.ui:391
 msgid "UDP port to listen on (0 = random port)."
 msgstr "UDP port to listen on (0 = random port)."
 
-#: nm-amneziawg-dialog.ui:434
+#: properties/nm-amneziawg-dialog.ui:417
+msgid "Private Key:"
+msgstr "Private Key:"
+
+#: properties/nm-amneziawg-dialog.ui:431
 msgid "Base64-encoded 32-byte private key for the interface."
 msgstr "Base64-encoded 32-byte private key for the interface."
 
-#: nm-amneziawg-dialog.ui:490
+#: properties/nm-amneziawg-dialog.ui:442
+msgid "Show private key"
+msgstr "Show private key"
+
+#: properties/nm-amneziawg-dialog.ui:475
+msgid "MTU:"
+msgstr "MTU:"
+
+#: properties/nm-amneziawg-dialog.ui:489
 msgid "MTU of the interface (0 = auto-detect, typical values 1280-1500)."
 msgstr "MTU of the interface (0 = auto-detect, typical values 1280-1500)."
 
-#: nm-amneziawg-dialog.ui:531
-msgid "Firewall mark for the interface (optional, used for routing/firewall rules)."
-msgstr "Firewall mark for the interface (optional, used for routing/firewall rules)."
+#: properties/nm-amneziawg-dialog.ui:515
+msgid "FwMark:"
+msgstr "FwMark:"
 
-#: nm-amneziawg-dialog.ui:573
+#: properties/nm-amneziawg-dialog.ui:529
+msgid ""
+"Firewall mark for the interface (optional, used for routing/firewall rules)."
+msgstr ""
+"Firewall mark for the interface (optional, used for routing/firewall rules)."
+
+#: properties/nm-amneziawg-dialog.ui:591
+msgid "Jc:"
+msgstr "Jc:"
+
+#: properties/nm-amneziawg-dialog.ui:605
 msgid "Junk packet count - number of random junk sizes to use."
 msgstr "Junk packet count - number of random junk sizes to use."
 
-#: nm-amneziawg-dialog.ui:615
-msgid "Minimum junk packet size in bytes."
-msgstr "Minimum junk packet size in bytes."
+#: properties/nm-amneziawg-dialog.ui:636
+msgid "JMax:"
+msgstr "JMax:"
 
-#: nm-amneziawg-dialog.ui:657
+#: properties/nm-amneziawg-dialog.ui:650
 msgid "Maximum junk packet size in bytes."
 msgstr "Maximum junk packet size in bytes."
 
-#: nm-amneziawg-dialog.ui:699
+#: properties/nm-amneziawg-dialog.ui:677
+msgid "JMin:"
+msgstr "JMin:"
+
+#: properties/nm-amneziawg-dialog.ui:691
+msgid "Minimum junk packet size in bytes."
+msgstr "Minimum junk packet size in bytes."
+
+#: properties/nm-amneziawg-dialog.ui:722
+msgid "Junk Packets"
+msgstr "Junk Packets"
+
+#: properties/nm-amneziawg-dialog.ui:761
+msgid "S1:"
+msgstr "S1:"
+
+#: properties/nm-amneziawg-dialog.ui:775
 msgid "First noise packet size."
 msgstr "First noise packet size."
 
-#: nm-amneziawg-dialog.ui:741
+#: properties/nm-amneziawg-dialog.ui:801
+msgid "S2:"
+msgstr "S2:"
+
+#: properties/nm-amneziawg-dialog.ui:815
 msgid "Second noise packet size."
 msgstr "Second noise packet size."
 
-#: nm-amneziawg-dialog.ui:783
-msgid "First handshake packet magic header value."
-msgstr "First handshake packet magic header value."
+#: properties/nm-amneziawg-dialog.ui:841
+msgid "S3:"
+msgstr "S3:"
 
-#: nm-amneziawg-dialog.ui:825
-msgid "Second handshake packet magic header value."
-msgstr "Second handshake packet magic header value."
+#: properties/nm-amneziawg-dialog.ui:855
+msgid "Cookie reply packet junk size (max 65479)."
+msgstr "Cookie reply packet junk size (max 65479)."
 
-#: nm-amneziawg-dialog.ui:867
-msgid "Third handshake packet magic header value."
-msgstr "Third handshake packet magic header value."
+#: properties/nm-amneziawg-dialog.ui:881
+msgid "S4:"
+msgstr "S4:"
 
-#: nm-amneziawg-dialog.ui:909
-msgid "Fourth handshake packet magic header value."
-msgstr "Fourth handshake packet magic header value."
+#: properties/nm-amneziawg-dialog.ui:895
+msgid "Transport packet junk size (max 65503)."
+msgstr "Transport packet junk size (max 65503)."
+
+#: properties/nm-amneziawg-dialog.ui:918
+#, fuzzy
+msgid "Noise Packet Sizes"
+msgstr "First noise packet size."
+
+#: properties/nm-amneziawg-dialog.ui:961
+msgid "H1:"
+msgstr "H1:"
+
+#: properties/nm-amneziawg-dialog.ui:975
+msgid ""
+"First handshake packet magic header. Format: single number (e.g., 1) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"First handshake packet magic header. Format: single number (e.g., 1) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+
+#: properties/nm-amneziawg-dialog.ui:1000
+msgid "H2:"
+msgstr "H2:"
+
+#: properties/nm-amneziawg-dialog.ui:1014
+msgid ""
+"Second handshake packet magic header. Format: single number (e.g., 2) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Second handshake packet magic header. Format: single number (e.g., 2) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+
+#: properties/nm-amneziawg-dialog.ui:1051
+msgid "H3:"
+msgstr "H3:"
+
+#: properties/nm-amneziawg-dialog.ui:1065
+msgid ""
+"Third handshake packet magic header. Format: single number (e.g., 3) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Third handshake packet magic header. Format: single number (e.g., 3) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+
+#: properties/nm-amneziawg-dialog.ui:1090
+msgid "H4:"
+msgstr "H4:"
+
+#: properties/nm-amneziawg-dialog.ui:1104
+msgid ""
+"Fourth handshake packet magic header. Format: single number (e.g., 4) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Fourth handshake packet magic header. Format: single number (e.g., 4) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+
+#: properties/nm-amneziawg-dialog.ui:1133
+msgid "Magic Headers"
+msgstr "Magic Headers"
+
+#: properties/nm-amneziawg-dialog.ui:1172
+msgid "I1:"
+msgstr "I1:"
+
+#: properties/nm-amneziawg-dialog.ui:1186
+msgid ""
+"First init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"First init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+
+#: properties/nm-amneziawg-dialog.ui:1210
+msgid "I2:"
+msgstr "I2:"
+
+#: properties/nm-amneziawg-dialog.ui:1224
+msgid ""
+"Second init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Second init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+
+#: properties/nm-amneziawg-dialog.ui:1248
+msgid "I3:"
+msgstr "I3:"
+
+#: properties/nm-amneziawg-dialog.ui:1262
+msgid ""
+"Third init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Third init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+
+#: properties/nm-amneziawg-dialog.ui:1286
+msgid "I4:"
+msgstr "I4:"
+
+#: properties/nm-amneziawg-dialog.ui:1300
+msgid ""
+"Fourth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Fourth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+
+#: properties/nm-amneziawg-dialog.ui:1324
+msgid "I5:"
+msgstr "I5:"
+
+#: properties/nm-amneziawg-dialog.ui:1338
+msgid ""
+"Fifth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Fifth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+
+#: properties/nm-amneziawg-dialog.ui:1360
+msgid "Init Packet Content"
+msgstr "Init Packet Content"
+
+#: properties/nm-amneziawg-dialog.ui:1379
+msgid "AmneziaWG Obfuscation"
+msgstr "AmneziaWG Obfuscation"
+
+#: properties/nm-amneziawg-dialog.ui:1409
+msgid "Peers"
+msgstr "Peers"
+
+#: properties/nm-amneziawg-dialog.ui:1428
+msgid "Add"
+msgstr "Add"
+
+#: properties/nm-amneziawg-dialog.ui:1441
+msgid "Edit"
+msgstr "Edit"
+
+#: properties/nm-amneziawg-dialog.ui:1455
+msgid "Remove"
+msgstr "Remove"
+
+#~ msgid "First handshake packet magic header value."
+#~ msgstr "First handshake packet magic header value."
+
+#~ msgid "Second handshake packet magic header value."
+#~ msgstr "Second handshake packet magic header value."
+
+#~ msgid "Third handshake packet magic header value."
+#~ msgstr "Third handshake packet magic header value."
+
+#~ msgid "Fourth handshake packet magic header value."
+#~ msgstr "Fourth handshake packet magic header value."
+
+#~ msgid "Third noise packet size."
+#~ msgstr "Third noise packet size."
+
+#~ msgid "Fourth noise packet size."
+#~ msgstr "Fourth noise packet size."
+
+#~ msgid "First handshake packet magic header value (arbitrary string)."
+#~ msgstr "First handshake packet magic header value (arbitrary string)."
+
+#~ msgid "Second handshake packet magic header value (arbitrary string)."
+#~ msgstr "Second handshake packet magic header value (arbitrary string)."
+
+#~ msgid "Third handshake packet magic header value (arbitrary string)."
+#~ msgstr "Third handshake packet magic header value (arbitrary string)."
+
+#~ msgid "Fourth handshake packet magic header value (arbitrary string)."
+#~ msgstr "Fourth handshake packet magic header value (arbitrary string)."
+
+#~ msgid "First initiation packet content (arbitrary string)."
+#~ msgstr "First initiation packet content (arbitrary string)."
+
+#~ msgid "Second initiation packet content (arbitrary string)."
+#~ msgstr "Second initiation packet content (arbitrary string)."
+
+#~ msgid "Third initiation packet content (arbitrary string)."
+#~ msgstr "Third initiation packet content (arbitrary string)."
+
+#~ msgid "Fourth initiation packet content (arbitrary string)."
+#~ msgstr "Fourth initiation packet content (arbitrary string)."
+
+#~ msgid "Fifth initiation packet content (arbitrary string)."
+#~ msgstr "Fifth initiation packet content (arbitrary string)."

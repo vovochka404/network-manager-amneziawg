@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: NetworkManager-amneziawg\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-15 17:20+1000\n"
+"POT-Creation-Date: 2026-03-22 15:04+1000\n"
 "PO-Revision-Date: 2026-03-15 17:31+1000\n"
 "Language-Team: LLM auto translation\n"
 "Language: ru\n"
@@ -12,210 +12,439 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: nm-amneziawg-editor-plugin.c:69
+#: properties/nm-amneziawg-editor-plugin.c:70
 msgid "Unknown AmneziaWG file extension"
 msgstr "Неизвестное расширение файла AmneziaWG"
 
-#: nm-amneziawg-editor-plugin.c:78
+#: properties/nm-amneziawg-editor-plugin.c:79
 msgid "Failed to parse AmneziaWG config file"
 msgstr "Не удалось разобрать файл конфигурации AmneziaWG"
 
-#: nm-amneziawg-editor.c:501
+#: properties/nm-amneziawg-editor.c:272
+msgid "H1-H4 magic header ranges must not overlap"
+msgstr "Диапазоны магических заголовков H1-H4 не должны перекрываться"
+
+#: properties/nm-amneziawg-editor.c:285
+msgid "JMax must be greater than or equal to JMin"
+msgstr "JMax должен быть больше или равен JMin"
+
+#: properties/nm-amneziawg-editor.c:712
 msgid "Public key is required and must be valid base64\n"
 msgstr "Открытый ключ обязателен и должен быть в формате base64\n"
 
-#: nm-amneziawg-editor.c:505
+#: properties/nm-amneziawg-editor.c:716
 msgid "Endpoint is required and must be valid (host:port)"
 msgstr "Адрес подключения обязательна и должна быть в формате (хост:порт)"
 
-#: nm-amneziawg-editor.c:784
+#: properties/nm-amneziawg-editor.c:721
+msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
+msgstr "Allowed IPs должны быть допустимыми подсетями (например, 10.0.0.0/24)"
+
+#: properties/nm-amneziawg-editor.c:727
+msgid "Preshared key must be valid base64 or empty"
+msgstr "Общий ключ должен быть в формате base64 или пустым"
+
+#: properties/nm-amneziawg-editor.c:1047
+#: properties/nm-amneziawg-editor.c:1060
+#, c-format
+msgid "Delete peer \"%s\"?"
+msgstr "Удалить пир \"%s\"?"
+
+#: properties/nm-amneziawg-editor.c:1232
 msgid "Peer"
 msgstr "Пир"
 
-#: nm-amneziawg-editor.c:1039
+#: properties/nm-amneziawg-editor.c:1530
 msgid "Could not create amneziawg object"
 msgstr "Не удалось создать объект amneziawg"
 
-#: nm-amneziawg-editor.c:1058
+#: properties/nm-amneziawg-editor.c:1549
 msgid "could not load UI widget"
 msgstr "Не удалось загрузить виджет интерфейса"
 
-#: nm-amneziawg-dialog.ui:73
+#: src/nm-amneziawg-service.c:479
+#: src/nm-amneziawg-service.c:480
+msgid "Private key is required"
+msgstr "Требуется закрытый ключ"
+
+#: shared/nm-utils/nm-shared-utils.c:615
+#, c-format
+msgid "object class '%s' has no property named '%s'"
+msgstr "класс объекта '%s' не имеет свойства с именем '%s'"
+
+#: shared/nm-utils/nm-shared-utils.c:622
+#, c-format
+msgid "property '%s' of object class '%s' is not writable"
+msgstr "свойство '%s' класса объекта '%s' недоступно для записи"
+
+#: shared/nm-utils/nm-shared-utils.c:629
+#, c-format
+msgid ""
+"construct property \"%s\" for object '%s' can't be set after construction"
+msgstr "конструктивное свойство \"%s\" для объекта '%s' не может быть установлено после конструирования"
+
+#: shared/nm-utils/nm-shared-utils.c:637
+#, c-format
+msgid "'%s::%s' is not a valid property name; '%s' is not a GObject subtype"
+msgstr "'%s::%s' не является допустимым именем свойства; '%s' не является подтипом GObject"
+
+#: shared/nm-utils/nm-shared-utils.c:646
+#, c-format
+msgid "unable to set property '%s' of type '%s' from value of type '%s'"
+msgstr "невозможно установить свойство '%s' типа '%s' из значения типа '%s'"
+
+#: shared/nm-utils/nm-shared-utils.c:656
+#, c-format
+msgid ""
+"value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
+"type '%s'"
+msgstr "значение \"%s\" типа '%s' недопустимо или выходит за диапазон для свойства '%s' типа '%s'"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:80
+#, c-format
+msgid "missing plugin file \"%s\""
+msgstr "отсутствует файл плагина \"%s\""
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:86
+#, c-format
+msgid "cannot load editor plugin: %s"
+msgstr "не удалось загрузить плагин редактора: %s"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:95
+#, c-format
+msgid "cannot load factory %s from plugin: %s"
+msgstr "не удалось загрузить фабрику %s из плагина: %s"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:121
+msgid "unknown error creating editor instance"
+msgstr "неизвестная ошибка при создании экземпляра редактора"
+
+#: properties/nm-amneziawg-dialog.ui:33
 msgid "Edit AmneziaWG Peer"
 msgstr "Редактировать пир AmneziaWG"
 
-#: nm-amneziawg-dialog.ui:89
+#: properties/nm-amneziawg-dialog.ui:46
 msgid "_Cancel"
 msgstr "_Отмена"
 
-#: nm-amneziawg-dialog.ui:103
+#: properties/nm-amneziawg-dialog.ui:60
 msgid "_Apply"
 msgstr "_Применить"
 
-#: nm-amneziawg-dialog.ui:158
+#: properties/nm-amneziawg-dialog.ui:143
 msgid "Public Key:"
 msgstr "Открытый ключ:"
 
-#: nm-amneziawg-dialog.ui:181
-msgid "Allowed IPs:"
-msgstr "Разрешённые IP:"
-
-#: nm-amneziawg-dialog.ui:204
-msgid "Endpoint:"
-msgstr "Конечная точка:"
-
-#: nm-amneziawg-dialog.ui:227
-msgid "Preshared Key:"
-msgstr "Предварительный ключ:"
-
-#: nm-amneziawg-dialog.ui:248
-msgid "Show preshared key"
-msgstr "Показать предварительный ключ"
-
-#: nm-amneziawg-dialog.ui:265
-msgid "Persistent Keepalive:"
-msgstr "Постоянный Keepalive:"
-
-#: nm-amneziawg-dialog.ui:306
-msgid "Interface"
-msgstr "Интерфейс"
-
-#: nm-amneziawg-dialog.ui:326
-msgid "Listen Port:"
-msgstr "Порт прослушивания:"
-
-#: nm-amneziawg-dialog.ui:365
-msgid "Private Key:"
-msgstr "Закрытый ключ:"
-
-#: nm-amneziawg-dialog.ui:389
-msgid "Show private key"
-msgstr "Показать закрытый ключ"
-
-#: nm-amneziawg-dialog.ui:417
-msgid "MTU:"
-msgstr "MTU:"
-
-#: nm-amneziawg-dialog.ui:459
-msgid "FwMark:"
-msgstr "FwMark:"
-
-#: nm-amneziawg-dialog.ui:498
-msgid "Jc:"
-msgstr "Jc:"
-
-#: nm-amneziawg-dialog.ui:540
-msgid "JMin:"
-msgstr "JMin:"
-
-#: nm-amneziawg-dialog.ui:582
-msgid "JMax:"
-msgstr "JMax:"
-
-#: nm-amneziawg-dialog.ui:624
-msgid "S1:"
-msgstr "S1:"
-
-#: nm-amneziawg-dialog.ui:666
-msgid "S2:"
-msgstr "S2:"
-
-#: nm-amneziawg-dialog.ui:708
-msgid "H1:"
-msgstr "H1:"
-
-#: nm-amneziawg-dialog.ui:750
-msgid "H2:"
-msgstr "H2:"
-
-#: nm-amneziawg-dialog.ui:792
-msgid "H3:"
-msgstr "H3:"
-
-#: nm-amneziawg-dialog.ui:834
-msgid "H4:"
-msgstr "H4:"
-
-#: nm-amneziawg-dialog.ui:888
-msgid "Peers"
-msgstr "Пиры"
-
-#: nm-amneziawg-dialog.ui:910
-msgid "Add"
-msgstr "Добавить"
-
-#: nm-amneziawg-dialog.ui:923
-msgid "Remove"
-msgstr "Удалить"
-
-#: nm-amneziawg-dialog.ui:172
+#: properties/nm-amneziawg-dialog.ui:154
 msgid "Base64-encoded 32-byte public key of the peer."
 msgstr "Открытый ключ пира в формате base64 (32 байта)."
 
-#: nm-amneziawg-dialog.ui:195
-msgid "Comma-separated list of IP addresses and prefixes to route through the peer (e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
+#: properties/nm-amneziawg-dialog.ui:167
+msgid "Allowed IPs:"
+msgstr "Разрешённые IP:"
+
+#: properties/nm-amneziawg-dialog.ui:178
+msgid ""
+"Comma-separated list of IP addresses and prefixes to route through the peer "
+"(e.g., 10.0.0.0/24, 0.0.0.0/0 for all IPv4)."
 msgstr "Список IP-адресов и префиксов для маршрутизации через пир, разделенных запятыми (например, 10.0.0.0/24, 0.0.0.0/0 для всего IPv4)."
 
-#: nm-amneziawg-dialog.ui:218
+#: properties/nm-amneziawg-dialog.ui:191
+msgid "Endpoint:"
+msgstr "Конечная точка:"
+
+#: properties/nm-amneziawg-dialog.ui:202
 msgid "Host:port of the peer endpoint (e.g., vpn.example.com:51820)."
 msgstr "Адрес и порт пира (например, vpn.example.com:51820)."
 
-#: nm-amneziawg-dialog.ui:244
-msgid "Optional base64-encoded 32-byte preshared key for extra security."
-msgstr "Необязательный предварительный ключ в формате base64 (32 байта) для дополнительной безопасности."
+#: properties/nm-amneziawg-dialog.ui:215
+msgid "Preshared Key:"
+msgstr "Общий ключ:"
 
-#: nm-amneziawg-dialog.ui:284
-msgid "Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+#: properties/nm-amneziawg-dialog.ui:226
+msgid "Optional base64-encoded 32-byte preshared key for extra security."
+msgstr "Необязательный общий ключ в формате base64 (32 байта) для дополнительной безопасности."
+
+#: properties/nm-amneziawg-dialog.ui:237
+msgid "Show preshared key"
+msgstr "Показать общий ключ"
+
+#: properties/nm-amneziawg-dialog.ui:254
+msgid "Persistent Keepalive:"
+msgstr "Постоянный Keepalive:"
+
+#: properties/nm-amneziawg-dialog.ui:265
+msgid ""
+"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
 msgstr "Интервал в секундах между пакетами keepalive (0 = выключено, рекомендуется 25)."
 
-#: nm-amneziawg-dialog.ui:396
+#: properties/nm-amneziawg-dialog.ui:277
+msgid "_Advanced Security"
+msgstr "_Расширенная безопасность"
+
+#: properties/nm-amneziawg-dialog.ui:281
+msgid ""
+"Enable advanced security features for this peer (junk packets, headers, "
+"etc.)."
+msgstr "Включить расширенные функции безопасности для этого пира (мусорные пакеты, заголовки и т.д.)."
+
+#: properties/nm-amneziawg-dialog.ui:357
+msgid "Interface"
+msgstr "Интерфейс"
+
+#: properties/nm-amneziawg-dialog.ui:377
+msgid "Listen Port:"
+msgstr "Порт прослушивания:"
+
+#: properties/nm-amneziawg-dialog.ui:391
 msgid "UDP port to listen on (0 = random port)."
 msgstr "UDP-порт для прослушивания (0 = случайный порт)."
 
-#: nm-amneziawg-dialog.ui:434
+#: properties/nm-amneziawg-dialog.ui:417
+msgid "Private Key:"
+msgstr "Закрытый ключ:"
+
+#: properties/nm-amneziawg-dialog.ui:431
 msgid "Base64-encoded 32-byte private key for the interface."
 msgstr "Закрытый ключ интерфейса в формате base64 (32 байта)."
 
-#: nm-amneziawg-dialog.ui:490
+#: properties/nm-amneziawg-dialog.ui:442
+msgid "Show private key"
+msgstr "Показать закрытый ключ"
+
+#: properties/nm-amneziawg-dialog.ui:475
+msgid "MTU:"
+msgstr "MTU:"
+
+#: properties/nm-amneziawg-dialog.ui:489
 msgid "MTU of the interface (0 = auto-detect, typical values 1280-1500)."
 msgstr "MTU интерфейса (0 = автоопределение, типичные значения 1280-1500)."
 
-#: nm-amneziawg-dialog.ui:531
-msgid "Firewall mark for the interface (optional, used for routing/firewall rules)."
+#: properties/nm-amneziawg-dialog.ui:515
+msgid "FwMark:"
+msgstr "FwMark:"
+
+#: properties/nm-amneziawg-dialog.ui:529
+msgid ""
+"Firewall mark for the interface (optional, used for routing/firewall rules)."
 msgstr "Метка фаервола для интерфейса (необязательно, используется для правил маршрутизации/фаервола)."
 
-#: nm-amneziawg-dialog.ui:573
+#: properties/nm-amneziawg-dialog.ui:591
+msgid "Jc:"
+msgstr "Jc:"
+
+#: properties/nm-amneziawg-dialog.ui:605
 msgid "Junk packet count - number of random junk sizes to use."
 msgstr "Количество мусорных пакетов - количество случайных размеров мусора."
 
-#: nm-amneziawg-dialog.ui:615
-msgid "Minimum junk packet size in bytes."
-msgstr "Минимальный размер мусорного пакета в байтах."
+#: properties/nm-amneziawg-dialog.ui:636
+msgid "JMax:"
+msgstr "JMax:"
 
-#: nm-amneziawg-dialog.ui:657
+#: properties/nm-amneziawg-dialog.ui:650
 msgid "Maximum junk packet size in bytes."
 msgstr "Максимальный размер мусорного пакета в байтах."
 
-#: nm-amneziawg-dialog.ui:699
+#: properties/nm-amneziawg-dialog.ui:677
+msgid "JMin:"
+msgstr "JMin:"
+
+#: properties/nm-amneziawg-dialog.ui:691
+msgid "Minimum junk packet size in bytes."
+msgstr "Минимальный размер мусорного пакета в байтах."
+
+#: properties/nm-amneziawg-dialog.ui:722
+msgid "Junk Packets"
+msgstr "Мусорные пакеты"
+
+#: properties/nm-amneziawg-dialog.ui:761
+msgid "S1:"
+msgstr "S1:"
+
+#: properties/nm-amneziawg-dialog.ui:775
 msgid "First noise packet size."
 msgstr "Размер первого шумового пакета."
 
-#: nm-amneziawg-dialog.ui:741
+#: properties/nm-amneziawg-dialog.ui:801
+msgid "S2:"
+msgstr "S2:"
+
+#: properties/nm-amneziawg-dialog.ui:815
 msgid "Second noise packet size."
 msgstr "Размер второго шумового пакета."
 
-#: nm-amneziawg-dialog.ui:783
-msgid "First handshake packet magic header value."
-msgstr "Значение магического заголовка первого пакета рукопожатия."
+#: properties/nm-amneziawg-dialog.ui:841
+msgid "S3:"
+msgstr "S3:"
 
-#: nm-amneziawg-dialog.ui:825
-msgid "Second handshake packet magic header value."
-msgstr "Значение магического заголовка второго пакета рукопожатия."
+#: properties/nm-amneziawg-dialog.ui:855
+msgid "Cookie reply packet junk size (max 65479)."
+msgstr "Размер мусора в пакете cookie-ответа (макс. 65479)."
 
-#: nm-amneziawg-dialog.ui:867
-msgid "Third handshake packet magic header value."
-msgstr "Значение магического заголовка третьего пакета рукопожатия."
+#: properties/nm-amneziawg-dialog.ui:881
+msgid "S4:"
+msgstr "S4:"
 
-#: nm-amneziawg-dialog.ui:909
-msgid "Fourth handshake packet magic header value."
-msgstr "Значение магического заголовка четвертого пакета рукопожатия."
+#: properties/nm-amneziawg-dialog.ui:895
+msgid "Transport packet junk size (max 65503)."
+msgstr "Размер мусора в транспортном пакете (макс. 65503)."
+
+#: properties/nm-amneziawg-dialog.ui:918
+#, fuzzy
+msgid "Noise Packet Sizes"
+msgstr "Размер первого шумового пакета."
+
+#: properties/nm-amneziawg-dialog.ui:961
+msgid "H1:"
+msgstr "H1:"
+
+#: properties/nm-amneziawg-dialog.ui:975
+msgid ""
+"First handshake packet magic header. Format: single number (e.g., 1) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Магический заголовок первого пакета рукопожатия. Формат: одиночное число "
+"(например, 1) или диапазон (например, 100-200). Диапазоны H1-H4 не должны "
+"перекрываться."
+
+#: properties/nm-amneziawg-dialog.ui:1000
+msgid "H2:"
+msgstr "H2:"
+
+#: properties/nm-amneziawg-dialog.ui:1014
+msgid ""
+"Second handshake packet magic header. Format: single number (e.g., 2) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Магический заголовок второго пакета рукопожатия. Формат: одиночное число "
+"(например, 2) или диапазон (например, 100-200). Диапазоны H1-H4 не должны "
+"перекрываться."
+
+#: properties/nm-amneziawg-dialog.ui:1051
+msgid "H3:"
+msgstr "H3:"
+
+#: properties/nm-amneziawg-dialog.ui:1065
+msgid ""
+"Third handshake packet magic header. Format: single number (e.g., 3) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Магический заголовок третьего пакета рукопожатия. Формат: одиночное число "
+"(например, 3) или диапазон (например, 100-200). Диапазоны H1-H4 не должны "
+"перекрываться."
+
+#: properties/nm-amneziawg-dialog.ui:1090
+msgid "H4:"
+msgstr "H4:"
+
+#: properties/nm-amneziawg-dialog.ui:1104
+msgid ""
+"Fourth handshake packet magic header. Format: single number (e.g., 4) or "
+"range (e.g., 100-200). H1-H4 ranges must not overlap."
+msgstr ""
+"Магический заголовок четвертого пакета рукопожатия. Формат: одиночное число "
+"(например, 4) или диапазон (например, 100-200). Диапазоны H1-H4 не должны "
+"перекрываться."
+
+#: properties/nm-amneziawg-dialog.ui:1133
+msgid "Magic Headers"
+msgstr "Магические заголовки"
+
+#: properties/nm-amneziawg-dialog.ui:1172
+msgid "I1:"
+msgstr "I1:"
+
+#: properties/nm-amneziawg-dialog.ui:1186
+msgid ""
+"First init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Содержимое первого init-пакета. Формат: теги через &lt; (например, r16, "
+"b0xDEADBEEF, r16&lt;c). Теги: r&lt;num&gt; (случайные байты), rc&lt;num&gt; "
+"(случайные буквы), rd&lt;num&gt; (случайные цифры), c (счетчик), t (время), "
+"b0x&lt;hex&gt; (бинарные)."
+
+#: properties/nm-amneziawg-dialog.ui:1210
+msgid "I2:"
+msgstr "I2:"
+
+#: properties/nm-amneziawg-dialog.ui:1224
+msgid ""
+"Second init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Содержимое второго init-пакета. Формат: теги через &lt; (например, r16, "
+"b0xDEADBEEF, r16&lt;c). Теги: r&lt;num&gt; (случайные байты), rc&lt;num&gt; "
+"(случайные буквы), rd&lt;num&gt; (случайные цифры), c (счетчик), t (время), "
+"b0x&lt;hex&gt; (бинарные)."
+
+#: properties/nm-amneziawg-dialog.ui:1248
+msgid "I3:"
+msgstr "I3:"
+
+#: properties/nm-amneziawg-dialog.ui:1262
+msgid ""
+"Third init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Содержимое третьего init-пакета. Формат: теги через &lt; (например, r16, "
+"b0xDEADBEEF, r16&lt;c). Теги: r&lt;num&gt; (случайные байты), rc&lt;num&gt; "
+"(случайные буквы), rd&lt;num&gt; (случайные цифры), c (счетчик), t (время), "
+"b0x&lt;hex&gt; (бинарные)."
+
+#: properties/nm-amneziawg-dialog.ui:1286
+msgid "I4:"
+msgstr "I4:"
+
+#: properties/nm-amneziawg-dialog.ui:1300
+msgid ""
+"Fourth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Содержимое четвертого init-пакета. Формат: теги через &lt; (например, r16, "
+"b0xDEADBEEF, r16&lt;c). Теги: r&lt;num&gt; (случайные байты), rc&lt;num&gt; "
+"(случайные буквы), rd&lt;num&gt; (случайные цифры), c (счетчик), t (время), "
+"b0x&lt;hex&gt; (бинарные)."
+
+#: properties/nm-amneziawg-dialog.ui:1324
+msgid "I5:"
+msgstr "I5:"
+
+#: properties/nm-amneziawg-dialog.ui:1338
+msgid ""
+"Fifth init packet content. Format: tags separated by < (e.g., r16, "
+"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
+"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+msgstr ""
+"Содержимое пятого init-пакета. Формат: теги через &lt; (например, r16, "
+"b0xDEADBEEF, r16&lt;c). Теги: r&lt;num&gt; (случайные байты), rc&lt;num&gt; "
+"(случайные буквы), rd&lt;num&gt; (случайные цифры), c (счетчик), t (время), "
+"b0x&lt;hex&gt; (бинарные)."
+
+#: properties/nm-amneziawg-dialog.ui:1360
+msgid "Init Packet Content"
+msgstr "Содержимое init-пакета"
+
+#: properties/nm-amneziawg-dialog.ui:1379
+msgid "AmneziaWG Obfuscation"
+msgstr "Обфускация AmneziaWG"
+
+#: properties/nm-amneziawg-dialog.ui:1409
+msgid "Peers"
+msgstr "Пиры"
+
+#: properties/nm-amneziawg-dialog.ui:1428
+msgid "Add"
+msgstr "Добавить"
+
+#: properties/nm-amneziawg-dialog.ui:1441
+msgid "Edit"
+msgstr "Редактировать"
+
+#: properties/nm-amneziawg-dialog.ui:1455
+msgid "Remove"
+msgstr "Удалить"
