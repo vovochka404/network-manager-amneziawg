@@ -454,6 +454,7 @@ if(ENABLE_NLS)
     if(GETTEXT_XGETTEXT)
         add_custom_target(pot ALL
             COMMAND ${GETTEXT_XGETTEXT} -k_ --add-comments -o ${POT_FILE} ${ALL_SOURCE_FILES}
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/fix-pot-paths.sh ${POT_FILE} ${CMAKE_CURRENT_SOURCE_DIR}
             DEPENDS ${ALL_SOURCE_FILES}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
