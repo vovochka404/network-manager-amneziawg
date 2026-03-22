@@ -84,5 +84,5 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: build/network-manager-amneziawg_${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
-          asset_name: network-manager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
+          asset_name: network-manager-amneziawg_${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
