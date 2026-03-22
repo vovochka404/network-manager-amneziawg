@@ -435,6 +435,39 @@ fill_interface_from_connection(AmneziaWGEditor *self)
 
     str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5);
     set_widget_text(priv->builder, "interface_i5_entry", str ?: "");
+
+    // Set default values for H1-H4 if empty (WireGuard message types)
+    if (!str || !str[0]) {
+        GtkWidget *widget;
+
+        str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1);
+        if (!str || !str[0]) {
+            widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h1_entry"));
+            if (widget)
+                set_widget_text(priv->builder, "interface_h1_entry", "1");
+        }
+
+        str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2);
+        if (!str || !str[0]) {
+            widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h2_entry"));
+            if (widget)
+                set_widget_text(priv->builder, "interface_h2_entry", "2");
+        }
+
+        str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3);
+        if (!str || !str[0]) {
+            widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h3_entry"));
+            if (widget)
+                set_widget_text(priv->builder, "interface_h3_entry", "3");
+        }
+
+        str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4);
+        if (!str || !str[0]) {
+            widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h4_entry"));
+            if (widget)
+                set_widget_text(priv->builder, "interface_h4_entry", "4");
+        }
+    }
 }
 
 typedef struct {
@@ -755,17 +788,82 @@ peer_add_button_clicked(GtkButton *button, gpointer user_data)
     gtk_widget_show(dialog);
 }
 
+// Callback: edit peer button clicked - opens dialog
+static void
+peer_edit_button_clicked(GtkButton *button, gpointer user_data)
+{
+    AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
+    AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+    GtkWidget *treeview, *dialog;
+    GtkTreeModel *model;
+    GtkTreeSelection *selection;
+    GtkTreeIter iter;
+    GtkTreePath *path;
+    AWGDevicePeer *peer;
+    gint *indices;
+
+    treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
+    if (!treeview)
+        return;
+
+    model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
+    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+    if (!gtk_tree_selection_get_selected(selection, &model, &iter))
+        return;
+
+    gtk_tree_model_get(model, &iter, 1, &peer, -1);
+    if (!peer)
+        return;
+
+    // Get the peer index from the path
+    path = gtk_tree_model_get_path(model, &iter);
+    if (!path)
+        return;
+
+    indices = gtk_tree_path_get_indices(path);
+    if (!indices) {
+        gtk_tree_path_free(path);
+        return;
+    }
+
+    priv->dialog_peer = awg_device_peer_new_clone(peer);
+    priv->dialog_peer_index = indices[0];
+
+    gtk_tree_path_free(path);
+
+#if GTK_CHECK_VERSION(4, 0, 0)
+    GtkRoot *toplevel = gtk_widget_get_root(priv->widget);
+#else
+    GtkWidget *toplevel = gtk_widget_get_toplevel(priv->widget);
+#endif
+
+    dialog = peer_dialog_create(GTK_WIDGET(toplevel), priv->dialog_peer, self);
+    if (!dialog) {
+        g_object_unref(priv->dialog_peer);
+        priv->dialog_peer = NULL;
+        priv->dialog_peer_index = -1;
+        return;
+    }
+
+    gtk_widget_show(dialog);
+}
+
 // Callback: TreeView selection changed
 static void
 peers_treeview_selection_changed(GtkTreeSelection *selection, gpointer user_data)
 {
     AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
     AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
-    GtkWidget *remove_btn;
+    GtkWidget *remove_btn, *edit_btn;
 
     remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
+    edit_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_edit_button"));
+
     if (remove_btn) {
         gtk_widget_set_sensitive(remove_btn, gtk_tree_selection_get_selected(selection, NULL, NULL));
+    }
+    if (edit_btn) {
+        gtk_widget_set_sensitive(edit_btn, gtk_tree_selection_get_selected(selection, NULL, NULL));
     }
 }
 
@@ -849,18 +947,26 @@ peers_treeview_rebuild(AmneziaWGEditor *self)
     }
 }
 
-// Callback: remove peer button clicked
+#if GTK_CHECK_VERSION(4, 0, 0)
+// Callback for delete confirmation dialog response (GTK4 only)
 static void
-peer_remove_button_clicked(GtkButton *button, gpointer user_data)
+peer_delete_dialog_response_cb(GtkDialog *dialog, gint response_id, gpointer user_data)
 {
     AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
     AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
-    GtkWidget *treeview;
+    GtkWidget *treeview, *remove_btn, *warning_label;
     GtkTreeModel *model;
     GtkTreeSelection *selection;
     GtkTreeIter iter;
+    AWGDevicePeer *peer;
     guint count;
 
+    gtk_window_destroy(GTK_WINDOW(dialog));
+
+    if (response_id != GTK_RESPONSE_YES)
+        return;
+
+    // Get the peer from the first selected row
     treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
     if (!treeview)
         return;
@@ -870,7 +976,11 @@ peer_remove_button_clicked(GtkButton *button, gpointer user_data)
     if (!gtk_tree_selection_get_selected(selection, &model, &iter))
         return;
 
-    gtk_tree_model_get(model, &iter, 1, &priv->dialog_peer, -1);
+    gtk_tree_model_get(model, &iter, 1, &peer, -1);
+    if (!peer)
+        return;
+
+    priv->dialog_peer = g_object_ref(peer);
     if (priv->dialog_peer) {
         guint idx = 0;
         GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
@@ -889,16 +999,105 @@ peer_remove_button_clicked(GtkButton *button, gpointer user_data)
         peers_treeview_rebuild(self);
 
         count = awg_device_get_peers_count(priv->device);
-        GtkWidget *remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
+        remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
         if (remove_btn)
             gtk_widget_set_sensitive(remove_btn, count > 0);
 
-        GtkWidget *warning_label = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_warning_label"));
+        warning_label = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_warning_label"));
         if (warning_label)
             gtk_widget_set_visible(warning_label, count == 0);
 
         g_signal_emit_by_name(self, "changed");
     }
+}
+#endif
+
+// Callback: remove peer button clicked
+static void
+peer_remove_button_clicked(GtkButton *button, gpointer user_data)
+{
+    AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
+    AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+    GtkWidget *treeview;
+    GtkTreeModel *model;
+    GtkTreeSelection *selection;
+    GtkTreeIter iter;
+    AWGDevicePeer *peer;
+
+    treeview = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_treeview"));
+    if (!treeview)
+        return;
+
+    model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
+    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+    if (!gtk_tree_selection_get_selected(selection, &model, &iter))
+        return;
+
+    gtk_tree_model_get(model, &iter, 1, &peer, -1);
+    if (!peer)
+        return;
+
+#if GTK_CHECK_VERSION(4, 0, 0)
+    // GTK4: Use async dialog
+    GtkRoot *toplevel = gtk_widget_get_root(priv->widget);
+    GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(toplevel),
+                                               GTK_DIALOG_MODAL,
+                                               GTK_MESSAGE_QUESTION,
+                                               GTK_BUTTONS_YES_NO,
+                                               _("Delete peer \"%s\"?"),
+                                               awg_device_peer_get_endpoint(peer) ?: awg_device_peer_get_public_key(peer));
+
+    // Connect to response signal for GTK4
+    g_signal_connect(dialog, "response", G_CALLBACK(peer_delete_dialog_response_cb), self);
+    gtk_widget_show(dialog);
+#else
+    // GTK3: Use synchronous dialog
+    GtkWidget *toplevel = gtk_widget_get_toplevel(priv->widget);
+    GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(toplevel),
+                                               GTK_DIALOG_MODAL,
+                                               GTK_MESSAGE_QUESTION,
+                                               GTK_BUTTONS_YES_NO,
+                                               _("Delete peer \"%s\"?"),
+                                               awg_device_peer_get_endpoint(peer) ?: awg_device_peer_get_public_key(peer));
+    GtkWidget *remove_btn, *warning_label;
+    guint count;
+
+    gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+
+    if (response != GTK_RESPONSE_YES)
+        return;
+
+    priv->dialog_peer = g_object_ref(peer);
+    if (priv->dialog_peer) {
+        guint idx = 0;
+        GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
+        if (path) {
+            gint *indices = gtk_tree_path_get_indices(path);
+            if (indices)
+                idx = indices[0];
+            gtk_tree_path_free(path);
+        }
+
+        awg_device_remove_peer(priv->device, idx);
+        g_object_unref(priv->dialog_peer);
+        priv->dialog_peer = NULL;
+        priv->dialog_peer_index = -1;
+
+        peers_treeview_rebuild(self);
+
+        count = awg_device_get_peers_count(priv->device);
+        remove_btn = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
+        if (remove_btn)
+            gtk_widget_set_sensitive(remove_btn, count > 0);
+
+        warning_label = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peers_warning_label"));
+        if (warning_label)
+            gtk_widget_set_visible(warning_label, count == 0);
+
+        g_signal_emit_by_name(self, "changed");
+    }
+#endif
 }
 
 static gboolean
@@ -1011,6 +1210,10 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_add_button"));
     if (widget)
         g_signal_connect(G_OBJECT(widget), "clicked", G_CALLBACK(peer_add_button_clicked), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_edit_button"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "clicked", G_CALLBACK(peer_edit_button_clicked), self);
 
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_remove_button"));
     if (widget) {
