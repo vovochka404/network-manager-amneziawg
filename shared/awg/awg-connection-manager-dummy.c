@@ -61,11 +61,18 @@ awg_connection_manager_dummy_disconnect(AWGConnectionManager *mgr, GError **erro
     return FALSE;
 }
 
+static gboolean
+awg_connection_manager_dummy_manages_routes(AWGConnectionManager *mgr)
+{
+    return FALSE;
+}
+
 static void
 awg_connection_manager_dummy_interface_init(AWGConnectionManagerInterface *iface)
 {
     iface->connect = awg_connection_manager_dummy_connect;
     iface->disconnect = awg_connection_manager_dummy_disconnect;
+    iface->manages_routes = awg_connection_manager_dummy_manages_routes;
 }
 
 static void

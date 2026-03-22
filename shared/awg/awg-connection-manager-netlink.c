@@ -285,136 +285,6 @@ set_interface_mtu(const gchar *ifname, guint32 mtu)
 }
 
 static gboolean
-add_route(const gchar *ifname, const gchar *destination, int family)
-{
-    struct {
-        struct nlmsghdr nlh;
-        struct rtmsg rt;
-        char buffer[256];
-    } req;
-    int sock;
-    struct sockaddr_nl addr;
-    char *dest_copy, *prefix_str, *ip_str;
-    guint prefix;
-    struct rtattr *rta;
-
-    sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-    if (sock < 0)
-        return FALSE;
-
-    memset(&addr, 0, sizeof(addr));
-    addr.nl_family = AF_NETLINK;
-    addr.nl_pid = getpid();
-    addr.nl_groups = 0;
-
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(sock);
-        return FALSE;
-    }
-
-    memset(&req, 0, sizeof(req));
-    req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
-    req.nlh.nlmsg_type = RTM_NEWROUTE;
-    req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
-    req.nlh.nlmsg_seq = 1;
-    req.nlh.nlmsg_pid = getpid();
-
-    req.rt.rtm_family = family;
-    req.rt.rtm_dst_len = 0;
-    req.rt.rtm_src_len = 0;
-    req.rt.rtm_tos = 0;
-    req.rt.rtm_table = RT_TABLE_MAIN;
-    req.rt.rtm_protocol = RTPROT_STATIC;
-    req.rt.rtm_scope = RT_SCOPE_UNIVERSE;
-    req.rt.rtm_type = RTN_UNICAST;
-
-    dest_copy = g_strdup(destination);
-    ip_str = dest_copy;
-    prefix_str = strchr(dest_copy, '/');
-    if (prefix_str) {
-        *prefix_str = '\0';
-        prefix = atoi(prefix_str + 1);
-    } else {
-        prefix = (family == AF_INET) ? 32 : 128;
-    }
-    req.rt.rtm_dst_len = prefix;
-
-    rta = (struct rtattr *)((char *)&req.rt + NLMSG_ALIGN(sizeof(req.rt)));
-
-    if (family == AF_INET) {
-        struct in_addr dst_addr;
-        if (inet_pton(AF_INET, ip_str, &dst_addr) > 0) {
-            rta->rta_type = RTA_DST;
-            rta->rta_len = RTA_LENGTH(sizeof(dst_addr));
-            memcpy(RTA_DATA(rta), &dst_addr, sizeof(dst_addr));
-            req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
-            rta = (struct rtattr *)((char *)rta + RTA_ALIGN(rta->rta_len));
-        } else {
-            g_free(dest_copy);
-            close(sock);
-            return FALSE;
-        }
-    } else {
-        struct in6_addr dst_addr;
-        if (inet_pton(AF_INET6, ip_str, &dst_addr) > 0) {
-            rta->rta_type = RTA_DST;
-            rta->rta_len = RTA_LENGTH(sizeof(dst_addr));
-            memcpy(RTA_DATA(rta), &dst_addr, sizeof(dst_addr));
-            req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
-            rta = (struct rtattr *)((char *)rta + RTA_ALIGN(rta->rta_len));
-        } else {
-            g_free(dest_copy);
-            close(sock);
-            return FALSE;
-        }
-    }
-
-    rta->rta_type = RTA_OIF;
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    int ifindex = if_nametoindex(ifname);
-    memcpy(RTA_DATA(rta), &ifindex, sizeof(ifindex));
-    req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
-
-    g_free(dest_copy);
-
-    if (send(sock, &req, req.nlh.nlmsg_len, 0) < 0) {
-        close(sock);
-        return FALSE;
-    }
-
-    close(sock);
-    return TRUE;
-}
-
-static gboolean
-add_routes_for_allowed_ips(AWGConnectionManager *mgr)
-{
-    AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
-    AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);
-    const gchar *ifname = priv->interface_name;
-    const GList *peers_list = awg_device_get_peers_list(priv->device);
-    const GList *iter;
-
-    for (iter = peers_list; iter; iter = g_list_next(iter)) {
-        AWGDevicePeer *awg_peer = iter->data;
-        const gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(awg_peer);
-
-        if (allowed_ips && strlen(allowed_ips) > 0) {
-            char **ip_list = g_strsplit(allowed_ips, ",", -1);
-            for (int i = 0; ip_list[i]; i++) {
-                char *ip_str = g_strstrip(ip_list[i]);
-                gboolean is_ipv6 = (strchr(ip_str, ':') != NULL);
-
-                add_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET);
-            }
-            g_strfreev(ip_list);
-        }
-    }
-
-    return TRUE;
-}
-
-static gboolean
 awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error)
 {
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
@@ -455,7 +325,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         dev->flags |= WGDEVICE_HAS_LISTEN_PORT;
     }
 
-    guint16 fw_mark = awg_device_get_fw_mark(priv->device);
+    guint32 fw_mark = awg_device_get_fw_mark(priv->device);
     if (fw_mark > 0) {
         dev->fwmark = fw_mark;
         dev->flags |= WGDEVICE_HAS_FWMARK;
@@ -486,25 +356,61 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         dev->response_packet_junk_size = s2;
         dev->flags |= WGDEVICE_HAS_S2;
     }
-    guint32 h1 = awg_device_get_h1(priv->device);
-    if (h1 > 0) {
-        dev->init_packet_magic_header = h1;
+    guint16 s3 = awg_device_get_s3(priv->device);
+    if (s3 > 0) {
+        dev->cookie_reply_packet_junk_size = s3;
+        dev->flags |= WGDEVICE_HAS_S3;
+    }
+    guint16 s4 = awg_device_get_s4(priv->device);
+    if (s4 > 0) {
+        dev->transport_packet_junk_size = s4;
+        dev->flags |= WGDEVICE_HAS_S4;
+    }
+
+    const gchar *h1 = awg_device_get_h1(priv->device);
+    if (h1 && h1[0]) {
+        dev->init_packet_magic_header = g_strdup(h1);
         dev->flags |= WGDEVICE_HAS_H1;
     }
-    guint32 h2 = awg_device_get_h2(priv->device);
-    if (h2 > 0) {
-        dev->response_packet_magic_header = h2;
+    const gchar *h2 = awg_device_get_h2(priv->device);
+    if (h2 && h2[0]) {
+        dev->response_packet_magic_header = g_strdup(h2);
         dev->flags |= WGDEVICE_HAS_H2;
     }
-    guint32 h3 = awg_device_get_h3(priv->device);
-    if (h3 > 0) {
-        dev->underload_packet_magic_header = h3;
+    const gchar *h3 = awg_device_get_h3(priv->device);
+    if (h3 && h3[0]) {
+        dev->underload_packet_magic_header = g_strdup(h3);
         dev->flags |= WGDEVICE_HAS_H3;
     }
-    guint32 h4 = awg_device_get_h4(priv->device);
-    if (h4 > 0) {
-        dev->transport_packet_magic_header = h4;
+    const gchar *h4 = awg_device_get_h4(priv->device);
+    if (h4 && h4[0]) {
+        dev->transport_packet_magic_header = g_strdup(h4);
         dev->flags |= WGDEVICE_HAS_H4;
+    }
+    const gchar *i1 = awg_device_get_i1(priv->device);
+    if (i1 && i1[0]) {
+        dev->i1 = g_strdup(i1);
+        dev->flags |= WGDEVICE_HAS_I1;
+    }
+    const gchar *i2 = awg_device_get_i2(priv->device);
+    if (i2 && i2[0]) {
+        dev->i2 = g_strdup(i2);
+        dev->flags |= WGDEVICE_HAS_I2;
+    }
+    const gchar *i3 = awg_device_get_i3(priv->device);
+    if (i3 && i3[0]) {
+        dev->i3 = g_strdup(i3);
+        dev->flags |= WGDEVICE_HAS_I3;
+    }
+    const gchar *i4 = awg_device_get_i4(priv->device);
+    if (i4 && i4[0]) {
+        dev->i4 = g_strdup(i4);
+        dev->flags |= WGDEVICE_HAS_I4;
+    }
+    const gchar *i5 = awg_device_get_i5(priv->device);
+    if (i5 && i5[0]) {
+        dev->i5 = g_strdup(i5);
+        dev->flags |= WGDEVICE_HAS_I5;
     }
 
     dev->flags |= WGDEVICE_REPLACE_PEERS;
@@ -608,6 +514,11 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
             new_peer->flags |= WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL;
         }
 
+        if (awg_device_peer_get_advanced_security(awg_peer)) {
+            new_peer->awg = true;
+            new_peer->flags |= WGPEER_HAS_ADVANCED_SECURITY;
+        }
+
         if (!dev->first_peer) {
             dev->first_peer = new_peer;
             dev->last_peer = new_peer;
@@ -654,11 +565,6 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
         }
     }
 
-    if (!add_routes_for_allowed_ips(mgr)) {
-        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
-                    "Failed to add routes for %s", ifname);
-    }
-
     priv->running = TRUE;
     success = TRUE;
 
@@ -692,11 +598,18 @@ awg_connection_manager_netlink_disconnect(AWGConnectionManager *mgr, GError **er
     return success;
 }
 
+static gboolean
+awg_connection_manager_netlink_manages_routes(AWGConnectionManager *mgr)
+{
+    return FALSE;
+}
+
 static void
 awg_connection_manager_netlink_interface_init(AWGConnectionManagerInterface *iface)
 {
     iface->connect = awg_connection_manager_netlink_connect;
     iface->disconnect = awg_connection_manager_netlink_disconnect;
+    iface->manages_routes = awg_connection_manager_netlink_manages_routes;
 }
 
 static void

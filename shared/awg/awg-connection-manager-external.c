@@ -152,11 +152,18 @@ awg_connection_manager_external_disconnect(AWGConnectionManager *mgr, GError **e
     return success && exit_status == 0;
 }
 
+static gboolean
+awg_connection_manager_external_manages_routes(AWGConnectionManager *mgr)
+{
+    return TRUE;
+}
+
 static void
 awg_connection_manager_external_interface_init(AWGConnectionManagerInterface *iface)
 {
     iface->connect = awg_connection_manager_external_connect;
     iface->disconnect = awg_connection_manager_external_disconnect;
+    iface->manages_routes = awg_connection_manager_external_manages_routes;
 }
 
 static void

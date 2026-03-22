@@ -261,7 +261,7 @@ send_config(gpointer data)
 // create a Config, Ip4Config and Ip6Config from AWGDevice
 // and create a timer that sends the configuration to the plugin (see 'send_config()' above)
 static gboolean
-set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name)
+set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean routed_managed_by_manager)
 {
     GVariantBuilder builder, ip4builder, ip6builder;
     GVariantBuilder dns_builder;
@@ -302,7 +302,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name)
         }
 
         const gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
-        if (allowed_ips && strlen(allowed_ips) > 0) {
+        if (allowed_ips && strlen(allowed_ips) > 0 && !routed_managed_by_manager) {
             GPtrArray *routes4 = g_ptr_array_new_full(10, (GDestroyNotify)nm_ip_route_unref);
             GPtrArray *routes6 = g_ptr_array_new_full(10, (GDestroyNotify)nm_ip_route_unref);
             char **ip_list = g_strsplit(allowed_ips, ",", -1);
@@ -383,7 +383,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name)
             gchar *dns_str = g_inet_address_to_string(dns_addr);
             if (dns_str) {
                 val = g_variant_new_string(dns_str);
-                g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_DNS, val);
+                g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_DNS, val);
                 g_free(dns_str);
                 has_dns = TRUE;
             }
@@ -508,7 +508,7 @@ connect_common(NMVpnServicePlugin *plugin,
 
     priv->conn_manager = conn_manager;
 
-    if (!set_config(plugin, device, if_name)) {
+    if (!set_config(plugin, device, if_name, awg_connection_manager_manages_routes(conn_manager))) {
         _LOGW("Error: Could not set config!");
     }
 
