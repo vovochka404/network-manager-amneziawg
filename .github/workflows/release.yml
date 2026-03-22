@@ -24,6 +24,8 @@ jobs:
             glib2-devel gettext rpm-build
 
       - name: Build
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.event.inputs.version }}
         run: |
           mkdir build && cd build
           cmake .. \
@@ -32,7 +34,10 @@ jobs:
             -DWITH_GTK3=ON \
             -DWITH_GTK4=OFF
           cmake --build .
-          cpack -G RPM
+          
+          # Build RPM with explicit filename
+          cpack -G RPM \
+            -D CPACK_PACKAGE_FILE_NAME="NetworkManager-amneziawg-${VERSION}-amd64"
 
       - name: Upload RPM
         uses: actions/upload-release-asset@v1
@@ -40,8 +45,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: build/NetworkManager-amneziawg-*.rpm
-          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}.rpm
+          asset_path: build/NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}-amd64.rpm
+          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}-amd64.rpm
           asset_content_type: application/x-rpm
 
   build-deb:
@@ -57,6 +62,8 @@ jobs:
             gettext dpkg-dev debhelper
 
       - name: Build
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.event.inputs.version }}
         run: |
           mkdir build && cd build
           cmake .. \
@@ -65,7 +72,10 @@ jobs:
             -DWITH_GTK3=ON \
             -DWITH_GTK4=OFF
           cmake --build .
-          cpack -G DEB
+          
+          # Build DEB with explicit filename
+          cpack -G DEB \
+            -D CPACK_PACKAGE_FILE_NAME="network-manager-amneziawg_${VERSION}_amd64"
 
       - name: Upload DEB
         uses: actions/upload-release-asset@v1
@@ -73,6 +83,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: build/NetworkManager-amneziawg-*.deb
-          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}.deb
+          asset_path: build/network-manager-amneziawg_${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
+          asset_name: network-manager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
