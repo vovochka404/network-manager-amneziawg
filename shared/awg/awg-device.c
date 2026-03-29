@@ -439,8 +439,9 @@ awg_subnet_new_from_string(const char *str)
     }
 
     // Устанавливаем маску по умолчанию в зависимости от типа адреса
+    // Если маска не указана (например, адрес без /mask), используем максимальную
     max_mask = (g_inet_address_get_family(address) == G_SOCKET_FAMILY_IPV4) ? 32 : 128;
-    if (mask == 0) {
+    if (slash_pos == NULL) {
         mask = max_mask;
     }
 
@@ -1753,13 +1754,11 @@ awg_device_peer_new_clone(AWGDevicePeer *peer)
 
     clone_priv->shared_key_flags = priv->shared_key_flags;
 
+    // Копируем список allowed_ips напрямую, чтобы сохранить все подсети
     for (l = priv->allowed_ips; l; l = l->next) {
-        AWGSubNet *subnet = l->data;
-        gchar *subnet_str = awg_subnet_to_string(subnet);
-        if (subnet_str) {
-            awg_device_peer_set_allowed_ips_from_string(clone, subnet_str);
-            g_free(subnet_str);
-        }
+        AWGSubNet *subnet = AWG_SUBNET(l->data);
+        g_object_ref(subnet);
+        clone_priv->allowed_ips = g_list_append(clone_priv->allowed_ips, subnet);
     }
 
     if (priv->endpoint)
@@ -1886,7 +1885,7 @@ awg_device_peer_set_allowed_ips_from_string(AWGDevicePeer *self,
 
     for (i = 0; ip_strings[i] != NULL; i++) {
         gchar *trimmed_ip = g_strstrip(ip_strings[i]);
-        if (*trimmed_ip) { // Проверяем, что строка не пустая
+        if (*trimmed_ip) {
             AWGSubNet *subnet = awg_subnet_new_from_string(trimmed_ip);
             if (subnet != NULL) {
                 new_list = g_list_append(new_list, subnet);

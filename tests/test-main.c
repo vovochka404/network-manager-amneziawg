@@ -913,6 +913,35 @@ test_awg_validate_jmin_jmax(void)
 }
 
 static void
+test_awg_peer_clone_multi_allowed_ips(void)
+{
+    AWGDevicePeer *peer = awg_device_peer_new();
+    g_assert_nonnull(peer);
+
+    // Устанавливаем несколько allowed IPs
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "10.0.0.0/24, 192.168.0.0/16, 0.0.0.0/0"));
+    
+    // Проверяем, что все подсети сохранились
+    gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
+    g_assert_nonnull(allowed_ips);
+    g_assert_cmpstr(allowed_ips, ==, "10.0.0.0/24, 192.168.0.0/16, 0.0.0.0/0");
+    g_free(allowed_ips);
+
+    // Клонируем peer
+    AWGDevicePeer *clone = awg_device_peer_new_clone(peer);
+    g_assert_nonnull(clone);
+
+    // Проверяем, что у клона все подсети на месте
+    gchar *clone_allowed_ips = awg_device_peer_get_allowed_ips_as_string(clone);
+    g_assert_nonnull(clone_allowed_ips);
+    g_assert_cmpstr(clone_allowed_ips, ==, "10.0.0.0/24, 192.168.0.0/16, 0.0.0.0/0");
+    g_free(clone_allowed_ips);
+
+    g_object_unref(peer);
+    g_object_unref(clone);
+}
+
+static void
 test_awg_config_string_with_s3_s4(void)
 {
     AWGDevice *device = awg_device_new();
@@ -1098,6 +1127,7 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/validate/s4-valid", test_awg_validate_s4_valid);
     g_test_add_func("/awg/validate/magic-headers-no-overlap", test_awg_validate_magic_headers_no_overlap);
     g_test_add_func("/awg/validate/jmin-jmax", test_awg_validate_jmin_jmax);
+    g_test_add_func("/awg/peer/clone-multi-allowed-ips", test_awg_peer_clone_multi_allowed_ips);
 
     return g_test_run();
 }
