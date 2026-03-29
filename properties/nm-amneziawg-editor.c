@@ -560,6 +560,7 @@ peer_dialog_validate_fields(PeerDialogData *data)
     const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
     const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
     const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
+    const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
     NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(data->peer);
 
     gboolean valid = TRUE;
@@ -569,6 +570,10 @@ peer_dialog_validate_fields(PeerDialogData *data)
     }
 
     if (!check_peer_endpoint(endpoint)) {
+        valid = FALSE;
+    }
+
+    if (!check_peer_allowed_ips(allowed_ips)) {
         valid = FALSE;
     }
 
@@ -586,6 +591,7 @@ peer_dialog_update_apply_button(PeerDialogData *data)
 {
     const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
     const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
+    const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
 
     if (!check_peer_public_key(public_key)) {
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_public_key)), "error");
@@ -597,6 +603,12 @@ peer_dialog_update_apply_button(PeerDialogData *data)
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_endpoint)), "error");
     } else {
         gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_endpoint)), "error");
+    }
+
+    if (!check_peer_allowed_ips(allowed_ips)) {
+        gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_allowed_ips)), "error");
+    } else {
+        gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_allowed_ips)), "error");
     }
 
     gboolean valid = peer_dialog_validate_fields(data);
@@ -683,6 +695,7 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
 
     g_signal_connect(data->entry_public_key, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
     g_signal_connect(data->entry_endpoint, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
+    g_signal_connect(data->entry_allowed_ips, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
 
     gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
     gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(toplevel));

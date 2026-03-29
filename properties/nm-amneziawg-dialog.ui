@@ -367,46 +367,6 @@
           </packing>
         </child>
         <child>
-          <object class="GtkBox" id="listen-port">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <child>
-              <object class="GtkLabel">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <property name="label" translatable="yes">Listen Port:</property>
-                <property name="width-chars">20</property>
-                <property name="max-width-chars">20</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">False</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkSpinButton" id="interface_port_entry">
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="tooltip-markup" translatable="yes">UDP port to listen on (0 = random port).</property>
-                <property name="width-chars">7</property>
-                <property name="adjustment">adj_listen_port</property>
-                <property name="climb-rate">1</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">3</property>
-          </packing>
-        </child>
-        <child>
           <object class="GtkBox" id="private-key">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
@@ -450,6 +410,46 @@
                 <property name="expand">False</property>
                 <property name="fill">False</property>
                 <property name="position">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="listen-port">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Listen Port:</property>
+                <property name="width-chars">20</property>
+                <property name="max-width-chars">20</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="interface_port_entry">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="tooltip-markup" translatable="yes">UDP port to listen on (0 = random port).</property>
+                <property name="width-chars">7</property>
+                <property name="adjustment">adj_listen_port</property>
+                <property name="climb-rate">1</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
               </packing>
             </child>
           </object>
@@ -1150,16 +1150,14 @@
                     <property name="label-xalign">0</property>
                     <property name="shadow-type">in</property>
                     <child>
-                      <!-- n-columns=2 n-rows=3 -->
-                      <object class="GtkGrid">
+                      <object class="GtkBox">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="margin-start">6</property>
                         <property name="margin-end">6</property>
                         <property name="margin-top">6</property>
                         <property name="margin-bottom">6</property>
-                        <property name="row-spacing">6</property>
-                        <property name="column-spacing">6</property>
+                        <property name="orientation">vertical</property>
                         <child>
                           <object class="GtkBox" id="i1">
                             <property name="visible">True</property>
@@ -1183,19 +1181,20 @@
                               <object class="GtkEntry" id="interface_i1_entry">
                                 <property name="visible">True</property>
                                 <property name="can-focus">True</property>
-                                <property name="tooltip-markup" translatable="yes">First init packet content. Format: tags separated by &lt; (e.g., r16, b0xDEADBEEF, r16&lt;c). Tags: r&lt;num&gt; (random bytes), rc&lt;num&gt; (random letters), rd&lt;num&gt; (random digits), c (counter), t (timestamp), b0x&lt;hex&gt; (binary).</property>
+                                <property name="tooltip-markup" translatable="yes">First init packet content (CPS format). Tags: &amp;lt;r N&amp;gt; (random bytes), &amp;lt;rc N&amp;gt; (random ASCII), &amp;lt;rd N&amp;gt; (random digits), &amp;lt;c&amp;gt; (counter), &amp;lt;t&amp;gt; (timestamp), &amp;lt;b 0xHEX&amp;gt; (static bytes). Example: &amp;lt;r 16&amp;gt;&amp;lt;c&amp;gt;&amp;lt;t&amp;gt;&amp;lt;b 0xDEADBEEF&amp;gt;</property>
                                 <property name="width-chars">20</property>
                               </object>
                               <packing>
-                                <property name="expand">False</property>
+                                <property name="expand">True</property>
                                 <property name="fill">True</property>
                                 <property name="position">1</property>
                               </packing>
                             </child>
                           </object>
                           <packing>
-                            <property name="left-attach">0</property>
-                            <property name="top-attach">0</property>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
                           </packing>
                         </child>
                         <child>
@@ -1221,19 +1220,20 @@
                               <object class="GtkEntry" id="interface_i2_entry">
                                 <property name="visible">True</property>
                                 <property name="can-focus">True</property>
-                                <property name="tooltip-markup" translatable="yes">Second init packet content. Format: tags separated by &lt; (e.g., r16, b0xDEADBEEF, r16&lt;c). Tags: r&lt;num&gt; (random bytes), rc&lt;num&gt; (random letters), rd&lt;num&gt; (random digits), c (counter), t (timestamp), b0x&lt;hex&gt; (binary).</property>
+                                <property name="tooltip-markup" translatable="yes">Second init packet content (CPS format). Tags: &amp;lt;r N&amp;gt; (random bytes), &amp;lt;rc N&amp;gt; (random ASCII), &amp;lt;rd N&amp;gt; (random digits), &amp;lt;c&amp;gt; (counter), &amp;lt;t&amp;gt; (timestamp), &amp;lt;b 0xHEX&amp;gt; (static bytes). Example: &amp;lt;rc 10&amp;gt;&amp;lt;t&amp;gt;</property>
                                 <property name="width-chars">20</property>
                               </object>
                               <packing>
-                                <property name="expand">False</property>
+                                <property name="expand">True</property>
                                 <property name="fill">True</property>
                                 <property name="position">1</property>
                               </packing>
                             </child>
                           </object>
                           <packing>
-                            <property name="left-attach">1</property>
-                            <property name="top-attach">0</property>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
                           </packing>
                         </child>
                         <child>
@@ -1259,19 +1259,20 @@
                               <object class="GtkEntry" id="interface_i3_entry">
                                 <property name="visible">True</property>
                                 <property name="can-focus">True</property>
-                                <property name="tooltip-markup" translatable="yes">Third init packet content. Format: tags separated by &lt; (e.g., r16, b0xDEADBEEF, r16&lt;c). Tags: r&lt;num&gt; (random bytes), rc&lt;num&gt; (random letters), rd&lt;num&gt; (random digits), c (counter), t (timestamp), b0x&lt;hex&gt; (binary).</property>
+                                <property name="tooltip-markup" translatable="yes">Third init packet content (CPS format). Tags: &amp;lt;r N&amp;gt; (random bytes), &amp;lt;rc N&amp;gt; (random ASCII), &amp;lt;rd N&amp;gt; (random digits), &amp;lt;c&amp;gt; (counter), &amp;lt;t&amp;gt; (timestamp), &amp;lt;b 0xHEX&amp;gt; (static bytes). Example: &amp;lt;b 0xDEADBEEF&amp;gt;</property>
                                 <property name="width-chars">20</property>
                               </object>
                               <packing>
-                                <property name="expand">False</property>
+                                <property name="expand">True</property>
                                 <property name="fill">True</property>
                                 <property name="position">1</property>
                               </packing>
                             </child>
                           </object>
                           <packing>
-                            <property name="left-attach">0</property>
-                            <property name="top-attach">1</property>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">2</property>
                           </packing>
                         </child>
                         <child>
@@ -1297,19 +1298,20 @@
                               <object class="GtkEntry" id="interface_i4_entry">
                                 <property name="visible">True</property>
                                 <property name="can-focus">True</property>
-                                <property name="tooltip-markup" translatable="yes">Fourth init packet content. Format: tags separated by &lt; (e.g., r16, b0xDEADBEEF, r16&lt;c). Tags: r&lt;num&gt; (random bytes), rc&lt;num&gt; (random letters), rd&lt;num&gt; (random digits), c (counter), t (timestamp), b0x&lt;hex&gt; (binary).</property>
+                                <property name="tooltip-markup" translatable="yes">Fourth init packet content (CPS format). Tags: &amp;lt;r N&amp;gt; (random bytes), &amp;lt;rc N&amp;gt; (random ASCII), &amp;lt;rd N&amp;gt; (random digits), &amp;lt;c&amp;gt; (counter), &amp;lt;t&amp;gt; (timestamp), &amp;lt;b 0xHEX&amp;gt; (static bytes). Example: &amp;lt;r 16&amp;gt;&amp;lt;t&amp;gt;</property>
                                 <property name="width-chars">20</property>
                               </object>
                               <packing>
-                                <property name="expand">False</property>
+                                <property name="expand">True</property>
                                 <property name="fill">True</property>
                                 <property name="position">1</property>
                               </packing>
                             </child>
                           </object>
                           <packing>
-                            <property name="left-attach">1</property>
-                            <property name="top-attach">1</property>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">3</property>
                           </packing>
                         </child>
                         <child>
@@ -1335,20 +1337,20 @@
                               <object class="GtkEntry" id="interface_i5_entry">
                                 <property name="visible">True</property>
                                 <property name="can-focus">True</property>
-                                <property name="tooltip-markup" translatable="yes">Fifth init packet content. Format: tags separated by &lt; (e.g., r16, b0xDEADBEEF, r16&lt;c). Tags: r&lt;num&gt; (random bytes), rc&lt;num&gt; (random letters), rd&lt;num&gt; (random digits), c (counter), t (timestamp), b0x&lt;hex&gt; (binary).</property>
+                                <property name="tooltip-markup" translatable="yes">Fifth init packet content (CPS format). Tags: &amp;lt;r N&amp;gt; (random bytes), &amp;lt;rc N&amp;gt; (random ASCII), &amp;lt;rd N&amp;gt; (random digits), &amp;lt;c&amp;gt; (counter), &amp;lt;t&amp;gt; (timestamp), &amp;lt;b 0xHEX&amp;gt; (static bytes). Example: &amp;lt;b 0xAABBCCDD&amp;gt;&amp;lt;rc 5&amp;gt;&amp;lt;rd 3&amp;gt;&amp;lt;c&amp;gt;</property>
                                 <property name="width-chars">20</property>
                               </object>
                               <packing>
-                                <property name="expand">False</property>
+                                <property name="expand">True</property>
                                 <property name="fill">True</property>
                                 <property name="position">1</property>
                               </packing>
                             </child>
                           </object>
                           <packing>
-                            <property name="left-attach">0</property>
-                            <property name="top-attach">2</property>
-                            <property name="width">2</property>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">4</property>
                           </packing>
                         </child>
                       </object>
