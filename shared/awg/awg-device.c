@@ -1314,7 +1314,7 @@ awg_device_set_i1(AWGDevice *self, const gchar *i1)
     }
 
     if (!awg_validate_i_packet(i1)) {
-        g_warning("Invalid i1 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i1);
+        g_warning("Invalid i1 format: %s (expected: CPS format like <r 16>, <rc 10>, <b 0xDEADBEEF>, tags separated by <)", i1);
         return FALSE;
     }
 
@@ -1348,7 +1348,7 @@ awg_device_set_i2(AWGDevice *self, const gchar *i2)
     }
 
     if (!awg_validate_i_packet(i2)) {
-        g_warning("Invalid i2 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i2);
+        g_warning("Invalid i2 format: %s (expected: CPS format like <r 16>, <rc 10>, <b 0xDEADBEEF>, tags separated by <)", i2);
         return FALSE;
     }
 
@@ -1382,7 +1382,7 @@ awg_device_set_i3(AWGDevice *self, const gchar *i3)
     }
 
     if (!awg_validate_i_packet(i3)) {
-        g_warning("Invalid i3 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i3);
+        g_warning("Invalid i3 format: %s (expected: CPS format like <r 16>, <rc 10>, <b 0xDEADBEEF>, tags separated by <)", i3);
         return FALSE;
     }
 
@@ -1416,7 +1416,7 @@ awg_device_set_i4(AWGDevice *self, const gchar *i4)
     }
 
     if (!awg_validate_i_packet(i4)) {
-        g_warning("Invalid i4 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i4);
+        g_warning("Invalid i4 format: %s (expected: CPS format like <r 16>, <rc 10>, <b 0xDEADBEEF>, tags separated by <)", i4);
         return FALSE;
     }
 
@@ -1450,7 +1450,7 @@ awg_device_set_i5(AWGDevice *self, const gchar *i5)
     }
 
     if (!awg_validate_i_packet(i5)) {
-        g_warning("Invalid i5 format: %s (expected: tag format like r16, rc10, b0xDEADBEEF, tags separated by <)", i5);
+        g_warning("Invalid i5 format: %s (expected: CPS format like <r 16>, <rc 10>, <b 0xDEADBEEF>, tags separated by <)", i5);
         return FALSE;
     }
 

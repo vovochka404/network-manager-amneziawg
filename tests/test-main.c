@@ -604,8 +604,8 @@ test_awg_device_new_from_config_extended(void)
     g_assert_nonnull(device);
 
     g_assert_cmpint(awg_device_get_jc(device), ==, 3);
-    g_assert_cmpint(awg_device_get_jmin(device), ==, 15);
-    g_assert_cmpint(awg_device_get_jmax(device), ==, 30);
+    g_assert_cmpint(awg_device_get_jmin(device), ==, 64);
+    g_assert_cmpint(awg_device_get_jmax(device), ==, 128);
     g_assert_cmpint(awg_device_get_s1(device), ==, 10);
     g_assert_cmpint(awg_device_get_s2(device), ==, 20);
     g_assert_cmpint(awg_device_get_s3(device), ==, 30);
@@ -616,11 +616,11 @@ test_awg_device_new_from_config_extended(void)
     g_assert_cmpstr(awg_device_get_h3(device), ==, "201-300");
     g_assert_cmpstr(awg_device_get_h4(device), ==, "301-400");
 
-    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16");
-    g_assert_cmpstr(awg_device_get_i2(device), ==, "rc10");
-    g_assert_cmpstr(awg_device_get_i3(device), ==, "b0xDEADBEEF");
-    g_assert_cmpstr(awg_device_get_i4(device), ==, "r16<c");
-    g_assert_cmpstr(awg_device_get_i5(device), ==, "rc5<t");
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "<r 16>");
+    g_assert_cmpstr(awg_device_get_i2(device), ==, "<rc 10>");
+    g_assert_cmpstr(awg_device_get_i3(device), ==, "<b 0xDEADBEEF>");
+    g_assert_cmpstr(awg_device_get_i4(device), ==, "<r 16><t>");
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "<b 0xAABBCCDD><rc 5><rd 3><c>");
 
     g_object_unref(device);
     g_free(config_path);
@@ -656,20 +656,20 @@ test_awg_i1_i5_setters(void)
     g_assert_null(awg_device_get_i1(device));
     g_assert_null(awg_device_get_i5(device));
 
-    g_assert_true(awg_device_set_i1(device, "r16"));
-    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16");
+    g_assert_true(awg_device_set_i1(device, "<r 16>"));
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "<r 16>");
 
-    g_assert_true(awg_device_set_i2(device, "rc10"));
-    g_assert_cmpstr(awg_device_get_i2(device), ==, "rc10");
+    g_assert_true(awg_device_set_i2(device, "<rc 10>"));
+    g_assert_cmpstr(awg_device_get_i2(device), ==, "<rc 10>");
 
-    g_assert_true(awg_device_set_i3(device, "b0xDEADBEEF"));
-    g_assert_cmpstr(awg_device_get_i3(device), ==, "b0xDEADBEEF");
+    g_assert_true(awg_device_set_i3(device, "<b 0xDEADBEEF>"));
+    g_assert_cmpstr(awg_device_get_i3(device), ==, "<b 0xDEADBEEF>");
 
-    g_assert_true(awg_device_set_i4(device, "r16<c"));
-    g_assert_cmpstr(awg_device_get_i4(device), ==, "r16<c");
+    g_assert_true(awg_device_set_i4(device, "<r 16><t>"));
+    g_assert_cmpstr(awg_device_get_i4(device), ==, "<r 16><t>");
 
-    g_assert_true(awg_device_set_i5(device, "c"));
-    g_assert_cmpstr(awg_device_get_i5(device), ==, "c");
+    g_assert_true(awg_device_set_i5(device, "<c>"));
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "<c>");
 
     g_assert_true(awg_device_set_i1(device, NULL));
     g_assert_null(awg_device_get_i1(device));
@@ -728,11 +728,11 @@ test_awg_i1_i5_with_spaces(void)
     AWGDevice *device = awg_device_new();
     g_assert_nonnull(device);
 
-    g_assert_true(awg_device_set_i1(device, "r16<c"));
-    g_assert_cmpstr(awg_device_get_i1(device), ==, "r16<c");
+    g_assert_true(awg_device_set_i1(device, "<r 16><t>"));
+    g_assert_cmpstr(awg_device_get_i1(device), ==, "<r 16><t>");
 
-    g_assert_true(awg_device_set_i5(device, "r16<c "));
-    g_assert_cmpstr(awg_device_get_i5(device), ==, "r16<c ");
+    g_assert_true(awg_device_set_i5(device, "<r 16><t> "));
+    g_assert_cmpstr(awg_device_get_i5(device), ==, "<r 16><t> ");
 
     g_object_unref(device);
 }
@@ -800,21 +800,25 @@ test_awg_validate_i_packet_valid(void)
     g_assert_true(awg_validate_i_packet(""));
     g_assert_true(awg_validate_i_packet(" "));
 
-    g_assert_true(awg_validate_i_packet("r16"));
-    g_assert_true(awg_validate_i_packet("rc10"));
-    g_assert_true(awg_validate_i_packet("rd8"));
-    g_assert_true(awg_validate_i_packet("c"));
-    g_assert_true(awg_validate_i_packet("t"));
-    g_assert_true(awg_validate_i_packet("b0xDEADBEEF"));
-    g_assert_true(awg_validate_i_packet("b0xAABBCCDD"));
+    g_assert_true(awg_validate_i_packet("<c>"));
+    g_assert_true(awg_validate_i_packet("<t>"));
+    g_assert_true(awg_validate_i_packet("<b 0xDEADBEEF>"));
+    g_assert_true(awg_validate_i_packet("<b 0xAABBCCDD>"));
 
-    g_assert_true(awg_validate_i_packet("r16<c"));
-    g_assert_true(awg_validate_i_packet("b0xDEADBEEF<r16<c"));
-    g_assert_true(awg_validate_i_packet("r16<c<t"));
-    g_assert_true(awg_validate_i_packet("rc10<rd5<c"));
+    g_assert_true(awg_validate_i_packet("<r 16>"));
+    g_assert_true(awg_validate_i_packet("<rc 10>"));
+    g_assert_true(awg_validate_i_packet("<rd 8>"));
 
-    g_assert_true(awg_validate_i_packet("r16<c "));
-    g_assert_true(awg_validate_i_packet(" r16 "));
+    g_assert_true(awg_validate_i_packet("<r 16><t>"));
+    g_assert_true(awg_validate_i_packet("<b 0xDEADBEEF><r 16>"));
+    g_assert_true(awg_validate_i_packet("<rc 10><rd 5>"));
+
+    g_assert_true(awg_validate_i_packet("<r 16> "));
+    g_assert_true(awg_validate_i_packet(" <r 16> "));
+
+    g_assert_true(awg_validate_i_packet("<r 65535>"));
+    g_assert_true(awg_validate_i_packet("<rc 65535>"));
+    g_assert_true(awg_validate_i_packet("<rd 65535>"));
 }
 
 static void
@@ -824,6 +828,7 @@ test_awg_validate_i_packet_invalid(void)
     g_assert_false(awg_validate_i_packet("packet_content"));
     g_assert_false(awg_validate_i_packet("b0xGGGG"));
     g_assert_false(awg_validate_i_packet("bDEAD"));
+    g_assert_false(awg_validate_i_packet("b 0xGGGG"));
     g_assert_false(awg_validate_i_packet("b0x1"));
     g_assert_false(awg_validate_i_packet("rc"));
     g_assert_false(awg_validate_i_packet("rd"));
@@ -831,6 +836,18 @@ test_awg_validate_i_packet_invalid(void)
     g_assert_false(awg_validate_i_packet("rdxyz"));
     g_assert_false(awg_validate_i_packet("r"));
     g_assert_false(awg_validate_i_packet("unknown"));
+
+    g_assert_false(awg_validate_i_packet("<r16>"));
+    g_assert_false(awg_validate_i_packet("<rc10>"));
+    g_assert_false(awg_validate_i_packet("<rd8>"));
+    g_assert_false(awg_validate_i_packet("<b0xDEADBEEF>"));
+
+    g_assert_false(awg_validate_i_packet("<c 0>"));
+    g_assert_false(awg_validate_i_packet("<t 0>"));
+
+    g_assert_false(awg_validate_i_packet("r65536"));
+    g_assert_false(awg_validate_i_packet("rc65536"));
+    g_assert_false(awg_validate_i_packet("rd65536"));
 
     gchar *too_long = g_malloc(5 * 1024 + 100);
     memset(too_long, 'a', 5 * 1024 + 99);
@@ -931,11 +948,11 @@ test_awg_config_string_with_i1_i5(void)
 
     awg_device_set_address_from_string(device, "10.0.0.2/32");
     awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
-    awg_device_set_i1(device, "r16");
-    awg_device_set_i2(device, "rc10");
-    awg_device_set_i3(device, "b0xDEADBEEF");
-    awg_device_set_i4(device, "r16<c");
-    awg_device_set_i5(device, "rc5<t");
+    awg_device_set_i1(device, "<r 16>");
+    awg_device_set_i2(device, "<rc 10>");
+    awg_device_set_i3(device, "<b 0xDEADBEEF>");
+    awg_device_set_i4(device, "<r 16><t>");
+    awg_device_set_i5(device, "<rc 5><t>");
 
     AWGDevicePeer *peer = awg_device_peer_new();
     g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
@@ -947,11 +964,11 @@ test_awg_config_string_with_i1_i5(void)
     gchar *config_str = awg_device_create_config_string(device);
     g_assert_nonnull(config_str);
 
-    g_assert_nonnull(strstr(config_str, "I1 = r16"));
-    g_assert_nonnull(strstr(config_str, "I2 = rc10"));
-    g_assert_nonnull(strstr(config_str, "I3 = b0xDEADBEEF"));
-    g_assert_nonnull(strstr(config_str, "I4 = r16<c"));
-    g_assert_nonnull(strstr(config_str, "I5 = rc5<t"));
+    g_assert_nonnull(strstr(config_str, "I1 = <r 16>"));
+    g_assert_nonnull(strstr(config_str, "I2 = <rc 10>"));
+    g_assert_nonnull(strstr(config_str, "I3 = <b 0xDEADBEEF>"));
+    g_assert_nonnull(strstr(config_str, "I4 = <r 16><t>"));
+    g_assert_nonnull(strstr(config_str, "I5 = <rc 5><t>"));
 
     g_free(config_str);
     g_object_unref(device);
@@ -1011,8 +1028,8 @@ test_awg_device_save_load_extended(void)
     g_assert_cmpstr(awg_device_get_h1(device2), ==, "1-100");
     g_assert_cmpstr(awg_device_get_h4(device2), ==, "301-400");
 
-    g_assert_cmpstr(awg_device_get_i1(device2), ==, "r16");
-    g_assert_cmpstr(awg_device_get_i5(device2), ==, "rc5<t");
+    g_assert_cmpstr(awg_device_get_i1(device2), ==, "<r 16>");
+    g_assert_cmpstr(awg_device_get_i5(device2), ==, "<b 0xAABBCCDD><rc 5><rd 3><c>");
 
     g_object_unref(device2);
 

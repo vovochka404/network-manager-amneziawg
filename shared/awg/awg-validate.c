@@ -438,38 +438,40 @@ awg_validate_magic_headers_no_overlap(const gchar *h1, const gchar *h2, const gc
 }
 
 static gboolean
-validate_i_tag_format(const gchar *tag_str, gint tag_len)
+validate_i_tag_format(const gchar *tag_str, gint tag_len, const gchar *value_str, gint value_len)
 {
     if (tag_len < 1)
         return FALSE;
 
     if (tag_str[0] == 'c' || tag_str[0] == 't') {
-        return (tag_len == 1);
+        return (tag_len == 1 && value_len == 0);
     }
 
     if (tag_str[0] == 'b') {
-        if (tag_len < 3 || tag_str[1] != '0' || tag_str[2] != 'x')
+        if (tag_len != 1)
             return FALSE;
-        for (gint i = 3; i < tag_len; i++) {
-            if (!g_ascii_isxdigit(tag_str[i]))
+        if (value_len < 2 || value_str[0] != '0' || value_str[1] != 'x')
+            return FALSE;
+        for (gint i = 2; i < value_len; i++) {
+            if (!g_ascii_isxdigit(value_str[i]))
                 return FALSE;
         }
-        return ((tag_len - 3) % 2) == 0 && tag_len > 3;
+        return ((value_len - 2) % 2) == 0;
     }
 
     if (tag_str[0] == 'r') {
-        if (tag_len >= 2 && (tag_str[1] == 'c' || tag_str[1] == 'd')) {
-            for (gint i = 2; i < tag_len; i++) {
-                if (!g_ascii_isdigit(tag_str[i]))
-                    return FALSE;
-            }
-            return tag_len > 2;
-        }
-        for (gint i = 1; i < tag_len; i++) {
-            if (!g_ascii_isdigit(tag_str[i]))
+        if (tag_len == 1) {
+            guint64 value;
+            if (!g_ascii_string_to_unsigned(value_str, 10, 0, G_MAXUINT16, &value, NULL))
                 return FALSE;
+            return TRUE;
         }
-        return tag_len > 1;
+        if (tag_len == 2 && (tag_str[1] == 'c' || tag_str[1] == 'd')) {
+            guint64 value;
+            if (!g_ascii_string_to_unsigned(value_str, 10, 0, G_MAXUINT16, &value, NULL))
+                return FALSE;
+            return TRUE;
+        }
     }
 
     return FALSE;
@@ -513,16 +515,22 @@ awg_validate_i_packet(const gchar *str)
         gchar *space = strchr(token, ' ');
         gchar *tag;
         gint tag_len;
+        const gchar *value;
+        gint value_len;
 
         if (space) {
             tag = token;
             tag_len = space - token;
+            value = space + 1;
+            value_len = token + token_len - (space + 1);
         } else {
             tag = token;
             tag_len = token_len;
+            value = "";
+            value_len = 0;
         }
 
-        if (!validate_i_tag_format(tag, tag_len)) {
+        if (!validate_i_tag_format(tag, tag_len, value, value_len)) {
             valid = FALSE;
             break;
         }
