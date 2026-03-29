@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.9.7] — 2026-03-29
+
+### Bug Fixes
+
+#### Connection Editor
+
+- **Fixed Allowed IPs display in peer editor**: Fixed critical bug where only the last subnet was displayed when editing peer with multiple Allowed IPs
+- **Fixed subnet mask /0 handling**: Corrected parsing of subnet mask 0 (e.g., `0.0.0.0/0`)
+
+### Improvements
+
+#### Connection Editor
+
+- **Added Allowed IPs validation**: Implemented validation for peer Allowed IPs field in editor dialog with visual error indication
+- **Updated I1-I5 field tooltips**: Corrected documentation for init packet content fields with proper CPS tag format and examples
+
+### Testing
+
+- **Added peer clone test**: New test verifies correct cloning of peers with multiple Allowed IPs
+
+---
+
 ## [0.9.6] — 2026-03-22
 
 ### Major Changes

@@ -222,7 +222,7 @@ Validators are defined in `shared/awg/awg-validate.c`.
 | `awg_validate_mtu()` | Validates MTU value | 0 (auto), 68-1500 |
 | `awg_validate_port()` | Validates port number | 0-65535 |
 | `awg_validate_fw_mark()` | Validates fwmark value | 0-UINT32_MAX |
-| `awg_validate_i_packet()` | Validates i1-i5 format | Tags: r, rc, rd, c, t, b0x; max 5KB |
+| `awg_validate_i_packet()` | Validates i1-i5 format | Tags: r, rc, rd, c, t, b; space required, N ≤ 65535 |
 | `awg_validate_s3()` | Validates s3 junk size | 0-65479 (kernel limit) |
 | `awg_validate_s4()` | Validates s4 junk size | 0-65503 (kernel limit) |
 | `awg_validate_junk_size()` | Validates jc, jmin, jmax, s1, s2 | 0-65535 |
@@ -497,16 +497,16 @@ The VPN editor handles only:
 
 ### AmneziaWG Parameters
 
-**Numeric parameters (uint16):**
+**Numeric parameters:**
 | Parameter | Description | Range |
 |-----------|-------------|-------|
-| jc | Junk packet count | 0-65535 |
-| jmin | Minimum junk packet size | 0-65535 |
-| jmax | Maximum junk packet size | 0-65535 |
-| s1 | First noise packet size (init_packet_junk_size) | 0-65535 |
-| s2 | Second noise packet size (response_packet_junk_size) | 0-65535 |
-| s3 | 0 - 65479 (kernel limit) |
-| s4 | 0 - 65503 (kernel limit) |
+| jc | Junk packet count | 0-10 |
+| jmin | Minimum junk packet size | 64-1024 bytes |
+| jmax | Maximum junk packet size | 64-1024 bytes |
+| s1 | First noise packet size (init_packet_junk_size) | 0-64 bytes |
+| s2 | Second noise packet size (response_packet_junk_size) | 0-64 bytes |
+| s3 | Cookie reply packet junk size | 0-64 bytes |
+| s4 | Transport packet junk size | 0-32 bytes |
 
 **String parameters (max 5KB each):**
 | Parameter | Description | Notes |
@@ -515,11 +515,11 @@ The VPN editor handles only:
 | h2 | Second handshake packet magic header | Arbitrary string |
 | h3 | Third handshake packet magic header | Arbitrary string |
 | h4 | Fourth handshake packet magic header | Arbitrary string |
-| i1 | First init packet content | Whitespace preserved |
-| i2 | Second init packet content | Whitespace preserved |
-| i3 | Third init packet content | Whitespace preserved |
-| i4 | Fourth init packet content | Whitespace preserved |
-| i5 | Fifth init packet content | Whitespace preserved |
+| i1 | First init packet content | CPS format |
+| i2 | Second init packet content | CPS format |
+| i3 | Third init packet content | CPS format |
+| i4 | Fourth init packet content | CPS format |
+| i5 | Fifth init packet content | CPS format |
 
 **Important:** H1-H4 and I1-I5 are stored as strings, not numbers. Use `awg_validate_awg_string()` for validation (max 5KB).
 
@@ -610,28 +610,42 @@ If too large, kernel returns:
 
 **UI Note:** GtkAdjustment for S3/S4 should ideally be limited to 65479/65503, but the kernel will return an error if exceeded.
 
-#### I1-I5: Init Packet Contents
+#### I1-I5: Init Packet Contents (CPS Format)
 
-Format: tag-based string parsed by `jp_parse_tags()` in `junk.c` (lines 184-233)
+Format: tag-based string in CPS (Custom Protocol Signature) format parsed by `jp_parse_tags()` in `junk.c`.
 
-Available tags:
+**Syntax:**
+```
+i{n} = <tag1><tag2><tag3>...
+```
 
-| Tag | Format | Description | Example |
-|-----|--------|-------------|---------|
-| `b` | `b<hex>` | Binary bytes (hex) | `b0xDEADBEEF` = 4 bytes |
-| `c` | `c` | Packet counter (4 bytes) | `c` = 4 bytes, updated per-packet |
-| `t` | `t` | Unix timestamp (4 bytes) | `t` = 4 bytes |
-| `r` | `r<num>` | Random bytes | `r16` = 16 random bytes |
-| `rc` | `rc<num>` | Random lowercase/uppercase letters | `rc10` = 10 random letters |
-| `rd` | `rd<num>` | Random digits | `rd8` = 8 random digits |
+Tags are separated by `<` and `>`. Space between tag and value is required (except for `<t>` and `<c>`).
 
-**Syntax:** Tags are separated by `<` and `>`. Spaces after tags are preserved.
+**Available tags:**
+
+| Tag | Format | Description | Constraints | Example |
+|-----|--------|-------------|-------------|---------|
+| `b` | `<b 0xHEX>` | Static bytes for protocol imitation | Arbitrary length, even hex digits | `<b 0xDEADBEEF>` |
+| `c` | `<c>` | Packet counter (32-bit, network byte order) | No value allowed | `<c>` |
+| `t` | `<t>` | Unix timestamp (32-bit, network byte order) | No value allowed | `<t>` |
+| `r` | `<r N>` | Cryptographically secure random bytes | N ≤ 65535 | `<r 16>` |
+| `rc` | `<rc N>` | Random ASCII alphanumeric `[A-Za-z0-9]` | N ≤ 65535 | `<rc 10>` → "aB3dEf9H2k" |
+| `rd` | `<rd N>` | Random decimal digits `[0-9]` | N ≤ 65535 | `<rd 5>` → "13654" |
+
+**Important:** Space after tag letter is required:
+- `<r 16>` ✓ (valid)
+- `<r16>` ✗ (invalid)
+
+For tags `t` and `c`, no value allowed:
+- `<t>` ✓ (valid)
+- `<t 0>` ✗ (invalid)
 
 **Examples:**
 ```
-r16                    → 16 random bytes
-b0xDEADBEEF           → 4 bytes: 0xDE, 0xAD, 0xBE, 0xEF
-b0xAABBCC<r16<c        → 4 bytes + 16 random + 4-byte counter
+<b 0xDEADBEEF><rc 8><t><r 50>  → example CPS packet
+<r 16>                             → 16 random bytes
+<b 0xDEADBEEF>                    → 4 bytes: 0xDE, 0xAD, 0xBE, 0xEF
+<b 0xAABBCC><r 16><t>            → 4 bytes + 16 random + timestamp
 ```
 
 **Validation:** `jp_spec_setup()` in `junk.c` (lines 244-318):
