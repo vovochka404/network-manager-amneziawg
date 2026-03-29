@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: network-manager-amneziawg master\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-22 15:04+1000\n"
+"POT-Creation-Date: 2026-03-29 21:50+1000\n"
 "PO-Revision-Date: 2026-03-15 17:20+1000\n"
 "Last-Translator: \n"
 "Language-Team: LLM auto translation\n"
@@ -28,43 +28,41 @@ msgstr "H1-H4 Magic-Header-Bereiche dürfen sich nicht überschneiden"
 msgid "JMax must be greater than or equal to JMin"
 msgstr "JMax muss größer oder gleich JMin sein"
 
-#: properties/nm-amneziawg-editor.c:712
+#: properties/nm-amneziawg-editor.c:725
 msgid "Public key is required and must be valid base64\n"
 msgstr ""
 "Öffentlicher Schlüssel ist erforderlich und muss gültiges Base64 sein\n"
 
-#: properties/nm-amneziawg-editor.c:716
+#: properties/nm-amneziawg-editor.c:729
 msgid "Endpoint is required and must be valid (host:port)"
 msgstr "Endpunkt ist erforderlich und muss gültig sein (host:port)"
 
-#: properties/nm-amneziawg-editor.c:721
+#: properties/nm-amneziawg-editor.c:734
 msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 msgstr "Erlaubte IPs müssen gültige Subnetze sein (z.B. 10.0.0.0/24)"
 
-#: properties/nm-amneziawg-editor.c:727
+#: properties/nm-amneziawg-editor.c:740
 msgid "Preshared key must be valid base64 or empty"
 msgstr "Vorheriger Schlüssel muss gültiges Base64 oder leer sein"
 
-#: properties/nm-amneziawg-editor.c:1047
-#: properties/nm-amneziawg-editor.c:1060
+#: properties/nm-amneziawg-editor.c:1060 properties/nm-amneziawg-editor.c:1073
 #, c-format
 msgid "Delete peer \"%s\"?"
 msgstr "Peer \"%s\" löschen?"
 
-#: properties/nm-amneziawg-editor.c:1232
+#: properties/nm-amneziawg-editor.c:1245
 msgid "Peer"
 msgstr "Peer"
 
-#: properties/nm-amneziawg-editor.c:1530
+#: properties/nm-amneziawg-editor.c:1543
 msgid "Could not create amneziawg object"
 msgstr "AmneziaWG-Objekt konnte nicht erzeugt werden"
 
-#: properties/nm-amneziawg-editor.c:1549
+#: properties/nm-amneziawg-editor.c:1562
 msgid "could not load UI widget"
 msgstr "UI-Widget konnte nicht geladen werden"
 
-#: src/nm-amneziawg-service.c:479
-#: src/nm-amneziawg-service.c:480
+#: src/nm-amneziawg-service.c:479 src/nm-amneziawg-service.c:480
 msgid "Private key is required"
 msgstr "Privater Schlüssel ist erforderlich"
 
@@ -208,24 +206,24 @@ msgid "Interface"
 msgstr "Schnittstelle"
 
 #: properties/nm-amneziawg-dialog.ui:377
-msgid "Listen Port:"
-msgstr "Listen-Port:"
-
-#: properties/nm-amneziawg-dialog.ui:391
-msgid "UDP port to listen on (0 = random port)."
-msgstr "UDP-Port zum Lauschen (0 = zufälliger Port)."
-
-#: properties/nm-amneziawg-dialog.ui:417
 msgid "Private Key:"
 msgstr "Privater Schlüssel:"
 
-#: properties/nm-amneziawg-dialog.ui:431
+#: properties/nm-amneziawg-dialog.ui:391
 msgid "Base64-encoded 32-byte private key for the interface."
 msgstr "Base64-kodierter 32-Byte privater Schlüssel für die Schnittstelle."
 
-#: properties/nm-amneziawg-dialog.ui:442
+#: properties/nm-amneziawg-dialog.ui:402
 msgid "Show private key"
 msgstr "Privaten Schlüssel anzeigen"
+
+#: properties/nm-amneziawg-dialog.ui:430
+msgid "Listen Port:"
+msgstr "Listen-Port:"
+
+#: properties/nm-amneziawg-dialog.ui:444
+msgid "UDP port to listen on (0 = random port)."
+msgstr "UDP-Port zum Lauschen (0 = zufälliger Port)."
 
 #: properties/nm-amneziawg-dialog.ui:475
 msgid "MTU:"
@@ -363,35 +361,29 @@ msgstr ""
 msgid "Magic Headers"
 msgstr "Magic-Header"
 
-#: properties/nm-amneziawg-dialog.ui:1172
+#: properties/nm-amneziawg-dialog.ui:1170
 msgid "I1:"
 msgstr "I1:"
 
-#: properties/nm-amneziawg-dialog.ui:1186
+#: properties/nm-amneziawg-dialog.ui:1184
 msgid ""
-"First init packet content. Format: tags separated by < (e.g., r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
-"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+"First init packet content (CPS format). Tags: &lt;r N&gt; (random bytes), "
+"&lt;rc N&gt; (random ASCII), &lt;rd N&gt; (random digits), &lt;c&gt; "
+"(counter), &lt;t&gt; (timestamp), &lt;b 0xHEX&gt; (static bytes). Example: "
+"&lt;r 16&gt;&lt;c&gt;&lt;t&gt;&lt;b 0xDEADBEEF&gt;"
 msgstr ""
-"Erster Init-Paket Inhalt. Format: Tags getrennt durch < (z.B. r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (zufällige Bytes), rc<num> (zufällige "
-"Buchstaben), rd<num> (zufällige Ziffern), c (Zähler), t (Zeitstempel), "
-"b0x<hex> (binär)."
 
-#: properties/nm-amneziawg-dialog.ui:1210
+#: properties/nm-amneziawg-dialog.ui:1209
 msgid "I2:"
 msgstr "I2:"
 
-#: properties/nm-amneziawg-dialog.ui:1224
+#: properties/nm-amneziawg-dialog.ui:1223
 msgid ""
-"Second init packet content. Format: tags separated by < (e.g., r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
-"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+"Second init packet content (CPS format). Tags: &lt;r N&gt; (random bytes), "
+"&lt;rc N&gt; (random ASCII), &lt;rd N&gt; (random digits), &lt;c&gt; "
+"(counter), &lt;t&gt; (timestamp), &lt;b 0xHEX&gt; (static bytes). Example: "
+"&lt;rc 10&gt;&lt;t&gt;"
 msgstr ""
-"Zweiter Init-Paket Inhalt. Format: Tags getrennt durch < (z.B. r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (zufällige Bytes), rc<num> (zufällige "
-"Buchstaben), rd<num> (zufällige Ziffern), c (Zähler), t (Zeitstempel), "
-"b0x<hex> (binär)."
 
 #: properties/nm-amneziawg-dialog.ui:1248
 msgid "I3:"
@@ -399,118 +391,56 @@ msgstr "I3:"
 
 #: properties/nm-amneziawg-dialog.ui:1262
 msgid ""
-"Third init packet content. Format: tags separated by < (e.g., r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
-"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+"Third init packet content (CPS format). Tags: &lt;r N&gt; (random bytes), "
+"&lt;rc N&gt; (random ASCII), &lt;rd N&gt; (random digits), &lt;c&gt; "
+"(counter), &lt;t&gt; (timestamp), &lt;b 0xHEX&gt; (static bytes). Example: "
+"&lt;b 0xDEADBEEF&gt;"
 msgstr ""
-"Dritter Init-Paket Inhalt. Format: Tags getrennt durch < (z.B. r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (zufällige Bytes), rc<num> (zufällige "
-"Buchstaben), rd<num> (zufällige Ziffern), c (Zähler), t (Zeitstempel), "
-"b0x<hex> (binär)."
 
-#: properties/nm-amneziawg-dialog.ui:1286
+#: properties/nm-amneziawg-dialog.ui:1287
 msgid "I4:"
 msgstr "I4:"
 
-#: properties/nm-amneziawg-dialog.ui:1300
+#: properties/nm-amneziawg-dialog.ui:1301
 msgid ""
-"Fourth init packet content. Format: tags separated by < (e.g., r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
-"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+"Fourth init packet content (CPS format). Tags: &lt;r N&gt; (random bytes), "
+"&lt;rc N&gt; (random ASCII), &lt;rd N&gt; (random digits), &lt;c&gt; "
+"(counter), &lt;t&gt; (timestamp), &lt;b 0xHEX&gt; (static bytes). Example: "
+"&lt;r 16&gt;&lt;t&gt;"
 msgstr ""
-"Vierter Init-Paket Inhalt. Format: Tags getrennt durch < (z.B. r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (zufällige Bytes), rc<num> (zufällige "
-"Buchstaben), rd<num> (zufällige Ziffern), c (Zähler), t (Zeitstempel), "
-"b0x<hex> (binär)."
 
-#: properties/nm-amneziawg-dialog.ui:1324
+#: properties/nm-amneziawg-dialog.ui:1326
 msgid "I5:"
 msgstr "I5:"
 
-#: properties/nm-amneziawg-dialog.ui:1338
+#: properties/nm-amneziawg-dialog.ui:1340
 msgid ""
-"Fifth init packet content. Format: tags separated by < (e.g., r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (random bytes), rc<num> (random letters), "
-"rd<num> (random digits), c (counter), t (timestamp), b0x<hex> (binary)."
+"Fifth init packet content (CPS format). Tags: &lt;r N&gt; (random bytes), "
+"&lt;rc N&gt; (random ASCII), &lt;rd N&gt; (random digits), &lt;c&gt; "
+"(counter), &lt;t&gt; (timestamp), &lt;b 0xHEX&gt; (static bytes). Example: "
+"&lt;b 0xAABBCCDD&gt;&lt;rc 5&gt;&lt;rd 3&gt;&lt;c&gt;"
 msgstr ""
-"Fünfter Init-Paket Inhalt. Format: Tags getrennt durch < (z.B. r16, "
-"b0xDEADBEEF, r16<c). Tags: r<num> (zufällige Bytes), rc<num> (zufällige "
-"Buchstaben), rd<num> (zufällige Ziffern), c (Zähler), t (Zeitstempel), "
-"b0x<hex> (binär)."
 
-#: properties/nm-amneziawg-dialog.ui:1360
+#: properties/nm-amneziawg-dialog.ui:1362
 msgid "Init Packet Content"
 msgstr "Init-Paket Inhalt"
 
-#: properties/nm-amneziawg-dialog.ui:1379
+#: properties/nm-amneziawg-dialog.ui:1381
 msgid "AmneziaWG Obfuscation"
 msgstr "AmneziaWG Verschleierung"
 
-#: properties/nm-amneziawg-dialog.ui:1409
+#: properties/nm-amneziawg-dialog.ui:1411
 msgid "Peers"
 msgstr "Peers"
 
-#: properties/nm-amneziawg-dialog.ui:1428
+#: properties/nm-amneziawg-dialog.ui:1430
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: properties/nm-amneziawg-dialog.ui:1441
+#: properties/nm-amneziawg-dialog.ui:1443
 msgid "Edit"
 msgstr "Bearbeiten"
 
-#: properties/nm-amneziawg-dialog.ui:1455
+#: properties/nm-amneziawg-dialog.ui:1457
 msgid "Remove"
 msgstr "Entfernen"
-
-#~ msgid "First handshake packet magic header value."
-#~ msgstr "Magischer Header-Wert des ersten Handshake-Pakets."
-
-#~ msgid "Second handshake packet magic header value."
-#~ msgstr "Magischer Header-Wert des zweiten Handshake-Pakets."
-
-#~ msgid "Third handshake packet magic header value."
-#~ msgstr "Magischer Header-Wert des dritten Handshake-Pakets."
-
-#~ msgid "Fourth handshake packet magic header value."
-#~ msgstr "Magischer Header-Wert des vierten Handshake-Pakets."
-
-#~ msgid "Third noise packet size."
-#~ msgstr "Dritte Rausch-Paket-Größe."
-
-#~ msgid "Fourth noise packet size."
-#~ msgstr "Vierte Rausch-Paket-Größe."
-
-#~ msgid "First handshake packet magic header value (arbitrary string)."
-#~ msgstr ""
-#~ "Magischer Header-Wert des ersten Handshake-Pakets (beliebige "
-#~ "Zeichenkette)."
-
-#~ msgid "Second handshake packet magic header value (arbitrary string)."
-#~ msgstr ""
-#~ "Magischer Header-Wert des zweiten Handshake-Pakets (beliebige "
-#~ "Zeichenkette)."
-
-#~ msgid "Third handshake packet magic header value (arbitrary string)."
-#~ msgstr ""
-#~ "Magischer Header-Wert des dritten Handshake-Pakets (beliebige "
-#~ "Zeichenkette)."
-
-#~ msgid "Fourth handshake packet magic header value (arbitrary string)."
-#~ msgstr ""
-#~ "Magischer Header-Wert des vierten Handshake-Pakets (beliebige "
-#~ "Zeichenkette)."
-
-#~ msgid "First initiation packet content (arbitrary string)."
-#~ msgstr "Inhalt des ersten Initiierungspakets (beliebige Zeichenkette)."
-
-#~ msgid "Second initiation packet content (arbitrary string)."
-#~ msgstr "Inhalt des zweiten Initiierungspakets (beliebige Zeichenkette)."
-
-#~ msgid "Third initiation packet content (arbitrary string)."
-#~ msgstr "Inhalt des dritten Initiierungspakets (beliebige Zeichenkette)."
-
-#~ msgid "Fourth initiation packet content (arbitrary string)."
-#~ msgstr "Inhalt des vierten Initiierungspakets (beliebige Zeichenkette)."
-
-#~ msgid "Fifth initiation packet content (arbitrary string)."
-#~ msgstr "Inhalt des fünften Initiierungspakets (beliebige Zeichenkette)."
