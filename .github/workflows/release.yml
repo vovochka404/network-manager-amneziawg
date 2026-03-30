@@ -16,16 +16,21 @@ jobs:
     container: fedora:latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install dependencies
         run: |
           dnf install -y cmake gcc g++ pkg-config intltool \
             NetworkManager-libnm-devel gtk3-devel libnma-devel \
             glib2-devel gettext rpm-build
 
+      - name: Get version without v prefix
+        id: version
+        run: |
+          VERSION="${{ github.event.release.tag_name || github.event.inputs.version }}"
+          VERSION_NO_V="${VERSION#v}"
+          echo "version=$VERSION_NO_V" >> $GITHUB_OUTPUT
+
       - name: Build
-        env:
-          VERSION: ${{ github.event.release.tag_name || github.event.inputs.version }}
         run: |
           mkdir build && cd build
           cmake .. \
@@ -34,10 +39,10 @@ jobs:
             -DWITH_GTK3=ON \
             -DWITH_GTK4=OFF
           cmake --build .
-          
+
           # Build RPM with explicit filename
           cpack -G RPM \
-            -D CPACK_PACKAGE_FILE_NAME="NetworkManager-amneziawg-${VERSION}-amd64"
+            -D CPACK_PACKAGE_FILE_NAME="NetworkManager-amneziawg-${{ steps.version.outputs.version }}-amd64"
 
       - name: Upload RPM
         uses: actions/upload-release-asset@v1
@@ -45,15 +50,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: build/NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}-amd64.rpm
-          asset_name: NetworkManager-amneziawg-${{ github.event.release.tag_name || github.event.inputs.version }}-amd64.rpm
+          asset_path: build/NetworkManager-amneziawg-${{ steps.version.outputs.version }}-amd64.rpm
+          asset_name: NetworkManager-amneziawg-${{ steps.version.outputs.version }}-amd64.rpm
           asset_content_type: application/x-rpm
 
   build-deb:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -61,9 +66,14 @@ jobs:
             libnm-dev libnma-dev libgtk-3-dev libglib2.0-dev \
             gettext dpkg-dev debhelper
 
+      - name: Get version without v prefix
+        id: version
+        run: |
+          VERSION="${{ github.event.release.tag_name || github.event.inputs.version }}"
+          VERSION_NO_V="${VERSION#v}"
+          echo "version=$VERSION_NO_V" >> $GITHUB_OUTPUT
+
       - name: Build
-        env:
-          VERSION: ${{ github.event.release.tag_name || github.event.inputs.version }}
         run: |
           mkdir build && cd build
           cmake .. \
@@ -72,10 +82,10 @@ jobs:
             -DWITH_GTK3=ON \
             -DWITH_GTK4=OFF
           cmake --build .
-          
+
           # Build DEB with explicit filename
           cpack -G DEB \
-            -D CPACK_PACKAGE_FILE_NAME="network-manager-amneziawg_${VERSION}_amd64"
+            -D CPACK_PACKAGE_FILE_NAME="network-manager-amneziawg_${{ steps.version.outputs.version }}_amd64"
 
       - name: Upload DEB
         uses: actions/upload-release-asset@v1
@@ -83,6 +93,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: build/network-manager-amneziawg_${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
-          asset_name: network-manager-amneziawg_${{ github.event.release.tag_name || github.event.inputs.version }}_amd64.deb
+          asset_path: build/network-manager-amneziawg_${{ steps.version.outputs.version }}_amd64.deb
+          asset_name: network-manager-amneziawg_${{ steps.version.outputs.version }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
