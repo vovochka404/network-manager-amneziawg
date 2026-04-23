@@ -35,6 +35,7 @@
 #include <string.h>
 
 #include "awg/awg-config.h"
+#include "awg/awg-connection-manager-netlink.h"
 #include "awg/awg-connection-manager.h"
 #include "awg/awg-device.h"
 #include "awg/awg-nm-connection.h"
@@ -89,6 +90,8 @@ typedef struct {
     char *connection_file;
     gchar *connection_config;
     AWGConnectionManager *conn_manager;
+    gboolean ip4_method_auto;
+    gboolean ip6_method_auto;
 } NMAmneziaWGPluginPrivate;
 
 G_DEFINE_TYPE(NMAmneziaWGPlugin, nm_amneziawg_plugin, NM_TYPE_VPN_SERVICE_PLUGIN);
@@ -150,6 +153,30 @@ wg_disconnect(NMVpnServicePlugin *plugin,
                             NM_VPN_PLUGIN_ERROR_FAILED,
                             "No connection manager found for Disconnect");
         return FALSE;
+    }
+
+    /* If method=manual and netlink, plugin added routes itself — clean them up */
+    if (!awg_connection_manager_manages_routes(conn_manager)) {
+        GError *route_error = NULL;
+
+        if (!priv->ip4_method_auto) {
+            _LOGI("IPv4 manual mode: cleaning up routes via netlink");
+            awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET, &route_error);
+            if (route_error) {
+                _LOGW("Warning: Could not delete IPv4 routes: %s", route_error->message);
+                g_error_free(route_error);
+                route_error = NULL;
+            }
+        }
+
+        if (!priv->ip6_method_auto) {
+            _LOGI("IPv6 manual mode: cleaning up routes via netlink");
+            awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET6, &route_error);
+            if (route_error) {
+                _LOGW("Warning: Could not delete IPv6 routes: %s", route_error->message);
+                g_error_free(route_error);
+            }
+        }
     }
 
     if (!awg_connection_manager_disconnect(conn_manager, error)) {
@@ -261,7 +288,7 @@ send_config(gpointer data)
 // create a Config, Ip4Config and Ip6Config from AWGDevice
 // and create a timer that sends the configuration to the plugin (see 'send_config()' above)
 static gboolean
-set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean routed_managed_by_manager)
+set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean ip4_method_auto, gboolean ip6_method_auto)
 {
     GVariantBuilder builder, ip4builder, ip6builder;
     GVariantBuilder dns_builder;
@@ -302,7 +329,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
         }
 
         const gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
-        if (allowed_ips && strlen(allowed_ips) > 0 && !routed_managed_by_manager) {
+        if (allowed_ips && strlen(allowed_ips) > 0) {
             GPtrArray *routes4 = g_ptr_array_new_full(10, (GDestroyNotify)nm_ip_route_unref);
             GPtrArray *routes6 = g_ptr_array_new_full(10, (GDestroyNotify)nm_ip_route_unref);
             char **ip_list = g_strsplit(allowed_ips, ",", -1);
@@ -310,6 +337,12 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
             for (int i = 0; ip_list[i]; i++) {
                 char *ip_str = g_strstrip(ip_list[i]);
                 gboolean is_ipv6 = (strchr(ip_str, ':') != NULL);
+
+                /* Only add routes if NM is managing routes for this address family */
+                if (is_ipv6 && !ip6_method_auto)
+                    continue;
+                if (!is_ipv6 && !ip4_method_auto)
+                    continue;
 
                 gchar **ip_parts = g_strsplit(ip_str, "/", 2);
                 if (ip_parts[0] && ip_parts[1]) {
@@ -404,12 +437,6 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
         }
     }
 
-    val = g_variant_new_boolean(TRUE);
-    g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_NEVER_DEFAULT, val);
-    g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_NEVER_DEFAULT, val);
-    g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_NEVER_DEFAULT, val);
-    g_variant_builder_add(&ip6builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_NEVER_DEFAULT, val);
-
     val = g_variant_new_string(if_name);
     g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_TUNDEV, val);
     g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV, val);
@@ -470,6 +497,9 @@ connect_common(NMVpnServicePlugin *plugin,
     gchar *if_name = generate_interface_name_from_connection(connection);
     AWGDevice *device;
     AWGConnectionManager *conn_manager;
+    NMSettingIPConfig *s_ip4, *s_ip6;
+    const char *method_ip4, *method_ip6;
+    gboolean ip4_method_auto, ip6_method_auto;
 
     _LOGI("Setting up AmneziaWG Connection ('%s')", connection_name);
 
@@ -482,6 +512,18 @@ connect_common(NMVpnServicePlugin *plugin,
             return FALSE;
         }
     }
+
+    /* Determine IP configuration methods */
+    s_ip4 = nm_connection_get_setting_ip4_config(connection);
+    s_ip6 = nm_connection_get_setting_ip6_config(connection);
+
+    method_ip4 = s_ip4 ? nm_setting_ip_config_get_method(s_ip4) : NM_SETTING_IP4_CONFIG_METHOD_AUTO;
+    method_ip6 = s_ip6 ? nm_setting_ip_config_get_method(s_ip6) : NM_SETTING_IP6_CONFIG_METHOD_AUTO;
+
+    ip4_method_auto = g_str_equal(method_ip4, NM_SETTING_IP4_CONFIG_METHOD_AUTO);
+    ip6_method_auto = g_str_equal(method_ip6, NM_SETTING_IP6_CONFIG_METHOD_AUTO);
+
+    _LOGI("IP methods: IPv4=%s, IPv6=%s", method_ip4, method_ip6);
 
     device = awg_device_new_from_nm_connection(connection, error);
     if (!device) {
@@ -507,8 +549,33 @@ connect_common(NMVpnServicePlugin *plugin,
     }
 
     priv->conn_manager = conn_manager;
+    priv->ip4_method_auto = ip4_method_auto;
+    priv->ip6_method_auto = ip6_method_auto;
 
-    if (!set_config(plugin, device, if_name, awg_connection_manager_manages_routes(conn_manager))) {
+    /* If method=manual and netlink (not external), plugin must add routes itself */
+    if (!awg_connection_manager_manages_routes(conn_manager)) {
+        GError *route_error = NULL;
+
+        if (!ip4_method_auto) {
+            _LOGI("IPv4 manual mode: adding routes via netlink");
+            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET, &route_error)) {
+                _LOGW("Warning: Could not add IPv4 routes: %s", route_error->message);
+                g_error_free(route_error);
+                route_error = NULL;
+            }
+        }
+
+        if (!ip6_method_auto) {
+            _LOGI("IPv6 manual mode: adding routes via netlink");
+            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET6, &route_error)) {
+                _LOGW("Warning: Could not add IPv6 routes: %s", route_error->message);
+                g_error_free(route_error);
+                route_error = NULL;
+            }
+        }
+    }
+
+    if (!set_config(plugin, device, if_name, ip4_method_auto, ip6_method_auto)) {
         _LOGW("Error: Could not set config!");
     }
 
