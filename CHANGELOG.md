@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.8] — 2026-04-23
+
+### Major Changes
+
+#### Connection Manager
+- **Restored manual routes management**: Netlink backend now properly handles manual connections with user-defined routes via NetworkManager
+
+### Bug Fixes
+
+#### Connection Import
+- **Fixed DNS import**: DNS servers are now correctly imported from config files to NMConnection settings
+
+### Improvements
+
+#### Connection Editor
+- **Set connection name from filename on import**: When importing a config file, the connection now takes its name from the filename (e.g., `awg0.conf` → connection name `awg0`) instead of using a default name
+
+---
+
 ## [0.9.7] — 2026-03-29
 
 ### Bug Fixes
