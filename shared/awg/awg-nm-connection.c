@@ -97,6 +97,15 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         g_object_set(s_ip4, NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP4_CONFIG_METHOD_DISABLED, NULL);
     }
 
+    {
+        const GList *dns_v4 = awg_device_get_dns_v4_list(device);
+        for (const GList *iter = dns_v4; iter; iter = g_list_next(iter)) {
+            GInetAddress *dns_addr = G_INET_ADDRESS(iter->data);
+            g_autofree gchar *dns_str = g_inet_address_to_string(dns_addr);
+            nm_setting_ip_config_add_dns(NM_SETTING_IP_CONFIG(s_ip4), dns_str);
+        }
+    }
+
     addr = awg_device_get_address_v6(device);
     if (addr) {
         g_object_set(s_ip6,
@@ -106,6 +115,15 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         add_ip_address(NM_SETTING_IP_CONFIG(s_ip6), (GInetAddress *)addr, 128);
     } else {
         g_object_set(s_ip6, NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP6_CONFIG_METHOD_IGNORE, NULL);
+    }
+
+    {
+        const GList *dns_v6 = awg_device_get_dns_v6_list(device);
+        for (const GList *iter = dns_v6; iter; iter = g_list_next(iter)) {
+            GInetAddress *dns_addr = G_INET_ADDRESS(iter->data);
+            g_autofree gchar *dns_str = g_inet_address_to_string(dns_addr);
+            nm_setting_ip_config_add_dns(NM_SETTING_IP_CONFIG(s_ip6), dns_str);
+        }
     }
 
     s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
