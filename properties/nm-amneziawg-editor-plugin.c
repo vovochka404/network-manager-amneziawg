@@ -54,12 +54,40 @@ G_DEFINE_TYPE_EXTENDED(AmneziaWGEditorPlugin, amneziawg_editor_plugin, G_TYPE_OB
 
 /*****************************************************************************/
 
+static char *
+sanitize_connection_name(const char *name)
+{
+    GString *s;
+    char *ret;
+    guint i, j;
+
+    s = g_string_new(name);
+    for (i = 0, j = 0; i < s->len; i++) {
+        if (s->str[i] != '/' && s->str[i] != ':') {
+            if (s->str[i] == ' ')
+                s->str[j] = '_';
+            else
+                s->str[j] = s->str[i];
+            j++;
+        }
+    }
+    g_string_truncate(s, j);
+    if (s->len == 0) {
+        g_string_free(s, TRUE);
+        return NULL;
+    }
+    ret = g_string_free(s, FALSE);
+    return ret;
+}
+
 static NMConnection *
 import(NMVpnEditorPlugin *iface, const char *path, GError **error)
 {
     NMConnection *connection = NULL;
     AWGDevice *device = NULL;
-    char *ext;
+    const char *ext;
+    const char *filename;
+    char *conn_name = NULL;
 
     ext = strrchr(path, '.');
 
@@ -71,22 +99,39 @@ import(NMVpnEditorPlugin *iface, const char *path, GError **error)
         return NULL;
     }
 
+    filename = strrchr(path, '/');
+    filename = filename ? filename + 1 : path;
+    if (g_str_has_suffix(filename, ext)) {
+        size_t name_len = strlen(filename) - strlen(ext);
+        if (name_len > 0)
+            conn_name = sanitize_connection_name(g_strndup(filename, name_len));
+    }
+
     device = awg_device_new_from_config(path);
     if (!device) {
         g_set_error_literal(error,
                             NMV_EDITOR_PLUGIN_ERROR,
                             NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
                             _("Failed to parse AmneziaWG config file"));
+        g_free(conn_name);
         return NULL;
     }
 
     connection = nm_simple_connection_new();
     if (!awg_device_save_to_nm_connection(device, connection, error)) {
         g_object_unref(connection);
-        connection = NULL;
+        g_object_unref(device);
+        g_free(conn_name);
+        return NULL;
+    }
+
+    if (conn_name) {
+        NMSettingConnection *s_con = nm_connection_get_setting_connection(connection);
+        g_object_set(s_con, NM_SETTING_CONNECTION_ID, conn_name, NULL);
     }
 
     g_object_unref(device);
+    g_free(conn_name);
     return connection;
 }
 static gboolean export(NMVpnEditorPlugin *iface,

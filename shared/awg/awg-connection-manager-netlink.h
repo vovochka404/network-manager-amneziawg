@@ -32,6 +32,9 @@ gboolean awg_connection_manager_netlink_is_available(void);
 
 AWGConnectionManager *awg_connection_manager_netlink_new(const gchar *interface_name, AWGDevice *device);
 
+gboolean awg_connection_manager_netlink_add_routes(AWGConnectionManager *mgr, int family, GError **error);
+gboolean awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int family, GError **error);
+
 G_END_DECLS
 
 #endif /* AWG_CONNECTION_MANAGER_NETLINK_H */
