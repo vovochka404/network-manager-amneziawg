@@ -82,6 +82,7 @@ struct AWGDevicePeerPrivate {
     NMSettingSecretFlags shared_key_flags;
     GList *allowed_ips; // list of AWGSubnet structs
     gchar *endpoint;
+    GInetAddress *resolved_endpoint;
     guint16 keep_alive;
     gboolean advanced_security;
 };
@@ -1764,6 +1765,11 @@ awg_device_peer_new_clone(AWGDevicePeer *peer)
     if (priv->endpoint)
         awg_device_peer_set_endpoint(clone, priv->endpoint);
 
+    if (priv->resolved_endpoint) {
+        g_object_ref(priv->resolved_endpoint);
+        clone_priv->resolved_endpoint = priv->resolved_endpoint;
+    }
+
     awg_device_peer_set_keep_alive_interval(clone, priv->keep_alive);
     awg_device_peer_set_advanced_security(clone, priv->advanced_security);
 
@@ -2029,6 +2035,30 @@ awg_device_peer_get_advanced_security(AWGDevicePeer *self)
     return priv->advanced_security;
 }
 
+void
+awg_device_peer_set_resolved_endpoint(AWGDevicePeer *self, GInetAddress *resolved_endpoint)
+{
+    AWGDevicePeerPrivate *priv;
+
+    g_return_if_fail(AWG_IS_DEVICE_PEER(self));
+    priv = awg_device_peer_get_instance_private(self);
+
+    g_clear_object(&priv->resolved_endpoint);
+    if (resolved_endpoint)
+        priv->resolved_endpoint = g_object_ref(resolved_endpoint);
+}
+
+GInetAddress *
+awg_device_peer_get_resolved_endpoint(AWGDevicePeer *self)
+{
+    AWGDevicePeerPrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
+    priv = awg_device_peer_get_instance_private(self);
+
+    return priv->resolved_endpoint;
+}
+
 gboolean
 awg_device_peer_is_valid(AWGDevicePeer *self)
 {
@@ -2049,6 +2079,7 @@ awg_device_peer_free(AWGDevicePeer *peer)
         g_clear_pointer(&priv->shared_key, g_free);
         g_list_free_full(priv->allowed_ips, (GDestroyNotify)g_object_unref);
         g_clear_object(&priv->endpoint);
+        g_clear_object(&priv->resolved_endpoint);
         g_free(priv);
         g_object_unref(peer);
     }

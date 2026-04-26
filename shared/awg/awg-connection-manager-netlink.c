@@ -652,10 +652,17 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error
                 hints.ai_family = AF_UNSPEC;
                 hints.ai_socktype = SOCK_DGRAM;
                 if (getaddrinfo(host, port, &hints, &res) == 0) {
+                    GInetAddress *resolved_addr = NULL;
                     if (res->ai_family == AF_INET && res->ai_addrlen == sizeof(new_peer->endpoint.addr4)) {
                         memcpy(&new_peer->endpoint.addr4, res->ai_addr, sizeof(new_peer->endpoint.addr4));
+                        resolved_addr = g_inet_address_new_from_bytes((guint8 *)&((struct sockaddr_in *)res->ai_addr)->sin_addr, AF_INET);
                     } else if (res->ai_family == AF_INET6 && res->ai_addrlen == sizeof(new_peer->endpoint.addr6)) {
                         memcpy(&new_peer->endpoint.addr6, res->ai_addr, sizeof(new_peer->endpoint.addr6));
+                        resolved_addr = g_inet_address_new_from_bytes((guint8 *)&((struct sockaddr_in6 *)res->ai_addr)->sin6_addr, AF_INET6);
+                    }
+                    if (resolved_addr) {
+                        awg_device_peer_set_resolved_endpoint(awg_peer, resolved_addr);
+                        g_object_unref(resolved_addr);
                     }
                     freeaddrinfo(res);
                 }

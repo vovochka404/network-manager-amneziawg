@@ -146,6 +146,9 @@ const gchar *awg_device_peer_get_endpoint(AWGDevicePeer *self);
 guint16 awg_device_peer_get_keep_alive_interval(AWGDevicePeer *self);
 gboolean awg_device_peer_get_advanced_security(AWGDevicePeer *self);
 
+void awg_device_peer_set_resolved_endpoint(AWGDevicePeer *self, GInetAddress *resolved_endpoint);
+GInetAddress *awg_device_peer_get_resolved_endpoint(AWGDevicePeer *self);
+
 gboolean awg_device_peer_set_public_key(AWGDevicePeer *self, const gchar *public_key);
 gboolean awg_device_peer_set_shared_key(AWGDevicePeer *self, const gchar *shared_key);
 gboolean awg_device_peer_set_allowed_ips_from_string(AWGDevicePeer *self, const gchar *allowed_ips);

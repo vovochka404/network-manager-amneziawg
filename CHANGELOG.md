@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.9] — 2026-04-26
+
+### Bug Fixes
+
+- **Fixed VPN gateway for hostname endpoints**: VPN connections with hostname endpoints (e.g., `vpn.example.com:51820`) properly handled. Endpoint is resolved to IP address during connection and properly passed to NetworkManager as gateway
+
+---
+
 ## [0.9.8] — 2026-04-23
 
 ### Major Changes

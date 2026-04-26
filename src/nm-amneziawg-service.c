@@ -30,6 +30,7 @@
 #include <glib-unix.h>
 #include <glib.h>
 #include <locale.h>
+#include <netdb.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -287,6 +288,30 @@ send_config(gpointer data)
 
 // create a Config, Ip4Config and Ip6Config from AWGDevice
 // and create a timer that sends the configuration to the plugin (see 'send_config()' above)
+static GInetAddress *
+resolve_host(const char *host, int port)
+{
+    struct addrinfo hints, *res = NULL;
+    GInetAddress *addr = NULL;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    if (getaddrinfo(host, NULL, &hints, &res) == 0) {
+        if (res->ai_family == AF_INET && res->ai_addrlen == sizeof(struct sockaddr_in)) {
+            struct sockaddr_in *sa = (struct sockaddr_in *)res->ai_addr;
+            addr = g_inet_address_new_from_bytes((guint8 *)&sa->sin_addr, AF_INET);
+        } else if (res->ai_family == AF_INET6 && res->ai_addrlen == sizeof(struct sockaddr_in6)) {
+            struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)res->ai_addr;
+            addr = g_inet_address_new_from_bytes((guint8 *)&sa6->sin6_addr, AF_INET6);
+        }
+        freeaddrinfo(res);
+    }
+
+    return addr;
+}
+
 static gboolean
 set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean ip4_method_auto, gboolean ip6_method_auto)
 {
@@ -309,23 +334,39 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     g_variant_builder_init(&dns_builder, G_VARIANT_TYPE_VARDICT);
 
     peers_list = awg_device_get_peers_list(device);
-    if (peers_list) {
+    if (!peers_list) {
+        g_warning("set_config: no peers in device!");
+        return FALSE;
+    }
+
+    {
         AWGDevicePeer *peer = peers_list->data;
+        GInetAddress *gateway_addr = NULL;
         const gchar *endpoint = awg_device_peer_get_endpoint(peer);
-        if (endpoint) {
+
+        gateway_addr = awg_device_peer_get_resolved_endpoint(peer);
+
+        if (!gateway_addr && endpoint) {
             gchar **parts = g_strsplit(endpoint, ":", 2);
             if (parts[0]) {
-                GVariant *gateway_val = ip4_to_gvariant(parts[0]);
-                if (gateway_val) {
-                    g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_EXT_GATEWAY, gateway_val);
-                } else {
-                    gateway_val = ip6_to_gvariant(parts[0]);
-                    if (gateway_val) {
-                        g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_EXT_GATEWAY, gateway_val);
-                    }
-                }
+                gateway_addr = g_inet_address_new_from_string(parts[0]);
+                if (!gateway_addr)
+                    gateway_addr = resolve_host(parts[0], 0);
             }
             g_strfreev(parts);
+        }
+
+        if (gateway_addr) {
+            gchar *ip_str = g_inet_address_to_string(gateway_addr);
+            if (ip_str) {
+                GVariant *gateway_val = g_inet_address_get_family(gateway_addr) == AF_INET
+                                            ? ip4_to_gvariant(ip_str)
+                                            : ip6_to_gvariant(ip_str);
+                if (gateway_val)
+                    g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_EXT_GATEWAY, gateway_val);
+                g_free(ip_str);
+            }
+            g_object_unref(gateway_addr);
         }
 
         const gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
