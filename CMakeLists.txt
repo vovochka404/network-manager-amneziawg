@@ -361,6 +361,14 @@ target_link_options(nm-vpn-plugin-amneziawg-core PRIVATE)
 add_library(nm-vpn-plugin-amneziawg SHARED)
 target_sources(nm-vpn-plugin-amneziawg PRIVATE
     $<TARGET_OBJECTS:nm-vpn-plugin-amneziawg-utils>
+    properties/nm-amneziawg-editor-plugin.c
+    properties/nm-amneziawg-editor-plugin.h
+)
+target_include_directories(nm-vpn-plugin-amneziawg PRIVATE ${CMAKE_SOURCE_DIR}/shared ${CMAKE_BINARY_DIR})
+target_compile_options(nm-vpn-plugin-amneziawg PRIVATE
+    ${COMMON_CFLAGS} ${COMMON_DEFINITIONS} ${PROPERTIES_CPPFLAGS}
+    -DNETWORKMANAGER_COMPILATION=NM_NETWORKMANAGER_COMPILATION_LIB_EDITOR
+    -DNM_PLUGIN_DIR=\"${NM_PLUGIN_DIR}\"
 )
 target_link_libraries(nm-vpn-plugin-amneziawg PRIVATE ${COMMON_LDFLAGS} nm-vpn-plugin-amneziawg-core ${LIBNM_LIBRARIES} ${CMAKE_DL_LIBS})
 set_target_properties(nm-vpn-plugin-amneziawg PROPERTIES
