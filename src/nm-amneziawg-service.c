@@ -86,14 +86,25 @@ typedef struct _Configs {
 } Configs;
 
 typedef struct {
-    gboolean interactive;
     char *mgt_path;
     char *connection_file;
     gchar *connection_config;
     AWGConnectionManager *conn_manager;
     gboolean ip4_method_auto;
     gboolean ip6_method_auto;
+    GTask *connect_task;
+    gboolean disconnecting;
 } NMAmneziaWGPluginPrivate;
+
+typedef struct {
+    NMVpnServicePlugin *plugin;
+    NMConnection *connection;
+    gchar *if_name;
+    gboolean ip4_method_auto;
+    gboolean ip6_method_auto;
+    AWGDevice *device;
+    AWGConnectionManager *conn_manager;
+} ConnectTaskData;
 
 G_DEFINE_TYPE(NMAmneziaWGPlugin, nm_amneziawg_plugin, NM_TYPE_VPN_SERVICE_PLUGIN);
 
@@ -145,24 +156,27 @@ wg_disconnect(NMVpnServicePlugin *plugin,
               GError **error)
 {
     NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
-    AWGConnectionManager *conn_manager = priv->conn_manager;
 
-    if (!conn_manager) {
-        _LOGW("Error: No connection manager found for Disconnect");
-        g_set_error_literal(error,
-                            NM_VPN_PLUGIN_ERROR,
-                            NM_VPN_PLUGIN_ERROR_FAILED,
-                            "No connection manager found for Disconnect");
-        return FALSE;
+    /* If a connect is in progress, mark as disconnecting and let the worker finish.
+     * The callback will see the flag and clean up. */
+    if (priv->connect_task) {
+        _LOGI("Disconnect requested while connect is in progress, will clean up after.");
+        priv->disconnecting = TRUE;
+        return TRUE;
+    }
+
+    if (!priv->conn_manager) {
+        _LOGI("Disconnected from AmneziaWG Connection (no active manager).");
+        return TRUE;
     }
 
     /* If method=manual and netlink, plugin added routes itself — clean them up */
-    if (!awg_connection_manager_manages_routes(conn_manager)) {
+    if (!awg_connection_manager_manages_routes(priv->conn_manager)) {
         GError *route_error = NULL;
 
         if (!priv->ip4_method_auto) {
             _LOGI("IPv4 manual mode: cleaning up routes via netlink");
-            awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET, &route_error);
+            awg_connection_manager_netlink_delete_routes(priv->conn_manager, AF_INET, &route_error);
             if (route_error) {
                 _LOGW("Warning: Could not delete IPv4 routes: %s", route_error->message);
                 g_error_free(route_error);
@@ -172,7 +186,7 @@ wg_disconnect(NMVpnServicePlugin *plugin,
 
         if (!priv->ip6_method_auto) {
             _LOGI("IPv6 manual mode: cleaning up routes via netlink");
-            awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET6, &route_error);
+            awg_connection_manager_netlink_delete_routes(priv->conn_manager, AF_INET6, &route_error);
             if (route_error) {
                 _LOGW("Warning: Could not delete IPv6 routes: %s", route_error->message);
                 g_error_free(route_error);
@@ -180,14 +194,14 @@ wg_disconnect(NMVpnServicePlugin *plugin,
         }
     }
 
-    if (!awg_connection_manager_disconnect(conn_manager, error)) {
+    if (!awg_connection_manager_disconnect(priv->conn_manager, error)) {
         _LOGW("Error: Could not disconnect!");
-        g_object_unref(conn_manager);
+        g_object_unref(priv->conn_manager);
         priv->conn_manager = NULL;
         return FALSE;
     }
 
-    g_object_unref(conn_manager);
+    g_object_unref(priv->conn_manager);
     priv->conn_manager = NULL;
 
     _LOGI("Disconnected from AmneziaWG Connection!");
@@ -512,47 +526,180 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     return TRUE;
 }
 
-// the common part of both Connect() and ConnectInteractively():
-// create a configuration string from the NMVpnServicePlugin and NMConnection,
-// export this configuration to a temporary file (/tmp/CONNECTION-ID.conf)
-// and call awg-quick on this script
-// the temporary file gets deleted immediately after awg-quick has completed
-//
-// in order to be able to disconnect properly, the configuration string
-// and filename are saved in the plugin's private data, such that the
-// temporary file can be re-created in the Disconnect() method
-static gboolean
-wg_need_secrets(NMVpnServicePlugin *plugin,
-                NMConnection *connection,
-                const char **setting_name,
-                GError **error);
+/*****************************************************************************/
 
+static void
+connect_task_data_free(ConnectTaskData *data)
+{
+    if (!data)
+        return;
+    g_clear_object(&data->plugin);
+    g_clear_object(&data->connection);
+    g_clear_object(&data->device);
+    g_clear_object(&data->conn_manager);
+    g_free(data->if_name);
+    g_free(data);
+}
+
+static void
+connect_worker(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable)
+{
+    ConnectTaskData *data = task_data;
+    GError *error = NULL;
+
+    data->if_name = generate_interface_name_from_connection(data->connection);
+
+    AWGDevice *device = awg_device_new_from_nm_connection(data->connection, &error);
+    if (!device) {
+        if (error) {
+            g_task_return_error(task, error);
+        } else {
+            g_task_return_new_error(task, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                                    "Could not create AWG device from connection");
+        }
+        return;
+    }
+
+    AWGConnectionManager *conn_manager = awg_connection_manager_auto_new(data->if_name, device);
+    if (!conn_manager) {
+        g_object_unref(device);
+        g_task_return_new_error(task, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                                "Could not create connection manager");
+        return;
+    }
+
+    if (!awg_connection_manager_connect(conn_manager, cancellable, &error)) {
+        g_object_unref(conn_manager);
+        g_object_unref(device);
+        if (error) {
+            g_task_return_error(task, error);
+        } else {
+            g_task_return_new_error(task, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                                    "Could not connect");
+        }
+        return;
+    }
+
+    /* If method=manual and netlink (not external), add routes in the worker thread */
+    if (!awg_connection_manager_manages_routes(conn_manager)) {
+        GError *route_error = NULL;
+
+        if (!data->ip4_method_auto) {
+            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET, &route_error)) {
+                _LOGW("Warning: Could not add IPv4 routes: %s",
+                      route_error ? route_error->message : "unknown error");
+                g_clear_error(&route_error);
+            }
+        }
+
+        if (!data->ip6_method_auto) {
+            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET6, &route_error)) {
+                _LOGW("Warning: Could not add IPv6 routes: %s",
+                      route_error ? route_error->message : "unknown error");
+                g_clear_error(&route_error);
+            }
+        }
+    }
+
+    /* Store results for the main-thread callback */
+    data->device = device;
+    data->conn_manager = conn_manager;
+
+    g_task_return_boolean(task, TRUE);
+}
+
+static void
+connect_task_completed(GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+    (void)user_data;
+    NMVpnServicePlugin *plugin = NM_VPN_SERVICE_PLUGIN(source_object);
+    NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
+    GTask *task = G_TASK(res);
+    ConnectTaskData *data = g_task_get_task_data(task);
+    gboolean disconnecting = priv->disconnecting;
+    gboolean ip4_method_auto = data->ip4_method_auto;
+    gboolean ip6_method_auto = data->ip6_method_auto;
+    AWGConnectionManager *conn_manager = g_steal_pointer(&data->conn_manager);
+    AWGDevice *device = g_steal_pointer(&data->device);
+    gchar *if_name = g_steal_pointer(&data->if_name);
+    GError *error = NULL;
+    gboolean success = g_task_propagate_boolean(task, &error);
+
+    /* Drop our task reference; the remaining task_data is freed by the
+     * destroy notify. Everything we still need was stolen above. */
+    g_clear_object(&priv->connect_task);
+
+    /* Disconnect was requested while connect was in progress */
+    if (disconnecting) {
+        priv->disconnecting = FALSE;
+        if (conn_manager) {
+            /* Mirror wg_disconnect cleanup: remove routes we added, then tear down. */
+            if (!awg_connection_manager_manages_routes(conn_manager)) {
+                GError *route_error = NULL;
+
+                if (!ip4_method_auto) {
+                    awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET, &route_error);
+                    g_clear_error(&route_error);
+                }
+
+                if (!ip6_method_auto) {
+                    awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET6, &route_error);
+                    g_clear_error(&route_error);
+                }
+            }
+            awg_connection_manager_disconnect(conn_manager, NULL);
+            g_object_unref(conn_manager);
+        }
+        g_clear_object(&device);
+        g_free(if_name);
+        g_clear_error(&error);
+        return;
+    }
+
+    if (!success) {
+        _LOGW("Error: Could not connect: %s", error ? error->message : "unknown error");
+        g_clear_error(&error);
+        nm_vpn_service_plugin_failure(plugin, NM_VPN_PLUGIN_FAILURE_CONNECT_FAILED);
+        g_clear_object(&device);
+        g_free(if_name);
+        return;
+    }
+
+    /* Success: store connection manager in priv */
+    priv->conn_manager = conn_manager;
+    priv->ip4_method_auto = ip4_method_auto;
+    priv->ip6_method_auto = ip6_method_auto;
+
+    if (!set_config(plugin, device, if_name, ip4_method_auto, ip6_method_auto)) {
+        _LOGW("Error: Could not set config!");
+    }
+
+    g_clear_object(&device);
+    g_free(if_name);
+}
+
+// the common part of both Connect() and ConnectInteractively():
+// launch an async GTask that performs the blocking connect in a worker thread,
+// leaving the main loop free to handle D-Bus requests (e.g. NeedSecrets)
 static gboolean
 connect_common(NMVpnServicePlugin *plugin,
                NMConnection *connection,
-               GVariant *details,
                GError **error)
 {
     NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
     const char *connection_name = nm_connection_get_id(connection);
-    gchar *if_name = generate_interface_name_from_connection(connection);
-    AWGDevice *device;
-    AWGConnectionManager *conn_manager;
     NMSettingIPConfig *s_ip4, *s_ip6;
     const char *method_ip4, *method_ip6;
-    gboolean ip4_method_auto, ip6_method_auto;
+    ConnectTaskData *task_data;
+
+    /* Reject if a connect is already in progress */
+    if (priv->connect_task) {
+        g_set_error_literal(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_WRONG_STATE,
+                            "Connection attempt already in progress");
+        return FALSE;
+    }
 
     _LOGI("Setting up AmneziaWG Connection ('%s')", connection_name);
-
-    if (priv->interactive) {
-        const char *setting_name;
-        if (wg_need_secrets(plugin, connection, &setting_name, error)) {
-            nm_vpn_service_plugin_secrets_required(plugin, _("Private key is required"), NULL);
-            g_set_error(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_BAD_ARGUMENTS, _("Private key is required"));
-            g_free(if_name);
-            return FALSE;
-        }
-    }
 
     /* Determine IP configuration methods */
     s_ip4 = nm_connection_get_setting_ip4_config(connection);
@@ -561,97 +708,41 @@ connect_common(NMVpnServicePlugin *plugin,
     method_ip4 = s_ip4 ? nm_setting_ip_config_get_method(s_ip4) : NM_SETTING_IP4_CONFIG_METHOD_AUTO;
     method_ip6 = s_ip6 ? nm_setting_ip_config_get_method(s_ip6) : NM_SETTING_IP6_CONFIG_METHOD_AUTO;
 
-    ip4_method_auto = g_str_equal(method_ip4, NM_SETTING_IP4_CONFIG_METHOD_AUTO);
-    ip6_method_auto = g_str_equal(method_ip6, NM_SETTING_IP6_CONFIG_METHOD_AUTO);
-
     _LOGI("IP methods: IPv4=%s, IPv6=%s", method_ip4, method_ip6);
 
-    device = awg_device_new_from_nm_connection(connection, error);
-    if (!device) {
-        _LOGW("Error: Could not create AWG device from connection '%s'!", connection_name);
-        g_free(if_name);
-        return FALSE;
-    }
+    task_data = g_new0(ConnectTaskData, 1);
+    task_data->plugin = g_object_ref(plugin);
+    task_data->connection = g_object_ref(connection);
+    task_data->ip4_method_auto = g_str_equal(method_ip4, NM_SETTING_IP4_CONFIG_METHOD_AUTO);
+    task_data->ip6_method_auto = g_str_equal(method_ip6, NM_SETTING_IP6_CONFIG_METHOD_AUTO);
 
-    conn_manager = awg_connection_manager_auto_new(if_name, device);
-    if (!conn_manager) {
-        _LOGW("Error: Could not create connection manager for '%s'!", connection_name);
-        g_object_unref(device);
-        g_free(if_name);
-        return FALSE;
-    }
-
-    if (!awg_connection_manager_connect(conn_manager, error)) {
-        _LOGW("Error: Could not connect!");
-        g_object_unref(conn_manager);
-        g_object_unref(device);
-        g_free(if_name);
-        return FALSE;
-    }
-
-    priv->conn_manager = conn_manager;
-    priv->ip4_method_auto = ip4_method_auto;
-    priv->ip6_method_auto = ip6_method_auto;
-
-    /* If method=manual and netlink (not external), plugin must add routes itself */
-    if (!awg_connection_manager_manages_routes(conn_manager)) {
-        GError *route_error = NULL;
-
-        if (!ip4_method_auto) {
-            _LOGI("IPv4 manual mode: adding routes via netlink");
-            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET, &route_error)) {
-                _LOGW("Warning: Could not add IPv4 routes: %s", route_error->message);
-                g_error_free(route_error);
-                route_error = NULL;
-            }
-        }
-
-        if (!ip6_method_auto) {
-            _LOGI("IPv6 manual mode: adding routes via netlink");
-            if (!awg_connection_manager_netlink_add_routes(conn_manager, AF_INET6, &route_error)) {
-                _LOGW("Warning: Could not add IPv6 routes: %s", route_error->message);
-                g_error_free(route_error);
-                route_error = NULL;
-            }
-        }
-    }
-
-    if (!set_config(plugin, device, if_name, ip4_method_auto, ip6_method_auto)) {
-        _LOGW("Error: Could not set config!");
-    }
-
-    g_object_unref(device);
-    g_free(if_name);
+    priv->connect_task = g_task_new(plugin, NULL, connect_task_completed, NULL);
+    g_task_set_task_data(priv->connect_task, task_data, (GDestroyNotify)connect_task_data_free);
+    g_task_run_in_thread(priv->connect_task, connect_worker);
 
     return TRUE;
 }
 
 // non-interactive connect
-// this version of connect is not allowed to ask the user for secrets, etc. interactively!
 static gboolean
 wg_connect(NMVpnServicePlugin *plugin,
            NMConnection *connection,
            GError **error)
 {
     _LOGI("Connecting to AmneziaWG: '%s'", nm_connection_get_id(connection));
-    return connect_common(plugin, connection, NULL, error);
+    return connect_common(plugin, connection, error);
 }
 
 // interactive connect (allows for user interaction)
-// this is the function that is actually called when the user clicks the connection in the GUI
 static gboolean
 wg_connect_interactive(NMVpnServicePlugin *plugin,
                        NMConnection *connection,
                        GVariant *details,
                        GError **error)
 {
+    (void)details;
     _LOGI("Connecting interactively to AmneziaWG: '%s'", nm_connection_get_id(connection));
-    if (!connect_common(plugin, connection, details, error)) {
-        return FALSE;
-    }
-
-    NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin)->interactive = TRUE;
-    return TRUE;
+    return connect_common(plugin, connection, error);
 }
 
 static gboolean
@@ -740,6 +831,23 @@ nm_amneziawg_plugin_init(NMAmneziaWGPlugin *plugin)
 static void
 dispose(GObject *object)
 {
+    NMAmneziaWGPlugin *plugin = NM_AMNEZIAWG_PLUGIN(object);
+    NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
+
+    /* A running worker keeps the task (and the plugin via the task's
+     * source reference) alive until connect_task_completed() runs, which
+     * sees the disconnecting flag and cleans up. */
+    if (priv->connect_task) {
+        priv->disconnecting = TRUE;
+        g_object_unref(priv->connect_task);
+        priv->connect_task = NULL;
+    }
+
+    if (priv->conn_manager) {
+        g_object_unref(priv->conn_manager);
+        priv->conn_manager = NULL;
+    }
+
     G_OBJECT_CLASS(nm_amneziawg_plugin_parent_class)->dispose(object);
 }
 

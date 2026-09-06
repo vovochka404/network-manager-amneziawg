@@ -252,7 +252,7 @@ test_netlink_connect(const gchar *config_path)
     GError *error = NULL;
     g_print("Attempting to connect...\n");
 
-    if (!awg_connection_manager_connect(mgr, &error)) {
+    if (!awg_connection_manager_connect(mgr, NULL, &error)) {
         g_printerr("Failed to connect: %s\n", error ? error->message : "unknown error");
         if (error)
             g_error_free(error);

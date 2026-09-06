@@ -41,7 +41,7 @@ awg_connection_manager_auto_new(const gchar *interface_name, AWGDevice *device)
 }
 
 gboolean
-awg_connection_manager_connect(AWGConnectionManager *self, GError **error)
+awg_connection_manager_connect(AWGConnectionManager *self, GCancellable *cancellable, GError **error)
 {
     AWGConnectionManagerInterface *iface;
 
@@ -49,7 +49,7 @@ awg_connection_manager_connect(AWGConnectionManager *self, GError **error)
 
     iface = AWG_CONNECTION_MANAGER_GET_IFACE(self);
     if (iface->connect)
-        return iface->connect(self, error);
+        return iface->connect(self, cancellable, error);
 
     return FALSE;
 }

@@ -493,7 +493,7 @@ awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int fami
 }
 
 static gboolean
-awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GError **error)
+awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
     AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);

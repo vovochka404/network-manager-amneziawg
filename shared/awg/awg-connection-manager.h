@@ -33,14 +33,14 @@ typedef struct _AWGConnectionManagerInterface AWGConnectionManagerInterface;
 struct _AWGConnectionManagerInterface {
     GTypeInterface parent_iface;
 
-    gboolean (*connect)(AWGConnectionManager *self, GError **error);
+    gboolean (*connect)(AWGConnectionManager *self, GCancellable *cancellable, GError **error);
     gboolean (*disconnect)(AWGConnectionManager *self, GError **error);
     gboolean (*manages_routes)(AWGConnectionManager *self);
 };
 
 AWGConnectionManager *awg_connection_manager_auto_new(const gchar *interface_name, AWGDevice *device);
 
-gboolean awg_connection_manager_connect(AWGConnectionManager *self, GError **error);
+gboolean awg_connection_manager_connect(AWGConnectionManager *self, GCancellable *cancellable, GError **error);
 gboolean awg_connection_manager_disconnect(AWGConnectionManager *self, GError **error);
 gboolean awg_connection_manager_manages_routes(AWGConnectionManager *self);
 

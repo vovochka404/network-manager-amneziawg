@@ -46,7 +46,7 @@ G_DEFINE_TYPE_WITH_CODE(AWGConnectionManagerDummy, awg_connection_manager_dummy,
     ((AWGConnectionManagerDummyPrivate *)awg_connection_manager_dummy_get_instance_private(self))
 
 static gboolean
-awg_connection_manager_dummy_connect(AWGConnectionManager *mgr, GError **error)
+awg_connection_manager_dummy_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
     g_set_error(error, AWG_CONNECTION_MANAGER_DUMMY_ERROR, 1,
                 _("Neither amneziawg kernel module nor awg-quick is available"));

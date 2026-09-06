@@ -77,7 +77,7 @@ awg_connection_manager_external_is_available(void)
 }
 
 static gboolean
-awg_connection_manager_external_connect(AWGConnectionManager *mgr, GError **error)
+awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
     AWGConnectionManagerExternal *self = AWG_CONNECTION_MANAGER_EXTERNAL(mgr);
     AWGConnectionManagerExternalPrivate *priv = AWG_CONNECTION_MANAGER_EXTERNAL_GET_PRIVATE(self);
