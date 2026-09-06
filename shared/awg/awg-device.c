@@ -1725,6 +1725,52 @@ awg_device_is_valid(AWGDevice *self)
     return TRUE;
 }
 
+/* Human-readable reason why the device is invalid (for logs and D-Bus
+ * errors). Returns NULL when the device is valid. Mirrors the checks in
+ * awg_device_is_valid(), first failure wins. */
+gchar *
+awg_device_get_invalid_reason(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+    GList *node = NULL;
+    guint peer_idx = 0;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), g_strdup("Invalid device object"));
+
+    priv = awg_device_get_instance_private(self);
+
+    if (!priv->private_key) {
+        return g_strdup("PrivateKey is missing (check vpn.secrets and secret flags)");
+    }
+
+    if (g_list_length(priv->peers) == 0) {
+        return g_strdup("No peers configured");
+    }
+
+    if (!awg_validate_magic_headers_no_overlap(priv->h1, priv->h2, priv->h3, priv->h4)) {
+        return g_strdup("H1-H4 magic header ranges overlap");
+    }
+
+    if (!awg_validate_jmin_jmax(priv->jmin, priv->jmax)) {
+        return g_strdup("JMin is greater than JMax");
+    }
+
+    for (node = priv->peers; node; node = node->next, peer_idx++) {
+        AWGDevicePeer *peer = (AWGDevicePeer *)node->data;
+
+        if (awg_device_peer_is_valid(peer))
+            continue;
+
+        if (!awg_device_peer_get_public_key(peer))
+            return g_strdup_printf("Peer %u: PublicKey is missing", peer_idx + 1);
+        if (!awg_device_peer_get_endpoint(peer))
+            return g_strdup_printf("Peer %u: Endpoint is missing", peer_idx + 1);
+        return g_strdup_printf("Peer %u: AllowedIPs are missing", peer_idx + 1);
+    }
+
+    return NULL;
+}
+
 /**** AWGDevicePeer ****/
 
 AWGDevicePeer *

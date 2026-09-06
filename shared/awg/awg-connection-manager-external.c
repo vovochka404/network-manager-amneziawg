@@ -111,7 +111,12 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
     unlink(priv->conf_path);
     g_free(command);
 
-    return success && exit_status == 0;
+    if (!success)
+        return FALSE;
+
+    /* Report a non-zero awg-quick exit (e.g. "Configuration parsing error"
+     * from "awg setconf") instead of failing silently without a GError. */
+    return g_spawn_check_exit_status(exit_status, error);
 }
 
 static gboolean
@@ -149,7 +154,10 @@ awg_connection_manager_external_disconnect(AWGConnectionManager *mgr, GError **e
     unlink(priv->conf_path);
     g_free(command);
 
-    return success && exit_status == 0;
+    if (!success)
+        return FALSE;
+
+    return g_spawn_check_exit_status(exit_status, error);
 }
 
 static gboolean

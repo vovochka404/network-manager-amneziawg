@@ -130,6 +130,7 @@ gboolean awg_device_replace_peer(AWGDevice *self, guint index, AWGDevicePeer *ne
 const GList *awg_device_get_peers_list(AWGDevice *self);
 guint awg_device_get_peers_count(AWGDevice *self);
 gboolean awg_device_is_valid(AWGDevice *self);
+gchar *awg_device_get_invalid_reason(AWGDevice *self);
 void awg_device_free(AWGDevice *device);
 
 AWGDevicePeer *awg_device_peer_new(void);

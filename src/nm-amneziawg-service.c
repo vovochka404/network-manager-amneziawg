@@ -196,6 +196,10 @@ wg_disconnect(NMVpnServicePlugin *plugin,
 
     if (!awg_connection_manager_disconnect(priv->conn_manager, error)) {
         _LOGW("Error: Could not disconnect!");
+        if (error && !*error) {
+            g_set_error_literal(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                                "Could not disconnect");
+        }
         g_object_unref(priv->conn_manager);
         priv->conn_manager = NULL;
         return FALSE;
@@ -560,6 +564,17 @@ connect_worker(GTask *task, gpointer source_object, gpointer task_data, GCancell
         return;
     }
 
+    /* Pre-flight validation: a device without PrivateKey (lost vpn.secrets)
+     * or peers produces a keyless config that "awg setconf"/awg-quick rejects
+     * with "Configuration parsing error". Fail early with a clear message. */
+    g_autofree gchar *invalid_reason = awg_device_get_invalid_reason(device);
+    if (invalid_reason) {
+        g_object_unref(device);
+        g_task_return_new_error(task, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                                "Invalid VPN configuration: %s", invalid_reason);
+        return;
+    }
+
     AWGConnectionManager *conn_manager = awg_connection_manager_auto_new(data->if_name, device);
     if (!conn_manager) {
         g_object_unref(device);
@@ -672,6 +687,7 @@ connect_task_completed(GObject *source_object, GAsyncResult *res, gpointer user_
 
     if (!set_config(plugin, device, if_name, ip4_method_auto, ip6_method_auto)) {
         _LOGW("Error: Could not set config!");
+        nm_vpn_service_plugin_failure(plugin, NM_VPN_PLUGIN_FAILURE_CONNECT_FAILED);
     }
 
     g_clear_object(&device);
@@ -817,6 +833,11 @@ wg_new_secrets(NMVpnServicePlugin *plugin,
     const char *setting_name;
 
     if (wg_need_secrets(plugin, connection, &setting_name, error)) {
+        /* A FALSE return without a set error makes libnm emit
+         * "g_dbus_method_invocation_take_error: assertion 'error != NULL'"
+         * and NM sees "Remote peer disconnected". Always set the error. */
+        g_set_error(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
+                    "Required secrets for '%s' are still missing", setting_name);
         return FALSE;
     }
 

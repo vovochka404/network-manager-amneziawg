@@ -10,11 +10,15 @@
  */
 
 #include "awg/awg-config.h"
+#include "awg/awg-connection-manager-external.h"
+#include "awg/awg-connection-manager.h"
 #include "awg/awg-device.h"
+#include "awg/awg-nm-connection.h"
 #include "awg/awg-validate.h"
 #include <glib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static gchar *
@@ -915,6 +919,7 @@ test_awg_validate_jmin_jmax(void)
 static void
 test_awg_peer_clone_multi_allowed_ips(void)
 {
+
     AWGDevicePeer *peer = awg_device_peer_new();
     g_assert_nonnull(peer);
 
@@ -1067,6 +1072,219 @@ test_awg_device_save_load_extended(void)
     g_free(config_path);
 }
 
+/* Regression tests for https://github.com/.../issues (Arch Linux activation
+ * failure): a connection without PrivateKey/PresharedKey in vpn.secrets
+ * produces a keyless config that "awg setconf" rejects with
+ * "Configuration parsing error", and NM_FORCE_AWG_QUICK must select the
+ * external (awg-quick) manager. */
+
+static void
+test_nm_connection_secrets_roundtrip(void)
+{
+    gchar *config_path = get_test_config_path("test-config-ipv4.conf");
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    g_assert_nonnull(device);
+    g_assert_cmpstr(awg_device_get_private_key(device), ==, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+
+    const GList *peers = awg_device_get_peers_list(device);
+    g_assert_nonnull(peers);
+    g_assert_cmpstr(awg_device_peer_get_shared_key(peers->data), ==, "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w=");
+
+    /* config -> NMConnection (what "nmcli connection import" stores) */
+    NMConnection *connection = nm_simple_connection_new();
+    GError *error = NULL;
+    g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+    g_assert_no_error(error);
+
+    NMSettingVpn *s_vpn = nm_connection_get_setting_vpn(connection);
+    g_assert_nonnull(s_vpn);
+    g_assert_cmpstr(nm_setting_vpn_get_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY), ==,
+                    "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+
+    {
+        NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NOT_SAVED;
+        g_assert_true(nm_setting_get_secret_flags(NM_SETTING(s_vpn), NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, &flags, NULL));
+        g_assert_cmpint(flags, ==, NM_SETTING_SECRET_FLAG_NONE);
+    }
+
+    {
+        g_autofree gchar *psk_key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, 0);
+        g_assert_cmpstr(nm_setting_vpn_get_secret(s_vpn, psk_key), ==, "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w=");
+    }
+
+    /* NMConnection -> AWGDevice (what the service builds on activation) */
+    AWGDevice *device2 = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    g_assert_nonnull(device2);
+    g_assert_true(awg_device_is_valid(device2));
+    g_assert_cmpstr(awg_device_get_private_key(device2), ==, awg_device_get_private_key(device));
+
+    const GList *peers2 = awg_device_get_peers_list(device2);
+    g_assert_nonnull(peers2);
+    g_assert_cmpstr(awg_device_peer_get_shared_key(peers2->data), ==,
+                    awg_device_peer_get_shared_key(peers->data));
+
+    /* The generated awg-quick config must contain both keys */
+    g_autofree gchar *config_str = awg_device_create_config_string(device2);
+    g_assert_nonnull(config_str);
+    g_assert_nonnull(strstr(config_str, "PrivateKey = IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_nonnull(strstr(config_str, "PresharedKey = 2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w="));
+
+    g_object_unref(device2);
+    g_object_unref(connection);
+    g_object_unref(device);
+    g_free(config_path);
+}
+
+static void
+test_keyless_config_detected(void)
+{
+    /* A config without PrivateKey/PresharedKey is rejected at import time */
+    gchar *config_path = get_test_config_path("test-config-no-keys.conf");
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid AWG device configuration*");
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    g_assert_null(device);
+    g_test_assert_expected_messages();
+    g_free(config_path);
+
+    /* ... but the same keyless state can still reach the service through
+     * NMConnection restore (lost vpn.secrets), which performs no validation.
+     * That keyless device is what produced a "Configuration parsing error"
+     * from "awg setconf" on activation. */
+    AWGDevice *keyless = awg_device_new();
+    AWGDevicePeer *peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(keyless, peer));
+    g_object_unref(peer);
+
+    NMConnection *connection = nm_simple_connection_new();
+    GError *error = NULL;
+    g_assert_true(awg_device_save_to_nm_connection(keyless, connection, &error));
+    g_assert_no_error(error);
+
+    AWGDevice *restored = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    g_assert_nonnull(restored);
+    g_assert_false(awg_device_is_valid(restored));
+
+    g_autofree gchar *reason = awg_device_get_invalid_reason(restored);
+    g_assert_nonnull(reason);
+    g_assert_nonnull(strstr(reason, "PrivateKey"));
+
+    g_autofree gchar *config_str = awg_device_create_config_string(restored);
+    g_assert_nonnull(config_str);
+    g_assert_null(strstr(config_str, "PrivateKey"));
+
+    g_object_unref(restored);
+    g_object_unref(connection);
+    g_object_unref(keyless);
+}
+
+static void
+test_invalid_reason_messages(void)
+{
+    /* Valid device -> no reason */
+    gchar *config_path = get_test_config_path("test-config-ipv4.conf");
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    g_assert_nonnull(device);
+    g_assert_null(awg_device_get_invalid_reason(device));
+
+    /* No peers */
+    {
+        AWGDevice *empty = awg_device_new();
+        awg_device_set_private_key(empty, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+        g_assert_false(awg_device_is_valid(empty));
+        g_autofree gchar *reason = awg_device_get_invalid_reason(empty);
+        g_assert_nonnull(reason);
+        g_assert_nonnull(strstr(reason, "peer"));
+        g_object_unref(empty);
+    }
+
+    /* Peer without public key (injected via replace_peer, which unlike
+     * add_peer performs no validation, same as NMConnection restore) */
+    {
+        gchar *peer_config_path = get_test_config_path("test-config-ipv4.conf");
+        AWGDevice *d = awg_device_new_from_config(peer_config_path);
+        g_assert_nonnull(d);
+        g_free(peer_config_path);
+        AWGDevicePeer *bad = awg_device_peer_new();
+        g_assert_true(awg_device_peer_set_endpoint(bad, "192.168.1.1:51820"));
+        g_assert_true(awg_device_peer_set_allowed_ips_from_string(bad, "0.0.0.0/0"));
+        g_assert_true(awg_device_replace_peer(d, 0, bad));
+        g_object_unref(bad);
+        g_assert_false(awg_device_is_valid(d));
+        g_autofree gchar *reason = awg_device_get_invalid_reason(d);
+        g_assert_nonnull(reason);
+        g_assert_nonnull(strstr(reason, "Peer 1"));
+        g_assert_nonnull(strstr(reason, "PublicKey"));
+        g_object_unref(d);
+    }
+
+    /* Overlapping H1-H4 ranges */
+    {
+        AWGDevice *d = awg_device_new();
+        awg_device_set_private_key(d, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+        awg_device_set_h1(d, "1-100");
+        awg_device_set_h2(d, "50-150");
+        AWGDevicePeer *peer = awg_device_peer_new();
+        g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+        g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+        g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+        g_assert_true(awg_device_add_peer(d, peer));
+        g_object_unref(peer);
+        g_assert_false(awg_device_is_valid(d));
+        g_autofree gchar *reason = awg_device_get_invalid_reason(d);
+        g_assert_nonnull(reason);
+        g_assert_nonnull(strstr(reason, "overlap"));
+        g_object_unref(d);
+    }
+
+    g_object_unref(device);
+    g_free(config_path);
+}
+
+static void
+test_force_awg_quick_selects_external(void)
+{
+    /* Hermetic stub for awg-quick so the test does not depend on the host */
+    g_autofree gchar *stub_path = g_build_filename(g_get_tmp_dir(), "test-awg-quick-stub", NULL);
+    g_assert_true(g_file_set_contents(stub_path, "#!/bin/sh\nexit 0\n", -1, NULL));
+    g_assert_cmpint(chmod(stub_path, 0755), ==, 0);
+
+    const gchar *old_quick_path = g_getenv("NM_AWG_QUICK_PATH");
+    const gchar *old_force = g_getenv("NM_FORCE_AWG_QUICK");
+    g_autofree gchar *saved_quick_path = old_quick_path ? g_strdup(old_quick_path) : NULL;
+    g_autofree gchar *saved_force = old_force ? g_strdup(old_force) : NULL;
+
+    g_setenv("NM_AWG_QUICK_PATH", stub_path, TRUE);
+    g_assert_true(awg_connection_manager_external_is_available());
+
+    g_setenv("NM_FORCE_AWG_QUICK", "1", TRUE);
+
+    AWGDevice *device = awg_device_new();
+    g_assert_nonnull(device);
+    AWGConnectionManager *mgr = awg_connection_manager_auto_new("testawg0", device);
+    g_assert_nonnull(mgr);
+    /* Must be the external manager even if the netlink module is present */
+    g_assert_true(AWG_IS_CONNECTION_MANAGER_EXTERNAL(mgr));
+    g_assert_true(awg_connection_manager_manages_routes(mgr));
+
+    g_object_unref(mgr);
+    g_object_unref(device);
+
+    if (saved_quick_path)
+        g_setenv("NM_AWG_QUICK_PATH", saved_quick_path, TRUE);
+    else
+        g_unsetenv("NM_AWG_QUICK_PATH");
+    if (saved_force)
+        g_setenv("NM_FORCE_AWG_QUICK", saved_force, TRUE);
+    else
+        g_unsetenv("NM_FORCE_AWG_QUICK");
+    unlink(stub_path);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1128,6 +1346,10 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/validate/magic-headers-no-overlap", test_awg_validate_magic_headers_no_overlap);
     g_test_add_func("/awg/validate/jmin-jmax", test_awg_validate_jmin_jmax);
     g_test_add_func("/awg/peer/clone-multi-allowed-ips", test_awg_peer_clone_multi_allowed_ips);
+    g_test_add_func("/awg/nm-connection/secrets-roundtrip", test_nm_connection_secrets_roundtrip);
+    g_test_add_func("/awg/nm-connection/keyless-config-detected", test_keyless_config_detected);
+    g_test_add_func("/awg/device/invalid-reason", test_invalid_reason_messages);
+    g_test_add_func("/awg/manager/force-quick-selects-external", test_force_awg_quick_selects_external);
 
     return g_test_run();
 }
