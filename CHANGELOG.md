@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.9.11] - 2026-09-06
+
+### Major Changes
+
+#### Non-blocking Connection Setup
+- **Async connection via GTask**: service `connect()` no longer blocks the main loop (previously the plugin froze after a failed handshake — the stalled loop left D-Bus `NeedSecrets` unanswered). The connection now runs in a `GTask` worker thread; a second `Connect` while one is in progress returns `WRONG_STATE`; a failed `set_config()` signals `CONNECT_FAILED` instead of stalling NM into a timeout. The connection manager `connect()` signature now takes a `GCancellable *`
+
+#### AmneziaWG Kernel ABI Compatibility
+- **Support old and current kernel ABIs**: magic headers (H1–H4) changed from NUL strings to packed u64 ranges and peer keepalive from u16 to u32 in newer kernels. The format is auto-detected from the loaded module version (3.x = new ABI), defaulting to the new ABI with legacy fallback when the version cannot be read
+
+### Bug Fixes
+
+#### VPN Plugin Factory Export
+- **Fixed `nmcli connection import type amneziawg`**: `nm_vpn_editor_plugin_factory` was compiled only into the editor target where the version script hides it — the main plugin declared the symbol but never compiled the file, failing with "undefined symbol" on all platforms. The file is now part of the main plugin target, and editor-plugin linkage was moved out of the core library
+
+#### Secrets & Config Handling
+- **Fixed activation failure with `Unknown reason`**: `new_secrets()` could return `FALSE` without setting a `GError`, making libnm emit `g_dbus_method_invocation_take_error: assertion 'error != NULL'` so NM saw `Remote peer disconnected`. Every D-Bus virtual now sets `*error` on all `FALSE` paths, including fallbacks from manager calls
+- **Pre-flight config validation**: `connect_worker` rejects invalid devices via the new `awg_device_get_invalid_reason()` before launching any backend. A keyless device (lost `vpn.secrets`) previously produced a config that `awg setconf`/awg-quick rejected with `Configuration parsing error`; the error now names the missing piece (`PrivateKey is missing…`, `Peer N: …`)
+- **Report awg-quick failures**: the external manager converts a non-zero `awg-quick` exit status into a `GError` via `g_spawn_check_exit_status()` instead of failing silently
+
+#### Netlink Robustness
+- **Use absolute modprobe path** in `load_kernel_module()`
+- **Copy input string before modifying** in `add_ip_address()` (was writing through a const pointer)
+- **Use `strdup()` instead of `g_strdup()`** for `wg_device` string fields (freed with `free()`)
+- **Check `inet_pton()` return value** when parsing Allowed IPs — malformed entries are skipped with a warning instead of producing garbage netlink messages
+- **Propagate `add_ip_address()` failures** in the connect flow instead of bringing up an address-less interface
+- **Return early when `if_nametoindex()` fails** instead of sending netlink messages with `ifi_index = 0`
+- **Save `errno` before GLib type-check macros** in route functions (the macros may clobber it before `g_set_error()` reads it)
+
+### Improvements
+
+#### Documentation
+- **Failure handling contract in AGENTS.md**: documents the D-Bus error contract, pre-flight validation, and backend exit-code reporting rules
+
+### Testing
+
+- **Added reproducing tests**: secrets round-trip through NMConnection, keyless-config detection, invalid-reason coverage, and force-quick backend selection with a hermetic awg-quick stub, plus a new `tests/test-config-no-keys.conf` fixture
+
+---
+
 ## [0.9.9] — 2026-04-26
 
 ### Bug Fixes
