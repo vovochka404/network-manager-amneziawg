@@ -782,6 +782,14 @@ The service implements these methods from `NMVpnServicePlugin`:
 5. NM calls `connect()` with connection containing the key
 6. Plugin creates AWGDevice from connection (key now available)
 
+### Failure Contract
+
+No silent failures: every failure path must produce a diagnosable error, never a NULL `GError` or a bare log line.
+
+- **D-Bus virtuals**: any `NMVpnServicePlugin` method returning `FALSE` must set `*error`. A `FALSE` with NULL error makes libnm emit `g_dbus_method_invocation_take_error: assertion 'error != NULL'`, send no reply, and NM fails activation with `Unknown reason` (`NoReply: Remote peer disconnected`). Guard every `FALSE` path, including fallbacks from manager calls (`new_secrets()` with still-missing secrets, `disconnect()` when the manager fails error-less).
+- **Pre-flight validation**: `connect_worker` rejects invalid devices via `awg_device_get_invalid_reason()` before launching any backend. A device without PrivateKey (lost `vpn.secrets`) or peers otherwise produces a keyless config that `awg setconf`/awg-quick rejects with `Configuration parsing error`. Name the missing piece (`PrivateKey is missing…`, `Peer N: …`) so the log is actionable.
+- **Backend exit codes**: the external manager reports non-zero `awg-quick` status via `g_spawn_check_exit_status()` instead of failing without an error. A failed `set_config()` signals `CONNECT_FAILED` instead of stalling NM into a timeout.
+
 ### UI Integration
 
 The properties editor includes combo boxes for selecting secret flags:
