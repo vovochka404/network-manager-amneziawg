@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <glib.h>
 #include <linux/genetlink.h>
 #include <linux/if_link.h>
 #include <linux/netlink.h>
@@ -23,6 +24,41 @@
 #include <unistd.h>
 
 #include "amneziawg.h"
+#include "awg/awg-validate.h"
+
+/*
+ * Kernel ABI for AmneziaWG changed between versions:
+ *  - magic headers (H1..H4) were NUL strings in old kernels and became
+ *    packed u64 ranges (u32_range_t, hi<<32|lo) in newer ones;
+ *  - peer keepalive interval was u16 and became u32.
+ * Detect the format from the loaded module version (3.x = new ABI,
+ * older = legacy). When the version cannot be read, default to the new
+ * ABI and fall back to legacy if the kernel rejects the request.
+ */
+static bool
+awg_kernel_uses_current_abi(bool *known)
+{
+    const char *path = "/sys/module/amneziawg/version";
+    char buf[64];
+    FILE *f;
+    unsigned major;
+
+    *known = false;
+    f = fopen(path, "r");
+    if (!f)
+        return true;
+    if (fgets(buf, sizeof(buf), f) == NULL) {
+        fclose(f);
+        return true;
+    }
+    fclose(f);
+
+    if (sscanf(buf, "%u", &major) != 1)
+        return true;
+
+    *known = true;
+    return major >= 3;
+}
 
 /* wireguard.h netlink uapi: */
 
@@ -430,6 +466,32 @@ static void
 mnl_attr_put_u32(struct nlmsghdr *nlh, uint16_t type, uint32_t data)
 {
     mnl_attr_put(nlh, type, sizeof(uint32_t), &data);
+}
+
+static void
+mnl_attr_put_u64(struct nlmsghdr *nlh, uint16_t type, uint64_t data)
+{
+    mnl_attr_put(nlh, type, sizeof(uint64_t), &data);
+}
+
+static void
+mnl_attr_put_strz(struct nlmsghdr *nlh, uint16_t type, const char *data);
+
+static void
+awg_mnl_attr_put_magic_header(struct nlmsghdr *nlh, uint16_t type, const char *str, bool current_abi)
+{
+    guint32 lo, hi;
+
+    /* Old kernels parse the "start-end" range themselves from a NUL string;
+     * newer ones expect a packed u32_range_t (u64 = hi<<32 | lo).
+     */
+    if (!current_abi) {
+        mnl_attr_put_strz(nlh, type, str);
+        return;
+    }
+
+    if (awg_magic_header_parse(str, &lo, &hi))
+        mnl_attr_put_u64(nlh, type, ((uint64_t)hi << 32) | lo);
 }
 
 static void
@@ -1130,6 +1192,7 @@ int
 wg_set_device(wg_device *dev)
 {
     int ret = 0;
+    bool current_abi, known_abi;
     wg_peer *peer = NULL;
     wg_allowedip *allowedip = NULL;
     struct nlattr *peers_nest, *peer_nest, *allowedips_nest, *allowedip_nest;
@@ -1139,6 +1202,8 @@ wg_set_device(wg_device *dev)
     nlg = mnlg_socket_open(WG_GENL_NAME, WG_GENL_VERSION);
     if (!nlg)
         return -errno;
+
+    current_abi = awg_kernel_uses_current_abi(&known_abi);
 
 again:
     nlh = mnlg_msg_prepare(nlg, WG_CMD_SET_DEVICE, NLM_F_REQUEST | NLM_F_ACK);
@@ -1168,13 +1233,13 @@ again:
         if (dev->flags & WGDEVICE_HAS_S4)
             mnl_attr_put_u16(nlh, WGDEVICE_A_S4, dev->transport_packet_junk_size);
         if (dev->flags & WGDEVICE_HAS_H1 && dev->init_packet_magic_header)
-            mnl_attr_put_strz(nlh, WGDEVICE_A_H1, dev->init_packet_magic_header);
+            awg_mnl_attr_put_magic_header(nlh, WGDEVICE_A_H1, dev->init_packet_magic_header, current_abi);
         if (dev->flags & WGDEVICE_HAS_H2 && dev->response_packet_magic_header)
-            mnl_attr_put_strz(nlh, WGDEVICE_A_H2, dev->response_packet_magic_header);
+            awg_mnl_attr_put_magic_header(nlh, WGDEVICE_A_H2, dev->response_packet_magic_header, current_abi);
         if (dev->flags & WGDEVICE_HAS_H3 && dev->underload_packet_magic_header)
-            mnl_attr_put_strz(nlh, WGDEVICE_A_H3, dev->underload_packet_magic_header);
+            awg_mnl_attr_put_magic_header(nlh, WGDEVICE_A_H3, dev->underload_packet_magic_header, current_abi);
         if (dev->flags & WGDEVICE_HAS_H4 && dev->transport_packet_magic_header)
-            mnl_attr_put_strz(nlh, WGDEVICE_A_H4, dev->transport_packet_magic_header);
+            awg_mnl_attr_put_magic_header(nlh, WGDEVICE_A_H4, dev->transport_packet_magic_header, current_abi);
         if (dev->flags & WGDEVICE_HAS_I1 && dev->i1)
             mnl_attr_put_strz(nlh, WGDEVICE_A_I1, dev->i1);
         if (dev->flags & WGDEVICE_HAS_I2 && dev->i2)
@@ -1219,7 +1284,8 @@ again:
                     goto toobig_peers;
             }
             if (peer->flags & WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL) {
-                if (!mnl_attr_put_u16_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval))
+                if (!(current_abi ? mnl_attr_put_u32_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval)
+                                  : mnl_attr_put_u16_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval)))
                     goto toobig_peers;
             }
         }
@@ -1289,6 +1355,21 @@ send:
     errno = 0;
     if (mnlg_socket_recv_run(nlg, NULL, NULL) < 0) {
         ret = errno ? -errno : -EINVAL;
+        /* If we guessed the wrong ABI (module version unreadable), recreate
+         * the interface and retry once with the legacy formats. */
+        if (ret == -EINVAL && !known_abi) {
+            known_abi = true;
+            current_abi = false;
+            peer = NULL;
+            allowedip = NULL;
+            ret = add_del_iface(dev->name, false);
+            if (ret < 0)
+                goto out;
+            ret = add_del_iface(dev->name, true);
+            if (ret < 0)
+                goto out;
+            goto again;
+        }
         goto out;
     }
     if (peer)
