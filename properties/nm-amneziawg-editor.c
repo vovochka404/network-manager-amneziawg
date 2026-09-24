@@ -114,6 +114,35 @@ check_interface_magic_header(const char *str)
 }
 
 static gboolean
+check_interface_header_protection_key(const char *str)
+{
+    guchar *decoded;
+    gsize len = 0;
+
+    if (!str || !str[0])
+        return TRUE;
+
+    if (!awg_validate_base64(str))
+        return FALSE;
+
+    decoded = g_base64_decode(str, &len);
+    g_free(decoded);
+
+    return len == 32;
+}
+
+static gboolean
+check_interface_range(const char *str)
+{
+    guint32 packed;
+
+    if (!str || !str[0])
+        return TRUE;
+
+    return awg_range_parse_u32(str, &packed);
+}
+
+static gboolean
 check_interface_private_key(const char *str)
 {
     return awg_validate_base64(str) && str && str[0];
@@ -252,6 +281,27 @@ check_validity(AmneziaWGEditor *self, GError **error)
         success = FALSE;
     }
     if (!check(priv, "interface_i5_entry", check_interface_i_packet, AWG_CONFIG_DEVICE_I5, FALSE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_header_protection_key_entry", check_interface_header_protection_key, AWG_CONFIG_DEVICE_HEADER_PROTECTION_KEY, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_content_padding_addition_entry", check_interface_range, AWG_CONFIG_DEVICE_CONTENT_PADDING_ADDITION, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_rekey_after_time_entry", check_interface_range, AWG_CONFIG_DEVICE_REKEY_AFTER_TIME, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_rekey_timeout_entry", check_interface_range, AWG_CONFIG_DEVICE_REKEY_TIMEOUT, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_reject_after_time_entry", check_interface_range, AWG_CONFIG_DEVICE_REJECT_AFTER_TIME, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_keepalive_timeout_entry", check_interface_range, AWG_CONFIG_DEVICE_KEEPALIVE_TIMEOUT, TRUE, error)) {
+        success = FALSE;
+    }
+    if (!check(priv, "interface_max_handshake_attempts_entry", check_interface_range, AWG_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS, TRUE, error)) {
         success = FALSE;
     }
 
@@ -466,6 +516,44 @@ fill_interface_from_connection(AmneziaWGEditor *self)
             widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_h4_entry"));
             if (widget)
                 set_widget_text(priv->builder, "interface_h4_entry", "4");
+        }
+    }
+
+    // AmneziaWG 3.1 parameters (empty on older servers)
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY);
+    set_widget_text(priv->builder, "interface_header_protection_key_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION);
+    set_widget_text(priv->builder, "interface_content_padding_addition_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME);
+    set_widget_text(priv->builder, "interface_rekey_after_time_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT);
+    set_widget_text(priv->builder, "interface_rekey_timeout_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME);
+    set_widget_text(priv->builder, "interface_reject_after_time_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT);
+    set_widget_text(priv->builder, "interface_keepalive_timeout_entry", str ?: "");
+
+    str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS);
+    set_widget_text(priv->builder, "interface_max_handshake_attempts_entry", str ?: "");
+
+    {
+        GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_random_trailers_check"));
+        if (toggle) {
+            str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS);
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(toggle), g_strcmp0(str, "on") == 0);
+        }
+    }
+
+    {
+        GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_disable_cookies_check"));
+        if (toggle) {
+            str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES);
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(toggle), g_strcmp0(str, "on") == 0);
         }
     }
 }
@@ -1220,6 +1308,42 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     if (widget)
         g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
 
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_header_protection_key_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_content_padding_addition_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_rekey_after_time_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_rekey_timeout_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_reject_after_time_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_keepalive_timeout_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_max_handshake_attempts_entry"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_random_trailers_check"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "toggled", G_CALLBACK(stuff_changed_cb), self);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_disable_cookies_check"));
+    if (widget)
+        g_signal_connect(G_OBJECT(widget), "toggled", G_CALLBACK(stuff_changed_cb), self);
+
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "peer_add_button"));
     if (widget)
         g_signal_connect(G_OBJECT(widget), "clicked", G_CALLBACK(peer_add_button_clicked), self);
@@ -1442,6 +1566,79 @@ save_interface_to_connection(AmneziaWGEditor *self)
         nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, str);
     }
     g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_header_protection_key_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_header_protection_key_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_content_padding_addition_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_content_padding_addition_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_rekey_after_time_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_rekey_after_time_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_rekey_timeout_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_rekey_timeout_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_reject_after_time_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_reject_after_time_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_keepalive_timeout_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_keepalive_timeout_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT);
+    g_free(str);
+
+    str = get_widget_text(priv->builder, "interface_max_handshake_attempts_entry");
+    if (str && str[0])
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS, str);
+    else if (gtk_builder_get_object(priv->builder, "interface_max_handshake_attempts_entry"))
+        nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS);
+    g_free(str);
+
+    /* The 3.1 keys are written only when they carry something, so a profile
+     * that does not use them stays free of them and clearing a field really
+     * clears it. */
+    {
+        GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_random_trailers_check"));
+
+        if (toggle) {
+            if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(toggle))) {
+                nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS, "on");
+            } else {
+                nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS);
+            }
+        }
+
+        toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_disable_cookies_check"));
+        if (toggle) {
+            if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(toggle))) {
+                nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES, "on");
+            } else {
+                nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES);
+            }
+        }
+    }
 
     if (priv->device) {
         const GList *peers = awg_device_get_peers_list(priv->device);
