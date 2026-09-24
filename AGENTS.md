@@ -1058,7 +1058,7 @@ Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the
 
 Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message (`check_awg31_support()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`; `awg_device_has_awg31_params()` decides whether the configuration needs them at all. When the version cannot be read the attributes are still sent and the kernel decides, as before.
 
-The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer (`awg --version` prints the version). The plugin does not verify the tools version yet.
+The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer, and the backend checks that before writing anything — it runs `awg --version` on the binary `awg-quick` resolves from `PATH` (`external_check_awg31_support()` in `awg-connection-manager-external.c`) and refuses with an actionable message. An unreadable or unparseable version is not blocked, the command then reports its own failure.
 
 ### Extended wg_device/wg_peer Structures (shared/amneziawg.h)
 
