@@ -190,8 +190,8 @@ check(const AmneziaWGEditorPrivate *priv,
         gtk_style_context_remove_class(gtk_widget_get_style_context(widget), "error");
     else {
         gtk_style_context_add_class(gtk_widget_get_style_context(widget), "error");
-        // only set the error if it's NULL
-        if (error == NULL && set_error) {
+        // only set the error if there is none yet
+        if (error && !*error && set_error) {
             g_set_error(error,
                         NMV_EDITOR_PLUGIN_ERROR,
                         NMV_EDITOR_PLUGIN_ERROR_INVALID_PROPERTY,
