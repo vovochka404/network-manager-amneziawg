@@ -138,11 +138,10 @@ import(NMVpnEditorPlugin *iface, const char *path, GError **error)
     return connection;
 }
 
-static gboolean
-export(NMVpnEditorPlugin *iface,
-       const char *path,
-       NMConnection *connection,
-       GError **error)
+static gboolean export(NMVpnEditorPlugin *iface,
+                       const char *path,
+                       NMConnection *connection,
+                       GError **error)
 {
     AWGDevice *device;
     gchar *config_str;
