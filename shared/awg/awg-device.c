@@ -66,6 +66,15 @@ struct AWGDevicePrivate {
     gchar *i3;
     gchar *i4;
     gchar *i5;
+    gchar *header_protection_key;
+    gchar *content_padding_addition;
+    gchar *rekey_after_time;
+    gchar *rekey_timeout;
+    gchar *reject_after_time;
+    gchar *keepalive_timeout;
+    gchar *max_handshake_attempts;
+    gboolean random_trailers;
+    gboolean disable_cookies;
     guint32 mtu;
     gchar *pre_up;
     gchar *post_up;
@@ -167,6 +176,15 @@ awg_device_init(AWGDevice *self)
     priv->i3 = NULL;
     priv->i4 = NULL;
     priv->i5 = NULL;
+    priv->header_protection_key = NULL;
+    priv->content_padding_addition = NULL;
+    priv->rekey_after_time = NULL;
+    priv->rekey_timeout = NULL;
+    priv->reject_after_time = NULL;
+    priv->keepalive_timeout = NULL;
+    priv->max_handshake_attempts = NULL;
+    priv->random_trailers = FALSE;
+    priv->disable_cookies = FALSE;
     priv->mtu = 0;
     priv->pre_up = NULL;
     priv->post_up = NULL;
@@ -199,6 +217,13 @@ awg_device_finalize(GObject *object)
     g_clear_pointer(&priv->i3, g_free);
     g_clear_pointer(&priv->i4, g_free);
     g_clear_pointer(&priv->i5, g_free);
+    g_clear_pointer(&priv->header_protection_key, g_free);
+    g_clear_pointer(&priv->content_padding_addition, g_free);
+    g_clear_pointer(&priv->rekey_after_time, g_free);
+    g_clear_pointer(&priv->rekey_timeout, g_free);
+    g_clear_pointer(&priv->reject_after_time, g_free);
+    g_clear_pointer(&priv->keepalive_timeout, g_free);
+    g_clear_pointer(&priv->max_handshake_attempts, g_free);
     g_clear_pointer(&priv->pre_up, g_free);
     g_clear_pointer(&priv->post_up, g_free);
     g_clear_pointer(&priv->pre_down, g_free);
@@ -1459,6 +1484,322 @@ awg_device_set_i5(AWGDevice *self, const gchar *i5)
     g_clear_pointer(&priv->i5, g_free);
     priv->i5 = g_strdup(i5);
     return TRUE;
+}
+
+const gchar *
+awg_device_get_header_protection_key(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->header_protection_key;
+}
+
+gboolean
+awg_device_set_header_protection_key(AWGDevice *self, const gchar *key)
+{
+    AWGDevicePrivate *priv;
+    gchar *decoded_key;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!key || !*key) {
+        g_clear_pointer(&priv->header_protection_key, g_free);
+        return TRUE;
+    }
+
+    decoded_key = awg_key_from_base64(key);
+    if (!decoded_key) {
+        g_warning("Invalid HeaderProtectionKey: %s (expected %d-byte base64 key)", key, AWG_KEY_SIZE);
+        return FALSE;
+    }
+    g_free(decoded_key);
+
+    g_clear_pointer(&priv->header_protection_key, g_free);
+    priv->header_protection_key = g_strdup(key);
+    return TRUE;
+}
+
+/* The AWG 3.1 range values below are validated with awg_range_parse_u32 so that
+ * anything accepted here is also encodable for the kernel (a u16 range packed as
+ * hi<<16 | lo); a wider check would accept values that netlink silently drops.
+ */
+
+const gchar *
+awg_device_get_content_padding_addition(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->content_padding_addition;
+}
+
+gboolean
+awg_device_set_content_padding_addition(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->content_padding_addition, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid ContentPaddingAddition: %s (expected a number or range within 0-%u, e.g. 10 or 2-10)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->content_padding_addition, g_free);
+    priv->content_padding_addition = g_strdup(str);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_rekey_after_time(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->rekey_after_time;
+}
+
+gboolean
+awg_device_set_rekey_after_time(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->rekey_after_time, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid RekeyAfterTime: %s (expected a number or range within 0-%u, e.g. 120 or 115-125)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->rekey_after_time, g_free);
+    priv->rekey_after_time = g_strdup(str);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_rekey_timeout(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->rekey_timeout;
+}
+
+gboolean
+awg_device_set_rekey_timeout(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->rekey_timeout, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid RekeyTimeout: %s (expected a number or range within 0-%u, e.g. 5 or 5-6)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->rekey_timeout, g_free);
+    priv->rekey_timeout = g_strdup(str);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_reject_after_time(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->reject_after_time;
+}
+
+gboolean
+awg_device_set_reject_after_time(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->reject_after_time, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid RejectAfterTime: %s (expected a number or range within 0-%u, e.g. 180 or 175-185)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->reject_after_time, g_free);
+    priv->reject_after_time = g_strdup(str);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_keepalive_timeout(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->keepalive_timeout;
+}
+
+gboolean
+awg_device_set_keepalive_timeout(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->keepalive_timeout, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid KeepaliveTimeout: %s (expected a number or range within 0-%u, e.g. 10 or 10-12)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->keepalive_timeout, g_free);
+    priv->keepalive_timeout = g_strdup(str);
+    return TRUE;
+}
+
+const gchar *
+awg_device_get_max_handshake_attempts(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), NULL);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->max_handshake_attempts;
+}
+
+gboolean
+awg_device_set_max_handshake_attempts(AWGDevice *self, const gchar *str)
+{
+    AWGDevicePrivate *priv;
+    guint32 packed;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    if (!str || !*str) {
+        g_clear_pointer(&priv->max_handshake_attempts, g_free);
+        return TRUE;
+    }
+
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid MaxHandshakeAttempts: %s (expected a number or range within 0-%u, e.g. 18 or 16-20)", str, G_MAXUINT16);
+        return FALSE;
+    }
+
+    g_clear_pointer(&priv->max_handshake_attempts, g_free);
+    priv->max_handshake_attempts = g_strdup(str);
+    return TRUE;
+}
+
+gboolean
+awg_device_get_random_trailers(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->random_trailers;
+}
+
+gboolean
+awg_device_set_random_trailers(AWGDevice *self, gboolean enabled)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    priv->random_trailers = enabled;
+    return TRUE;
+}
+
+gboolean
+awg_device_get_disable_cookies(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    return priv->disable_cookies;
+}
+
+gboolean
+awg_device_set_disable_cookies(AWGDevice *self, gboolean enabled)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    priv->disable_cookies = enabled;
+    return TRUE;
+}
+
+gboolean
+awg_device_has_awg31_params(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
+    priv = awg_device_get_instance_private(self);
+
+    return (priv->header_protection_key && *priv->header_protection_key) ||
+           (priv->content_padding_addition && *priv->content_padding_addition) ||
+           (priv->rekey_after_time && *priv->rekey_after_time) ||
+           (priv->rekey_timeout && *priv->rekey_timeout) ||
+           (priv->reject_after_time && *priv->reject_after_time) ||
+           (priv->keepalive_timeout && *priv->keepalive_timeout) ||
+           (priv->max_handshake_attempts && *priv->max_handshake_attempts) ||
+           priv->random_trailers || priv->disable_cookies;
 }
 
 guint32

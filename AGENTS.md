@@ -231,6 +231,9 @@ Validators are defined in `shared/awg/awg-validate.c`.
 | `awg_validate_jmin_jmax()` | Validates jmin <= jmax | - |
 | `awg_validate_allowed_ips()` | Validates allowed IPs subnets | - |
 | `awg_magic_header_parse()` | Parses magic header to start/end | - |
+| `awg_range_parse_u32()` | Packs a u16 range (`lo-hi` or `lo`) the way the kernel stores it | `hi<<16 \| lo`, components 0-65535 |
+| `awg_version_parse()` | Parses `major[.minor]` out of a version string | Leading non-digits skipped, so module versions and the tools banner both parse |
+| `awg_version_at_least()` | Feature gating against a minimum version | Unknown/unparseable version counts as supported |
 
 **Removed unused validators:** `awg_validate_dns`, `awg_validate_keep_alive`, `awg_validate_ip_or_empty`, `awg_validate_header_size`
 
@@ -708,6 +711,15 @@ This means partial configuration is NOT possible - all params must be valid toge
 | NM_AWG_VPN_CONFIG_DEVICE_I3 | connection-i3 | no |
 | NM_AWG_VPN_CONFIG_DEVICE_I4 | connection-i4 | no |
 | NM_AWG_VPN_CONFIG_DEVICE_I5 | connection-i5 | no |
+| NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY | connection-header-protection-key | no |
+| NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION | connection-content-padding-addition | no |
+| NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME | connection-rekey-after-time | no |
+| NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT | connection-rekey-timeout | no |
+| NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME | connection-reject-after-time | no |
+| NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT | connection-keepalive-timeout | no |
+| NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS | connection-max-handshake-attempts | no |
+| NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS | connection-random-trailers | no |
+| NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES | connection-disable-cookies | no |
 
 **Peer (NM_AWG_VPN_CONFIG_PEER_*, pattern with %d):**
 | Constant | Key | Secret |
@@ -987,7 +999,7 @@ struct _AWGConnectionManagerInterface {
 
 - `awg_connection_manager_dummy_is_available()` - always returns TRUE
 - `awg_connection_manager_external_is_available()` - checks for awg-quick presence
-- `awg_connection_manager_netlink_is_available()` - checks for amneziawg/wireguard kernel module
+- `awg_connection_manager_netlink_is_available()` - loads the `amneziawg` kernel module if needed (`modprobe`) and reports whether it is present
 
 ### Route Management
 
@@ -1020,9 +1032,9 @@ Selection order:
 
 The `wgdevice_attribute` enum in `shared/amneziawg.h` must match the kernel enum exactly. Missing attributes cause incorrect netlink messages.
 
-Critical value: `WGDEVICE_A_PEER = 18` (between WGDEVICE_A_H4 and WGDEVICE_A_S3). Missing this causes all subsequent attribute types (S3, S4, I1-I5) to be off by one.
+Critical value: `WGDEVICE_A_PEER = 18` (between WGDEVICE_A_H4 and WGDEVICE_A_S3). Missing this causes all subsequent attribute types (S3, S4, I1-I5 and the AWG 3.1 attributes) to be off by one.
 
-Reference: `/usr/src/amneziawg-1.0.20260210/uapi/wireguard.h` and `/home/vovochka/src/amneziawg-tools/src/containers.h`
+Reference: `amneziawg-linux-kernel-module` `src/uapi/wireguard.h` (tag `v3.1.20260812`, `WGDEVICE_A_MAX = __WGDEVICE_A_LAST - 1` at line 217) and `amneziawg-tools` `src/containers.h`
 
 Uses built-in mini-libmnl from `shared/amneziawg.c` for:
 - Creating/removing interface via genetlink
@@ -1030,9 +1042,23 @@ Uses built-in mini-libmnl from `shared/amneziawg.c` for:
 - Adding IP addresses via RTM_NEWADDR
 - Bringing interface up/down via RTM_SETLINK
 
-Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5
+Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the AWG 3.1 set (header protection key, content padding addition, rekey/reject/keepalive ranges, max handshake attempts, random trailers, disable cookies)
 
-**IMPORTANT:** `WG_GENL_VERSION` must be 2 to match the kernel module (see `/usr/src/amneziawg-1.0.20260210/uapi/wireguard.h:161`).
+**IMPORTANT:** `WG_GENL_VERSION` is **not** a compatibility gate. The 3.x module declares version 3 (`amneziawg-linux-kernel-module/src/uapi/wireguard.h:161`), the kernel stamps that value on replies only and never validates the version of an incoming `genlmsghdr`, and the vendored mini-libmnl in `shared/amneziawg.c` does not compare it either. What matters is attribute compatibility, and that is derived from the module *release* version (`/sys/module/amneziawg/version`) — see "AmneziaWG 3.1 Attributes" below.
+
+#### AmneziaWG 3.1 Attributes (module 3.0+)
+
+`WGDEVICE_A_HEADER_PROTECTION_KEY` … `WGDEVICE_A_DISABLE_COOKIES` are the last nine entries of the kernel's `wgdevice_attribute` enum. They appeared in module release 3.0 (`v3.0.20260730`); the last 1.x release (`v1.0.20260725`) ends the enum at `WGDEVICE_A_I5` and encodes H1-H4 as `NLA_NUL_STRING` instead of packed `NLA_U64` ranges.
+
+| Parameter (`.conf`) | Netlink attribute | Encoding |
+|---|---|---|
+| `HeaderProtectionKey` | `WGDEVICE_A_HEADER_PROTECTION_KEY` | 32 raw bytes (kernel policy `NLA_POLICY_EXACT_LEN(32)`) |
+| `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts` | matching `WGDEVICE_A_*` | `u16_range_t` packed as `hi<<16 \| lo`, transmitted as `u32` |
+| `RandomTrailers`, `DisableCookies` | `WGDEVICE_A_RANDOM_TRAILERS`, `WGDEVICE_A_DISABLE_COOKIES` | `u8` flag, only sent when enabled (`= on`) |
+
+Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message (`check_awg31_support()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`; `awg_device_has_awg31_params()` decides whether the configuration needs them at all. When the version cannot be read the attributes are still sent and the kernel decides, as before.
+
+The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer (`awg --version` prints the version). The plugin does not verify the tools version yet.
 
 ### Extended wg_device/wg_peer Structures (shared/amneziawg.h)
 
@@ -1041,10 +1067,11 @@ AmneziaWG fields added to `wg_device`:
 - `init_packet_junk_size`, `response_packet_junk_size`, `cookie_reply_packet_junk_size`, `transport_packet_junk_size` (s1-s4)
 - `init_packet_magic_header`, `response_packet_magic_header`, `underload_packet_magic_header`, `transport_packet_magic_header` (h1-h4)
 - `i1`, `i2`, `i3`, `i4`, `i5` - init packet contents (strings)
+- `header_protection_key` (32 bytes), `content_padding_addition`, `rekey_after_time`, `rekey_timeout`, `reject_after_time`, `keepalive_timeout`, `max_handshake_attempts` (packed u16 ranges), `random_trailers`, `disable_cookies` (u8 flags) - AWG 3.1
 
 ### Integration with nm-amneziawg-service
 
-Current implementation in `src/nm-amneziawg-service.c` uses external awg-quick utility directly. Planned migration to use `AWGConnectionManager`.
+Current implementation in `src/nm-amneziawg-service.c` creates the backend through `awg_connection_manager_auto_new()` and keeps it in the connection state; route add/delete is delegated to the backend when it `manages_routes()`.
 
 ## Editor Implementation
 

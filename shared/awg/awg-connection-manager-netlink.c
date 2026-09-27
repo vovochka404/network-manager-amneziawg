@@ -11,6 +11,8 @@
 
 #include "awg-connection-manager-netlink.h"
 #include "awg-config.h"
+#include "awg-validate.h"
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <glib.h>
@@ -492,6 +494,32 @@ awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int fami
     return TRUE;
 }
 
+/* AmneziaWG 3.1 obfuscation parameters live in netlink attributes the kernel
+ * knows only since module 3.0. An older module rejects the whole request with
+ * EINVAL ("Unknown attribute type"), which says nothing to the user, so refuse
+ * the connection up front with a version that can be acted on. */
+static gboolean
+check_awg31_support(AWGDevice *device, GError **error)
+{
+    g_autofree gchar *version = NULL;
+
+    if (!awg_device_has_awg31_params(device))
+        return TRUE;
+
+    version = amneziawg_kernel_version();
+    if (awg_version_at_least(version, 3, 0))
+        return TRUE;
+
+    g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, 0,
+                "This connection uses AmneziaWG 3.1 parameters (HeaderProtectionKey, "
+                "ContentPaddingAddition, ...), which need kernel module amneziawg 3.0 or "
+                "newer, but %s is loaded. Upgrade the module, or switch to the awg-quick "
+                "backend with NM_FORCE_AWG_QUICK=1 if amneziawg-tools 3.0 or newer is "
+                "installed",
+                version);
+    return FALSE;
+}
+
 static gboolean
 awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
@@ -503,6 +531,9 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
     const GList *iter;
     gboolean iface_added = FALSE;
     gboolean success = FALSE;
+
+    if (!check_awg31_support(priv->device, error))
+        return FALSE;
 
     dev = calloc(1, sizeof(wg_device));
     if (!dev) {
@@ -620,6 +651,43 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         dev->i5 = strdup(i5);
         dev->flags |= WGDEVICE_HAS_I5;
     }
+    /* AWG 3.1 parameters */
+    const gchar *hpk = awg_device_get_header_protection_key(priv->device);
+    if (hpk && hpk[0]) {
+        if (decode_base64_key(hpk, dev->header_protection_key)) {
+            dev->flags |= WGDEVICE_HAS_HEADER_PROTECTION_KEY;
+        }
+    }
+    const gchar *cpa = awg_device_get_content_padding_addition(priv->device);
+    if (cpa && cpa[0] && awg_range_parse_u32(cpa, &dev->content_padding_addition)) {
+        dev->flags |= WGDEVICE_HAS_CONTENT_PADDING_ADDITION;
+    }
+    const gchar *rat = awg_device_get_rekey_after_time(priv->device);
+    if (rat && rat[0] && awg_range_parse_u32(rat, &dev->rekey_after_time)) {
+        dev->flags |= WGDEVICE_HAS_REKEY_AFTER_TIME;
+    }
+    const gchar *rto = awg_device_get_rekey_timeout(priv->device);
+    if (rto && rto[0] && awg_range_parse_u32(rto, &dev->rekey_timeout)) {
+        dev->flags |= WGDEVICE_HAS_REKEY_TIMEOUT;
+    }
+    const gchar *jat = awg_device_get_reject_after_time(priv->device);
+    if (jat && jat[0] && awg_range_parse_u32(jat, &dev->reject_after_time)) {
+        dev->flags |= WGDEVICE_HAS_REJECT_AFTER_TIME;
+    }
+    const gchar *kat = awg_device_get_keepalive_timeout(priv->device);
+    if (kat && kat[0] && awg_range_parse_u32(kat, &dev->keepalive_timeout)) {
+        dev->flags |= WGDEVICE_HAS_KEEPALIVE_TIMEOUT;
+    }
+    const gchar *mha = awg_device_get_max_handshake_attempts(priv->device);
+    if (mha && mha[0] && awg_range_parse_u32(mha, &dev->max_handshake_attempts)) {
+        dev->flags |= WGDEVICE_HAS_MAX_HANDSHAKE_ATTEMPTS;
+    }
+    dev->random_trailers = awg_device_get_random_trailers(priv->device) ? 1 : 0;
+    if (dev->random_trailers)
+        dev->flags |= WGDEVICE_HAS_RANDOM_TRAILERS;
+    dev->disable_cookies = awg_device_get_disable_cookies(priv->device) ? 1 : 0;
+    if (dev->disable_cookies)
+        dev->flags |= WGDEVICE_HAS_DISABLE_COOKIES;
 
     dev->flags |= WGDEVICE_REPLACE_PEERS;
 
