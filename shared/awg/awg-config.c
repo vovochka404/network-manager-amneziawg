@@ -13,6 +13,18 @@
 #include "awg-device.h"
 #include <glib.h>
 
+/* AWG 3.1 on/off flags; mirrors the "on"/"off" convention used for AdvancedSecurity. */
+static gboolean
+awg_parse_bool(const gchar *value)
+{
+    if (!value || !*value)
+        return FALSE;
+    return g_ascii_strcasecmp(value, "on") == 0 ||
+           g_ascii_strcasecmp(value, "true") == 0 ||
+           g_ascii_strcasecmp(value, "yes") == 0 ||
+           g_ascii_strcasecmp(value, "1") == 0;
+}
+
 AWGDevice *
 awg_device_new_from_config(const char *config_path)
 {
@@ -116,6 +128,24 @@ awg_device_new_from_config(const char *config_path)
                 success &= awg_device_set_i4(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I5) == 0) {
                 success &= awg_device_set_i5(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_HEADER_PROTECTION_KEY) == 0) {
+                success &= awg_device_set_header_protection_key(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_CONTENT_PADDING_ADDITION) == 0) {
+                success &= awg_device_set_content_padding_addition(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REKEY_AFTER_TIME) == 0) {
+                success &= awg_device_set_rekey_after_time(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REKEY_TIMEOUT) == 0) {
+                success &= awg_device_set_rekey_timeout(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REJECT_AFTER_TIME) == 0) {
+                success &= awg_device_set_reject_after_time(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_KEEPALIVE_TIMEOUT) == 0) {
+                success &= awg_device_set_keepalive_timeout(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS) == 0) {
+                success &= awg_device_set_max_handshake_attempts(device, value);
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_RANDOM_TRAILERS) == 0) {
+                success &= awg_device_set_random_trailers(device, awg_parse_bool(value));
+            } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_DISABLE_COOKIES) == 0) {
+                success &= awg_device_set_disable_cookies(device, awg_parse_bool(value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MTU) == 0) {
                 success &= awg_device_set_mtu_from_string(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRE_UP) == 0) {
@@ -303,6 +333,41 @@ awg_device_create_config_string(AWGDevice *device)
     const gchar *i5 = awg_device_get_i5(device);
     if (i5 && *i5) {
         g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_I5, i5);
+    }
+
+    const gchar *hpk = awg_device_get_header_protection_key(device);
+    if (hpk && *hpk) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_HEADER_PROTECTION_KEY, hpk);
+    }
+    const gchar *cpa = awg_device_get_content_padding_addition(device);
+    if (cpa && *cpa) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_CONTENT_PADDING_ADDITION, cpa);
+    }
+    const gchar *rat = awg_device_get_rekey_after_time(device);
+    if (rat && *rat) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_REKEY_AFTER_TIME, rat);
+    }
+    const gchar *rto = awg_device_get_rekey_timeout(device);
+    if (rto && *rto) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_REKEY_TIMEOUT, rto);
+    }
+    const gchar *jat = awg_device_get_reject_after_time(device);
+    if (jat && *jat) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_REJECT_AFTER_TIME, jat);
+    }
+    const gchar *kat = awg_device_get_keepalive_timeout(device);
+    if (kat && *kat) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_KEEPALIVE_TIMEOUT, kat);
+    }
+    const gchar *mha = awg_device_get_max_handshake_attempts(device);
+    if (mha && *mha) {
+        g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS, mha);
+    }
+    if (awg_device_get_random_trailers(device)) {
+        g_string_append_printf(config, "%s = on\n", AWG_CONFIG_DEVICE_RANDOM_TRAILERS);
+    }
+    if (awg_device_get_disable_cookies(device)) {
+        g_string_append_printf(config, "%s = on\n", AWG_CONFIG_DEVICE_DISABLE_COOKIES);
     }
 
     const gchar *pre_up = awg_device_get_pre_up(device);

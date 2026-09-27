@@ -1285,6 +1285,262 @@ test_force_awg_quick_selects_external(void)
     unlink(stub_path);
 }
 
+static void
+test_awg_range_parse_u32(void)
+{
+    guint32 packed;
+
+    /* Packed as hi<<16 | lo, matching the kernel's u16_range_init(). */
+    g_assert_true(awg_range_parse_u32("2-10", &packed));
+    g_assert_cmpuint(packed, ==, (10u << 16) | 2u);
+
+    g_assert_true(awg_range_parse_u32("115-125", &packed));
+    g_assert_cmpuint(packed, ==, (125u << 16) | 115u);
+
+    /* A bare number is the degenerate range [n, n]. */
+    g_assert_true(awg_range_parse_u32("24", &packed));
+    g_assert_cmpuint(packed, ==, (24u << 16) | 24u);
+
+    g_assert_true(awg_range_parse_u32("65535", &packed));
+    g_assert_cmpuint(packed, ==, (65535u << 16) | 65535u);
+
+    /* Rejected: above u16, inverted, malformed, empty. */
+    g_assert_false(awg_range_parse_u32("65536", &packed));
+    g_assert_false(awg_range_parse_u32("2-70000", &packed));
+    g_assert_false(awg_range_parse_u32("10-2", &packed));
+    g_assert_false(awg_range_parse_u32("abc", &packed));
+    g_assert_false(awg_range_parse_u32("-5", &packed));
+    g_assert_false(awg_range_parse_u32("", &packed));
+    g_assert_false(awg_range_parse_u32(NULL, &packed));
+}
+
+static void
+test_awg_device_header_protection_key(void)
+{
+    AWGDevice *device = awg_device_new();
+
+    /* The kernel requires exactly 32 bytes (NLA_POLICY_EXACT_LEN), so a
+     * well-formed base64 string of the wrong length must be rejected rather
+     * than silently dropped later on.
+     */
+    g_assert_true(awg_device_set_header_protection_key(device, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304="));
+    g_assert_cmpstr(awg_device_get_header_protection_key(device), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
+
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "Invalid HeaderProtectionKey*");
+    g_assert_false(awg_device_set_header_protection_key(device, "c2hvcnQ="));
+    g_test_assert_expected_messages();
+    /* Rejected input must not clobber the previously accepted key. */
+    g_assert_cmpstr(awg_device_get_header_protection_key(device), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
+
+    /* Empty clears the key. */
+    g_assert_true(awg_device_set_header_protection_key(device, ""));
+    g_assert_null(awg_device_get_header_protection_key(device));
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_device_range_setters_reject_over_u16(void)
+{
+    AWGDevice *device = awg_device_new();
+
+    g_assert_true(awg_device_set_content_padding_addition(device, "2-10"));
+    g_assert_cmpstr(awg_device_get_content_padding_addition(device), ==, "2-10");
+
+    /* Values the kernel encoding cannot represent must not be accepted here,
+     * otherwise they would be dropped silently on the netlink path.
+     */
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "Invalid ContentPaddingAddition*");
+    g_assert_false(awg_device_set_content_padding_addition(device, "2-70000"));
+    g_test_assert_expected_messages();
+    g_assert_cmpstr(awg_device_get_content_padding_addition(device), ==, "2-10");
+
+    g_object_unref(device);
+}
+
+static void
+test_awg_config_awg31_roundtrip(void)
+{
+    gchar *config_path = get_test_config_path("test-config-awg31.conf");
+    gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-awg31.conf", NULL);
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *reloaded;
+
+    g_assert_nonnull(device);
+    g_assert_cmpstr(awg_device_get_header_protection_key(device), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
+    g_assert_cmpstr(awg_device_get_content_padding_addition(device), ==, "2-10");
+    g_assert_cmpstr(awg_device_get_rekey_after_time(device), ==, "115-125");
+    g_assert_cmpstr(awg_device_get_rekey_timeout(device), ==, "5-6");
+    g_assert_cmpstr(awg_device_get_reject_after_time(device), ==, "175-185");
+    g_assert_cmpstr(awg_device_get_keepalive_timeout(device), ==, "10-12");
+    g_assert_cmpstr(awg_device_get_max_handshake_attempts(device), ==, "16-20");
+    g_assert_true(awg_device_get_random_trailers(device));
+    g_assert_true(awg_device_get_disable_cookies(device));
+
+    /* awg-quick consumes the generated file, so the parameters must survive
+     * being written back out.
+     */
+    g_assert_true(awg_device_save_to_file(device, output_path));
+    g_object_unref(device);
+
+    reloaded = awg_device_new_from_config(output_path);
+    g_assert_nonnull(reloaded);
+    g_assert_cmpstr(awg_device_get_header_protection_key(reloaded), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
+    g_assert_cmpstr(awg_device_get_content_padding_addition(reloaded), ==, "2-10");
+    g_assert_cmpstr(awg_device_get_rekey_after_time(reloaded), ==, "115-125");
+    g_assert_cmpstr(awg_device_get_rekey_timeout(reloaded), ==, "5-6");
+    g_assert_cmpstr(awg_device_get_reject_after_time(reloaded), ==, "175-185");
+    g_assert_cmpstr(awg_device_get_keepalive_timeout(reloaded), ==, "10-12");
+    g_assert_cmpstr(awg_device_get_max_handshake_attempts(reloaded), ==, "16-20");
+    g_assert_true(awg_device_get_random_trailers(reloaded));
+    g_assert_true(awg_device_get_disable_cookies(reloaded));
+    g_object_unref(reloaded);
+
+    unlink(output_path);
+    g_free(output_path);
+    g_free(config_path);
+}
+
+static void
+test_awg_nm_connection_awg31_roundtrip(void)
+{
+    gchar *config_path = get_test_config_path("test-config-awg31.conf");
+    NMConnection *connection = nm_simple_connection_new();
+    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *restored;
+    GError *error = NULL;
+
+    g_assert_nonnull(device);
+    g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+    g_assert_no_error(error);
+    g_object_unref(device);
+
+    /* The parameters travel to the service over vpn.data, so they must come
+     * back out of the NMConnection unchanged.
+     */
+    restored = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_nonnull(restored);
+    g_assert_no_error(error);
+    g_assert_cmpstr(awg_device_get_header_protection_key(restored), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
+    g_assert_cmpstr(awg_device_get_content_padding_addition(restored), ==, "2-10");
+    g_assert_cmpstr(awg_device_get_rekey_after_time(restored), ==, "115-125");
+    g_assert_cmpstr(awg_device_get_max_handshake_attempts(restored), ==, "16-20");
+    g_assert_true(awg_device_get_random_trailers(restored));
+    g_assert_true(awg_device_get_disable_cookies(restored));
+
+    g_object_unref(restored);
+    g_object_unref(connection);
+    g_free(config_path);
+}
+
+static void
+test_awg_version_parse(void)
+{
+    guint major = 0;
+    guint minor = 0;
+
+    /* Kernel module releases look like "3.1.20260812". */
+    g_assert_true(awg_version_parse("3.1.20260812", &major, &minor));
+    g_assert_cmpuint(major, ==, 3);
+    g_assert_cmpuint(minor, ==, 1);
+
+    g_assert_true(awg_version_parse("1.0.20260725", &major, &minor));
+    g_assert_cmpuint(major, ==, 1);
+    g_assert_cmpuint(minor, ==, 0);
+
+    /* A missing or empty minor component counts as 0. */
+    g_assert_true(awg_version_parse("3", &major, &minor));
+    g_assert_cmpuint(major, ==, 3);
+    g_assert_cmpuint(minor, ==, 0);
+    g_assert_true(awg_version_parse("3.", &major, &minor));
+    g_assert_cmpuint(major, ==, 3);
+    g_assert_cmpuint(minor, ==, 0);
+
+    /* Trailing noise (build suffix, URL) is ignored. */
+    g_assert_true(awg_version_parse("3.1.20260812-dirty", &major, &minor));
+    g_assert_cmpuint(minor, ==, 1);
+
+    /* The tools banner is accepted as-is. */
+    g_assert_true(awg_version_parse("amneziawg-tools v3.0.20260730 - https://amnezia.org", &major, &minor));
+    g_assert_cmpuint(major, ==, 3);
+    g_assert_cmpuint(minor, ==, 0);
+
+    /* The minor pointer is optional. */
+    g_assert_true(awg_version_parse("4.5", &major, NULL));
+    g_assert_cmpuint(major, ==, 4);
+
+    /* Rejected: no digits at all, empty, NULL, number too large for a guint. */
+    g_assert_false(awg_version_parse("amneziawg", &major, &minor));
+    g_assert_false(awg_version_parse("", &major, &minor));
+    g_assert_false(awg_version_parse(NULL, &major, &minor));
+    g_assert_false(awg_version_parse("99999999999", &major, &minor));
+}
+
+static void
+test_awg_version_at_least(void)
+{
+    /* 3.0 is the first module/tools series with the AWG 3.1 attributes. */
+    g_assert_true(awg_version_at_least("3.0.20260730", 3, 0));
+    g_assert_true(awg_version_at_least("3.1.20260812", 3, 0));
+    g_assert_true(awg_version_at_least("10.0", 3, 0));
+    g_assert_true(awg_version_at_least("amneziawg-tools v3.0.20260730 - https://amnezia.org", 3, 0));
+
+    /* Everything older is rejected. */
+    g_assert_false(awg_version_at_least("1.0.20260725", 3, 0));
+    g_assert_false(awg_version_at_least("2.0.20260101", 3, 0));
+
+    /* Minor components are compared, not only the major one. */
+    g_assert_false(awg_version_at_least("3.1.20260812", 3, 2));
+    g_assert_true(awg_version_at_least("3.2", 3, 2));
+
+    /* Unknown versions are not rejected: the backend reports the failure. */
+    g_assert_true(awg_version_at_least(NULL, 3, 0));
+    g_assert_true(awg_version_at_least("", 3, 0));
+    g_assert_true(awg_version_at_least("unavailable", 3, 0));
+}
+
+static void
+test_awg_device_has_awg31_params(void)
+{
+    gchar *config_path;
+    AWGDevice *device;
+
+    /* A 2.0 configuration carries none of the 3.1 parameters. */
+    config_path = get_test_config_path("test-config-dual.conf");
+    device = awg_device_new_from_config(config_path);
+    g_assert_nonnull(device);
+    g_assert_false(awg_device_has_awg31_params(device));
+    g_object_unref(device);
+    g_free(config_path);
+
+    /* A 3.1 configuration carries all of them. */
+    config_path = get_test_config_path("test-config-awg31.conf");
+    device = awg_device_new_from_config(config_path);
+    g_assert_nonnull(device);
+    g_assert_true(awg_device_has_awg31_params(device));
+    g_object_unref(device);
+    g_free(config_path);
+
+    device = awg_device_new();
+    g_assert_nonnull(device);
+    g_assert_false(awg_device_has_awg31_params(device));
+
+    /* Booleans count only when enabled: "off" is never encoded. */
+    g_assert_true(awg_device_set_random_trailers(device, FALSE));
+    g_assert_true(awg_device_set_disable_cookies(device, FALSE));
+    g_assert_false(awg_device_has_awg31_params(device));
+    g_assert_true(awg_device_set_disable_cookies(device, TRUE));
+    g_assert_true(awg_device_has_awg31_params(device));
+    g_assert_true(awg_device_set_disable_cookies(device, FALSE));
+    g_assert_false(awg_device_has_awg31_params(device));
+
+    /* A single scalar parameter is enough. */
+    g_assert_true(awg_device_set_content_padding_addition(device, "2-10"));
+    g_assert_true(awg_device_has_awg31_params(device));
+
+    g_object_unref(device);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1350,6 +1606,14 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/nm-connection/keyless-config-detected", test_keyless_config_detected);
     g_test_add_func("/awg/device/invalid-reason", test_invalid_reason_messages);
     g_test_add_func("/awg/manager/force-quick-selects-external", test_force_awg_quick_selects_external);
+    g_test_add_func("/awg/validate/range-parse-u32", test_awg_range_parse_u32);
+    g_test_add_func("/awg/device/header-protection-key", test_awg_device_header_protection_key);
+    g_test_add_func("/awg/device/range-setters-reject-over-u16", test_awg_device_range_setters_reject_over_u16);
+    g_test_add_func("/awg/config/awg31-roundtrip", test_awg_config_awg31_roundtrip);
+    g_test_add_func("/awg/nm-connection/awg31-roundtrip", test_awg_nm_connection_awg31_roundtrip);
+    g_test_add_func("/awg/validate/version-parse", test_awg_version_parse);
+    g_test_add_func("/awg/validate/version-at-least", test_awg_version_at_least);
+    g_test_add_func("/awg/device/has-awg31-params", test_awg_device_has_awg31_params);
 
     return g_test_run();
 }

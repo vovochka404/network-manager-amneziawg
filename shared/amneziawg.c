@@ -26,6 +26,24 @@
 #include "amneziawg.h"
 #include "awg/awg-validate.h"
 
+char *
+amneziawg_kernel_version(void)
+{
+    const char *path = "/sys/module/amneziawg/version";
+    char *contents = NULL;
+
+    if (!g_file_get_contents(path, &contents, NULL, NULL))
+        return NULL;
+
+    g_strstrip(contents);
+    if (!*contents) {
+        g_free(contents);
+        return NULL;
+    }
+
+    return contents;
+}
+
 /*
  * Kernel ABI for AmneziaWG changed between versions:
  *  - magic headers (H1..H4) were NUL strings in old kernels and became
@@ -38,25 +56,16 @@
 static bool
 awg_kernel_uses_current_abi(bool *known)
 {
-    const char *path = "/sys/module/amneziawg/version";
-    char buf[64];
-    FILE *f;
-    unsigned major;
+    char *version = amneziawg_kernel_version();
+    unsigned major = 0;
 
-    *known = false;
-    f = fopen(path, "r");
-    if (!f)
-        return true;
-    if (fgets(buf, sizeof(buf), f) == NULL) {
-        fclose(f);
+    *known = version && awg_version_parse(version, &major, NULL);
+    if (!*known) {
+        g_free(version);
         return true;
     }
-    fclose(f);
+    g_free(version);
 
-    if (sscanf(buf, "%u", &major) != 1)
-        return true;
-
-    *known = true;
     return major >= 3;
 }
 
@@ -101,6 +110,15 @@ enum wgdevice_attribute {
     WGDEVICE_A_I3,
     WGDEVICE_A_I4,
     WGDEVICE_A_I5,
+    WGDEVICE_A_HEADER_PROTECTION_KEY,
+    WGDEVICE_A_CONTENT_PADDING_ADDITION,
+    WGDEVICE_A_REKEY_AFTER_TIME,
+    WGDEVICE_A_REKEY_TIMEOUT,
+    WGDEVICE_A_REJECT_AFTER_TIME,
+    WGDEVICE_A_KEEPALIVE_TIMEOUT,
+    WGDEVICE_A_MAX_HANDSHAKE_ATTEMPTS,
+    WGDEVICE_A_RANDOM_TRAILERS,
+    WGDEVICE_A_DISABLE_COOKIES,
     __WGDEVICE_A_LAST
 };
 
@@ -523,6 +541,12 @@ static bool
 mnl_attr_put_u8_check(struct nlmsghdr *nlh, size_t buflen, uint16_t type, uint8_t data)
 {
     return mnl_attr_put_check(nlh, buflen, type, sizeof(uint8_t), &data);
+}
+
+static void
+mnl_attr_put_u8(struct nlmsghdr *nlh, uint16_t type, uint8_t data)
+{
+    mnl_attr_put(nlh, type, sizeof(uint8_t), &data);
 }
 
 static bool
@@ -1250,6 +1274,24 @@ again:
             mnl_attr_put_strz(nlh, WGDEVICE_A_I4, dev->i4);
         if (dev->flags & WGDEVICE_HAS_I5 && dev->i5)
             mnl_attr_put_strz(nlh, WGDEVICE_A_I5, dev->i5);
+        if (dev->flags & WGDEVICE_HAS_HEADER_PROTECTION_KEY)
+            mnl_attr_put(nlh, WGDEVICE_A_HEADER_PROTECTION_KEY, sizeof(dev->header_protection_key), dev->header_protection_key);
+        if (dev->flags & WGDEVICE_HAS_CONTENT_PADDING_ADDITION)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_CONTENT_PADDING_ADDITION, dev->content_padding_addition);
+        if (dev->flags & WGDEVICE_HAS_REKEY_AFTER_TIME)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_REKEY_AFTER_TIME, dev->rekey_after_time);
+        if (dev->flags & WGDEVICE_HAS_REKEY_TIMEOUT)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_REKEY_TIMEOUT, dev->rekey_timeout);
+        if (dev->flags & WGDEVICE_HAS_REJECT_AFTER_TIME)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_REJECT_AFTER_TIME, dev->reject_after_time);
+        if (dev->flags & WGDEVICE_HAS_KEEPALIVE_TIMEOUT)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_KEEPALIVE_TIMEOUT, dev->keepalive_timeout);
+        if (dev->flags & WGDEVICE_HAS_MAX_HANDSHAKE_ATTEMPTS)
+            mnl_attr_put_u32(nlh, WGDEVICE_A_MAX_HANDSHAKE_ATTEMPTS, dev->max_handshake_attempts);
+        if (dev->flags & WGDEVICE_HAS_RANDOM_TRAILERS)
+            mnl_attr_put_u8(nlh, WGDEVICE_A_RANDOM_TRAILERS, dev->random_trailers);
+        if (dev->flags & WGDEVICE_HAS_DISABLE_COOKIES)
+            mnl_attr_put_u8(nlh, WGDEVICE_A_DISABLE_COOKIES, dev->disable_cookies);
         if (dev->flags & WGDEVICE_REPLACE_PEERS)
             flags |= WGDEVICE_F_REPLACE_PEERS;
         if (flags)

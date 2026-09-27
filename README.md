@@ -9,6 +9,8 @@ A VPN Plugin for NetworkManager that handles client-side AmneziaWG connections. 
 
 **Important:** This plugin version requires **amneziawg kernel module v1.0.20251004 or newer**.
 
+AWG 3.1 profiles (`HeaderProtectionKey`, `ContentPaddingAddition`, `RandomTrailers`, ...) additionally require a kernel module from the **3.0** series onwards, because the matching netlink attributes do not exist in older ones. Such a connection is refused with an explicit message instead of failing with `EINVAL`. On the awg-quick fallback the same profiles need **amneziawg-tools 3.0 or newer**, since older parsers reject the unknown keys.
+
 The plugin uses direct netlink communication with the kernel module for optimal performance. The awg-quick fallback mode is still available for systems with old module version.
 
 Requires [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) to be installed on your system.
@@ -246,8 +248,9 @@ sudo systemctl restart NetworkManager
 Use awg-quick mode (set `NM_FORCE_AWG_QUICK=1`) when:
 
 1. Your system have the amneziawg kernel module version lower then v1.0.20251004
-2. You prefer the `awg-quick` workflow for tunnel management
-3. Debugging connection issues (awg-quick provides more verbose output)
+2. Your system has a kernel module older than **3.0** and the profile carries AWG 3.1 parameters — the netlink backend refuses such a connection with an explicit error naming the loaded module version
+3. You prefer the `awg-quick` workflow for tunnel management
+4. Debugging connection issues (awg-quick provides more verbose output)
 
 ---
 

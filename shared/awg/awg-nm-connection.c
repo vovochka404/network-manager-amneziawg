@@ -221,6 +221,41 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, value);
     }
 
+    value = awg_device_get_header_protection_key(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY, value);
+    }
+    value = awg_device_get_content_padding_addition(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION, value);
+    }
+    value = awg_device_get_rekey_after_time(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME, value);
+    }
+    value = awg_device_get_rekey_timeout(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT, value);
+    }
+    value = awg_device_get_reject_after_time(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME, value);
+    }
+    value = awg_device_get_keepalive_timeout(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT, value);
+    }
+    value = awg_device_get_max_handshake_attempts(device);
+    if (value && *value) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS, value);
+    }
+    if (awg_device_get_random_trailers(device)) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS, "on");
+    }
+    if (awg_device_get_disable_cookies(device)) {
+        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES, "on");
+    }
+
     guint32 mtu = awg_device_get_mtu(device);
     if (mtu > 0) {
         g_autofree gchar *mtu_str = g_strdup_printf("%u", mtu);
@@ -429,6 +464,43 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5);
     if (value) {
         awg_device_set_i5(device, value);
+    }
+
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_HEADER_PROTECTION_KEY);
+    if (value && *value) {
+        awg_device_set_header_protection_key(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_CONTENT_PADDING_ADDITION);
+    if (value && *value) {
+        awg_device_set_content_padding_addition(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_AFTER_TIME);
+    if (value && *value) {
+        awg_device_set_rekey_after_time(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REKEY_TIMEOUT);
+    if (value && *value) {
+        awg_device_set_rekey_timeout(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_REJECT_AFTER_TIME);
+    if (value && *value) {
+        awg_device_set_reject_after_time(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_KEEPALIVE_TIMEOUT);
+    if (value && *value) {
+        awg_device_set_keepalive_timeout(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS);
+    if (value && *value) {
+        awg_device_set_max_handshake_attempts(device, value);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS);
+    if (value && *value) {
+        awg_device_set_random_trailers(device, g_ascii_strcasecmp(value, "true") == 0 || g_ascii_strcasecmp(value, "on") == 0);
+    }
+    value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES);
+    if (value && *value) {
+        awg_device_set_disable_cookies(device, g_ascii_strcasecmp(value, "true") == 0 || g_ascii_strcasecmp(value, "on") == 0);
     }
 
     value = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MTU);

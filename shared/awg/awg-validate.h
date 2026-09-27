@@ -62,6 +62,10 @@ gboolean awg_validate_fw_mark(const gchar *str);
 gboolean awg_validate_magic_header(const gchar *str);
 
 gboolean awg_magic_header_parse(const gchar *str, guint32 *start, guint32 *end);
+gboolean awg_range_parse_u32(const gchar *str, guint32 *out);
+
+gboolean awg_version_parse(const gchar *str, guint *major, guint *minor);
+gboolean awg_version_at_least(const gchar *str, guint major, guint minor);
 
 gboolean awg_validate_magic_headers_no_overlap(const gchar *h1, const gchar *h2, const gchar *h3, const gchar *h4);
 

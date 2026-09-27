@@ -86,7 +86,16 @@ enum wg_device_flags {
     WGDEVICE_HAS_I2 = 1U << 17,
     WGDEVICE_HAS_I3 = 1U << 18,
     WGDEVICE_HAS_I4 = 1U << 19,
-    WGDEVICE_HAS_I5 = 1U << 20
+    WGDEVICE_HAS_I5 = 1U << 20,
+    WGDEVICE_HAS_HEADER_PROTECTION_KEY = 1U << 21,
+    WGDEVICE_HAS_CONTENT_PADDING_ADDITION = 1U << 22,
+    WGDEVICE_HAS_REKEY_AFTER_TIME = 1U << 23,
+    WGDEVICE_HAS_REKEY_TIMEOUT = 1U << 24,
+    WGDEVICE_HAS_REJECT_AFTER_TIME = 1U << 25,
+    WGDEVICE_HAS_KEEPALIVE_TIMEOUT = 1U << 26,
+    WGDEVICE_HAS_MAX_HANDSHAKE_ATTEMPTS = 1U << 27,
+    WGDEVICE_HAS_RANDOM_TRAILERS = 1U << 28,
+    WGDEVICE_HAS_DISABLE_COOKIES = 1U << 29
 };
 
 typedef struct wg_device {
@@ -118,6 +127,17 @@ typedef struct wg_device {
     char *i4;
     char *i5;
 
+    /* AWG 3.1 */
+    wg_key header_protection_key;
+    uint32_t content_padding_addition;
+    uint32_t rekey_after_time;
+    uint32_t rekey_timeout;
+    uint32_t reject_after_time;
+    uint32_t keepalive_timeout;
+    uint32_t max_handshake_attempts;
+    uint8_t random_trailers;
+    uint8_t disable_cookies;
+
     struct wg_peer *first_peer, *last_peer;
 } wg_device;
 
@@ -137,5 +157,9 @@ bool wg_key_is_zero(const wg_key key);
 void wg_generate_public_key(wg_key public_key, const wg_key private_key);
 void wg_generate_private_key(wg_key private_key);
 void wg_generate_preshared_key(wg_key preshared_key);
+
+/* Plugin addition: release version the loaded amneziawg module reports, e.g.
+ * "3.1.20260812", or NULL when it cannot be read. Free with g_free(). */
+char *amneziawg_kernel_version(void);
 
 #endif
