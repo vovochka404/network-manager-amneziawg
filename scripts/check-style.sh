@@ -20,6 +20,7 @@ echo "Using clang-format: $($CLANG_FORMAT --version | head -n1)"
 
 # Collect source files
 FILES=$(find "$PROJECT_ROOT/src" "$PROJECT_ROOT/shared" "$PROJECT_ROOT/properties" \
+    "$PROJECT_ROOT/tests" \
     -name "*.c" -o -name "*.h" | \
     grep -v "/build/" | \
     sort)

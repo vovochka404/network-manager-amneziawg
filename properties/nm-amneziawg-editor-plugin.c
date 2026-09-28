@@ -85,6 +85,7 @@ import(NMVpnEditorPlugin *iface, const char *path, GError **error)
 {
     NMConnection *connection = NULL;
     AWGDevice *device = NULL;
+    GError *parse_error = NULL;
     const char *ext;
     const char *filename;
     char *conn_name = NULL;
@@ -107,12 +108,14 @@ import(NMVpnEditorPlugin *iface, const char *path, GError **error)
             conn_name = sanitize_connection_name(g_strndup(filename, name_len));
     }
 
-    device = awg_device_new_from_config(path);
+    device = awg_device_new_from_config(path, &parse_error);
     if (!device) {
-        g_set_error_literal(error,
-                            NMV_EDITOR_PLUGIN_ERROR,
-                            NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
-                            _("Failed to parse AmneziaWG config file"));
+        g_set_error(error,
+                    NMV_EDITOR_PLUGIN_ERROR,
+                    NMV_EDITOR_PLUGIN_ERROR_FILE_NOT_VPN,
+                    _("Failed to parse AmneziaWG config file: %s"),
+                    parse_error ? parse_error->message : _("unknown reason"));
+        g_clear_error(&parse_error);
         g_free(conn_name);
         return NULL;
     }
@@ -134,6 +137,7 @@ import(NMVpnEditorPlugin *iface, const char *path, GError **error)
     g_free(conn_name);
     return connection;
 }
+
 static gboolean export(NMVpnEditorPlugin *iface,
                        const char *path,
                        NMConnection *connection,

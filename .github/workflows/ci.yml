@@ -22,7 +22,8 @@ jobs:
             shared/*.c shared/*.h \
             shared/awg/*.c shared/awg/*.h \
             shared/nm-utils/*.c shared/nm-utils/*.h \
-            properties/*.c properties/*.h
+            properties/*.c properties/*.h \
+            tests/*.c
 
   build-ubuntu:
     runs-on: ubuntu-latest

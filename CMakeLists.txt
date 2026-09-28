@@ -220,6 +220,30 @@ set(COMMON_DEFINITIONS
 set(PROPERTIES_RESOURCES_DIR ${CMAKE_SOURCE_DIR}/properties)
 set(PROPERTIES_RESOURCES_XML ${CMAKE_SOURCE_DIR}/properties/gresource.xml)
 
+# The resource bundles files that gresource.xml refers to (.ui and friends).
+# Depending on the XML alone means editing one of them rebuilds nothing — the
+# stale resource is then linked into the plugin. Let glib-compile-resources list
+# them, so every bundled file is a dependency.
+execute_process(
+    COMMAND /usr/bin/glib-compile-resources
+        ${PROPERTIES_RESOURCES_XML}
+        --generate-dependencies
+        --sourcedir=${PROPERTIES_RESOURCES_DIR}
+    OUTPUT_VARIABLE PROPERTIES_RESOURCES_FILES
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE PROPERTIES_RESOURCES_RESULT
+)
+set(PROPERTIES_RESOURCES_PATHS "")
+if(PROPERTIES_RESOURCES_RESULT EQUAL 0)
+    string(REPLACE "\n" ";" PROPERTIES_RESOURCES_FILES "${PROPERTIES_RESOURCES_FILES}")
+    foreach(resource_file ${PROPERTIES_RESOURCES_FILES})
+        get_filename_component(resource_path ${resource_file} ABSOLUTE BASE_DIR ${PROPERTIES_RESOURCES_DIR})
+        list(APPEND PROPERTIES_RESOURCES_PATHS ${resource_path})
+    endforeach()
+else()
+    message(WARNING "glib-compile-resources could not list ${PROPERTIES_RESOURCES_XML}; bundled files will not be tracked")
+endif()
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/properties)
 
 add_custom_command(
@@ -230,7 +254,7 @@ add_custom_command(
         --sourcedir=${PROPERTIES_RESOURCES_DIR}
         --generate-header
         --internal
-    DEPENDS ${PROPERTIES_RESOURCES_XML}
+    DEPENDS ${PROPERTIES_RESOURCES_XML} ${PROPERTIES_RESOURCES_PATHS}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
@@ -242,7 +266,7 @@ add_custom_command(
         --sourcedir=${PROPERTIES_RESOURCES_DIR}
         --generate-source
         --internal
-    DEPENDS ${PROPERTIES_RESOURCES_XML}
+    DEPENDS ${PROPERTIES_RESOURCES_XML} ${PROPERTIES_RESOURCES_PATHS}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 

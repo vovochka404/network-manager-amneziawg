@@ -31,7 +31,7 @@ static void
 test_awg_device_new_from_config_ipv4(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv4.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     g_assert_nonnull(device);
     g_assert_cmpint(awg_device_get_peers_count(device), ==, 1);
@@ -71,7 +71,7 @@ static void
 test_awg_device_new_from_config_ipv6(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv6.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     g_assert_nonnull(device);
 
@@ -98,7 +98,7 @@ static void
 test_awg_device_new_from_config_dual_stack(void)
 {
     gchar *config_path = get_test_config_path("test-config-dual.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     g_assert_nonnull(device);
 
@@ -126,7 +126,7 @@ static void
 test_awg_device_new_from_config_multi_peer(void)
 {
     gchar *config_path = get_test_config_path("test-config-multi-peer.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     g_assert_nonnull(device);
     g_assert_cmpint(awg_device_get_peers_count(device), ==, 3);
@@ -160,7 +160,7 @@ static void
 test_awg_device_save_and_load_ipv4(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv4.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
 
     gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-ipv4.conf", NULL);
@@ -169,7 +169,7 @@ test_awg_device_save_and_load_ipv4(void)
 
     g_object_unref(device);
 
-    AWGDevice *device2 = awg_device_new_from_config(output_path);
+    AWGDevice *device2 = awg_device_new_from_config(output_path, NULL);
     g_assert_nonnull(device2);
 
     g_assert_cmpint(awg_device_get_peers_count(device2), ==, 1);
@@ -192,10 +192,75 @@ test_awg_device_save_and_load_ipv4(void)
 }
 
 static void
+test_awg_config_invalid_value_is_reported(void)
+{
+    /* The import path needs the reason in the error, not only in the journal. */
+    gchar *config_path = get_test_config_path("test-config-invalid-value.conf");
+    GError *error = NULL;
+    AWGDevice *device;
+
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid s1*");
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid AWG device configuration*");
+    device = awg_device_new_from_config(config_path, &error);
+    g_test_assert_expected_messages();
+
+    g_assert_null(device);
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "S1"));
+    g_assert_nonnull(strstr(error->message, "999999"));
+
+    g_clear_error(&error);
+    g_free(config_path);
+}
+
+static void
+test_awg_config_incomplete_is_reported(void)
+{
+    /* A parse that succeeds but yields an unusable device reports why. */
+    gchar *config_path = get_test_config_path("test-config-no-keys.conf");
+    GError *error = NULL;
+    AWGDevice *device;
+
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid AWG device configuration*");
+    device = awg_device_new_from_config(config_path, &error);
+    g_test_assert_expected_messages();
+
+    g_assert_null(device);
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "PrivateKey"));
+
+    g_clear_error(&error);
+    g_free(config_path);
+}
+
+static void
+test_awg_device_save_uses_private_permissions(void)
+{
+    gchar *config_path = get_test_config_path("test-config-extended.conf");
+    gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-private-perms.conf", NULL);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
+    struct stat st;
+
+    g_assert_nonnull(device);
+
+    /* The generated configuration carries the private key, so it must never be
+     * readable by anyone else — not even briefly, which is why it is created
+     * with G_FILE_CREATE_PRIVATE instead of being chmod()ed afterwards. */
+    g_assert_true(awg_device_save_to_file(device, output_path));
+    g_assert_cmpint(stat(output_path, &st), ==, 0);
+    g_assert_cmpuint(st.st_mode & 0777, ==, 0600);
+
+    g_object_unref(device);
+    unlink(output_path);
+    g_free(output_path);
+    g_free(config_path);
+}
+
+static void
 test_awg_device_save_and_load_multi_peer(void)
 {
     gchar *config_path = get_test_config_path("test-config-multi-peer.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
 
     gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-multi-peer.conf", NULL);
@@ -204,7 +269,7 @@ test_awg_device_save_and_load_multi_peer(void)
 
     g_object_unref(device);
 
-    AWGDevice *device2 = awg_device_new_from_config(output_path);
+    AWGDevice *device2 = awg_device_new_from_config(output_path, NULL);
     g_assert_nonnull(device2);
     g_assert_cmpint(awg_device_get_peers_count(device2), ==, 3);
 
@@ -294,7 +359,7 @@ static void
 test_awg_device_is_valid(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv4.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_true(awg_device_is_valid(device));
 
@@ -603,7 +668,7 @@ static void
 test_awg_device_new_from_config_extended(void)
 {
     gchar *config_path = get_test_config_path("test-config-extended.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     g_assert_nonnull(device);
 
@@ -925,7 +990,7 @@ test_awg_peer_clone_multi_allowed_ips(void)
 
     // Устанавливаем несколько allowed IPs
     g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "10.0.0.0/24, 192.168.0.0/16, 0.0.0.0/0"));
-    
+
     // Проверяем, что все подсети сохранились
     gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
     g_assert_nonnull(allowed_ips);
@@ -1044,7 +1109,7 @@ static void
 test_awg_device_save_load_extended(void)
 {
     gchar *config_path = get_test_config_path("test-config-extended.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
 
     gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-extended.conf", NULL);
@@ -1053,7 +1118,7 @@ test_awg_device_save_load_extended(void)
 
     g_object_unref(device);
 
-    AWGDevice *device2 = awg_device_new_from_config(output_path);
+    AWGDevice *device2 = awg_device_new_from_config(output_path, NULL);
     g_assert_nonnull(device2);
 
     g_assert_cmpint(awg_device_get_s3(device2), ==, 30);
@@ -1078,11 +1143,65 @@ test_awg_device_save_load_extended(void)
  * "Configuration parsing error", and NM_FORCE_AWG_QUICK must select the
  * external (awg-quick) manager. */
 
+/* Импортированный профиль должен маршрутизироваться в NetworkManager:
+ *  - ipv4.method = auto (при manual сервис плагина не ставит маршруты из AllowedIPs);
+ *  - never-default = yes, если профиль не маршрутизирует всё (список адресов),
+ *    и no для полного туннеля (0.0.0.0/0) — иначе NM заворачивает в туннель
+ *    и те адреса, которые должны идти мимо него.
+ */
+static void
+test_nm_connection_never_default(void)
+{
+    GError *error = NULL;
+
+    /* Список адресов: маршрут по умолчанию через VPN не нужен. */
+    {
+        gchar *config_path = get_test_config_path("test-config-split-tunnel.conf");
+        AWGDevice *device = awg_device_new_from_config(config_path, NULL);
+        NMConnection *connection = nm_simple_connection_new();
+        NMSettingIPConfig *s_ip4;
+
+        g_assert_nonnull(device);
+        g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+        g_assert_no_error(error);
+
+        s_ip4 = nm_connection_get_setting_ip4_config(connection);
+        g_assert_nonnull(s_ip4);
+        g_assert_cmpstr(nm_setting_ip_config_get_method(s_ip4), ==, NM_SETTING_IP4_CONFIG_METHOD_AUTO);
+        g_assert_true(nm_setting_ip_config_get_never_default(s_ip4));
+
+        g_object_unref(connection);
+        g_object_unref(device);
+        g_free(config_path);
+    }
+
+    /* Полный туннель: VPN и есть маршрут по умолчанию. */
+    {
+        gchar *config_path = get_test_config_path("test-config-ipv4.conf");
+        AWGDevice *device = awg_device_new_from_config(config_path, NULL);
+        NMConnection *connection = nm_simple_connection_new();
+        NMSettingIPConfig *s_ip4;
+
+        g_assert_nonnull(device);
+        g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+        g_assert_no_error(error);
+
+        s_ip4 = nm_connection_get_setting_ip4_config(connection);
+        g_assert_nonnull(s_ip4);
+        g_assert_cmpstr(nm_setting_ip_config_get_method(s_ip4), ==, NM_SETTING_IP4_CONFIG_METHOD_AUTO);
+        g_assert_false(nm_setting_ip_config_get_never_default(s_ip4));
+
+        g_object_unref(connection);
+        g_object_unref(device);
+        g_free(config_path);
+    }
+}
+
 static void
 test_nm_connection_secrets_roundtrip(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv4.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_cmpstr(awg_device_get_private_key(device), ==, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
 
@@ -1142,7 +1261,7 @@ test_keyless_config_detected(void)
     /* A config without PrivateKey/PresharedKey is rejected at import time */
     gchar *config_path = get_test_config_path("test-config-no-keys.conf");
     g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid AWG device configuration*");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_null(device);
     g_test_assert_expected_messages();
     g_free(config_path);
@@ -1187,7 +1306,7 @@ test_invalid_reason_messages(void)
 {
     /* Valid device -> no reason */
     gchar *config_path = get_test_config_path("test-config-ipv4.conf");
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_null(awg_device_get_invalid_reason(device));
 
@@ -1206,7 +1325,7 @@ test_invalid_reason_messages(void)
      * add_peer performs no validation, same as NMConnection restore) */
     {
         gchar *peer_config_path = get_test_config_path("test-config-ipv4.conf");
-        AWGDevice *d = awg_device_new_from_config(peer_config_path);
+        AWGDevice *d = awg_device_new_from_config(peer_config_path, NULL);
         g_assert_nonnull(d);
         g_free(peer_config_path);
         AWGDevicePeer *bad = awg_device_peer_new();
@@ -1283,6 +1402,46 @@ test_force_awg_quick_selects_external(void)
     else
         g_unsetenv("NM_FORCE_AWG_QUICK");
     unlink(stub_path);
+}
+
+static void
+test_peer_shared_key_flags_roundtrip(void)
+{
+    AWGDevice *device = awg_device_new();
+    AWGDevicePeer *peer = awg_device_peer_new();
+    AWGDevice *restored;
+    NMConnection *connection = nm_simple_connection_new();
+    NMSettingVpn *s_vpn;
+    GError *error = NULL;
+
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_peer_set_shared_key(peer, "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w="));
+    awg_device_peer_set_shared_key_flags(peer, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+    g_assert_no_error(error);
+    s_vpn = nm_connection_get_setting_vpn(connection);
+    g_assert_nonnull(s_vpn);
+
+    /* libnm persists the flags of a secret as "<secret-name>-flags". */
+    g_assert_cmpstr(nm_setting_vpn_get_data_item(s_vpn, "peer-0-preshared-key-flags"), ==, "4");
+    g_assert_null(nm_setting_vpn_get_data_item(s_vpn, "peer-0-preshared-key-flags-flags"));
+
+    restored = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    g_assert_nonnull(restored);
+    peer = AWG_DEVICE_PEER(awg_device_get_peers_list(restored)->data);
+    g_assert_nonnull(peer);
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(peer), ==, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+
+    g_object_unref(restored);
+    g_object_unref(connection);
+    g_object_unref(device);
 }
 
 static void
@@ -1363,7 +1522,7 @@ test_awg_config_awg31_roundtrip(void)
 {
     gchar *config_path = get_test_config_path("test-config-awg31.conf");
     gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-awg31.conf", NULL);
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     AWGDevice *reloaded;
 
     g_assert_nonnull(device);
@@ -1383,7 +1542,7 @@ test_awg_config_awg31_roundtrip(void)
     g_assert_true(awg_device_save_to_file(device, output_path));
     g_object_unref(device);
 
-    reloaded = awg_device_new_from_config(output_path);
+    reloaded = awg_device_new_from_config(output_path, NULL);
     g_assert_nonnull(reloaded);
     g_assert_cmpstr(awg_device_get_header_protection_key(reloaded), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
     g_assert_cmpstr(awg_device_get_content_padding_addition(reloaded), ==, "2-10");
@@ -1406,7 +1565,7 @@ test_awg_nm_connection_awg31_roundtrip(void)
 {
     gchar *config_path = get_test_config_path("test-config-awg31.conf");
     NMConnection *connection = nm_simple_connection_new();
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     AWGDevice *restored;
     GError *error = NULL;
 
@@ -1507,7 +1666,7 @@ test_awg_device_has_awg31_params(void)
 
     /* A 2.0 configuration carries none of the 3.1 parameters. */
     config_path = get_test_config_path("test-config-dual.conf");
-    device = awg_device_new_from_config(config_path);
+    device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_false(awg_device_has_awg31_params(device));
     g_object_unref(device);
@@ -1515,7 +1674,7 @@ test_awg_device_has_awg31_params(void)
 
     /* A 3.1 configuration carries all of them. */
     config_path = get_test_config_path("test-config-awg31.conf");
-    device = awg_device_new_from_config(config_path);
+    device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_true(awg_device_has_awg31_params(device));
     g_object_unref(device);
@@ -1551,6 +1710,10 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/config/dual-stack", test_awg_device_new_from_config_dual_stack);
     g_test_add_func("/awg/config/multi-peer", test_awg_device_new_from_config_multi_peer);
     g_test_add_func("/awg/config/save-load-ipv4", test_awg_device_save_and_load_ipv4);
+    g_test_add_func("/awg/config/save-private-permissions", test_awg_device_save_uses_private_permissions);
+    g_test_add_func("/awg/config/invalid-value-reported", test_awg_config_invalid_value_is_reported);
+    g_test_add_func("/awg/config/incomplete-reported", test_awg_config_incomplete_is_reported);
+    g_test_add_func("/awg/config/nm-connection-never-default", test_nm_connection_never_default);
     g_test_add_func("/awg/config/save-load-multi-peer", test_awg_device_save_and_load_multi_peer);
     g_test_add_func("/awg/config/mtu-not-exported-when-zero", test_awg_device_mtu_not_exported_when_zero);
     g_test_add_func("/awg/config/mtu-exported-when-set", test_awg_device_mtu_exported_when_set);
@@ -1603,6 +1766,7 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/validate/jmin-jmax", test_awg_validate_jmin_jmax);
     g_test_add_func("/awg/peer/clone-multi-allowed-ips", test_awg_peer_clone_multi_allowed_ips);
     g_test_add_func("/awg/nm-connection/secrets-roundtrip", test_nm_connection_secrets_roundtrip);
+    g_test_add_func("/awg/nm-connection/peer-psk-flags", test_peer_shared_key_flags_roundtrip);
     g_test_add_func("/awg/nm-connection/keyless-config-detected", test_keyless_config_detected);
     g_test_add_func("/awg/device/invalid-reason", test_invalid_reason_messages);
     g_test_add_func("/awg/manager/force-quick-selects-external", test_force_awg_quick_selects_external);

@@ -36,6 +36,43 @@ add_ip_address(NMSettingIPConfig *s_ip, GInetAddress *address, guint32 prefix)
     nm_ip_address_unref(addr);
 }
 
+/* Есть ли в AllowedIPs маршрут по умолчанию (0.0.0.0/0 или ::/0) для этой семьи.
+ *
+ * Нужно для never-default: если профиль маршрутизирует НЕ всё (split tunneling),
+ * подключение не должно становиться маршрутом по умолчанию — иначе NetworkManager
+ * завернёт в туннель весь трафик, включая исключённые адреса, и они перестанут
+ * открываться. Обратная ситуация (0.0.0.0/0 в AllowedIPs) — полный туннель,
+ * там never-default должен остаться выключенным.
+ */
+static gboolean
+allowed_ips_have_default(AWGDevice *device, int family)
+{
+    const GList *peers;
+
+    for (peers = awg_device_get_peers_list(device); peers; peers = g_list_next(peers)) {
+        AWGDevicePeer *peer = AWG_DEVICE_PEER(peers->data);
+        g_autofree gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
+        g_auto(GStrv) parts = NULL;
+        guint i;
+
+        if (!allowed_ips)
+            continue;
+
+        parts = g_strsplit(allowed_ips, ",", -1);
+        for (i = 0; parts[i]; i++) {
+            gchar *ip = g_strstrip(parts[i]);
+            gboolean is_v6 = strchr(ip, ':') != NULL;
+
+            if ((family == AF_INET && is_v6) || (family == AF_INET6 && !is_v6))
+                continue;
+            if (g_str_has_suffix(ip, "/0"))
+                return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 gboolean
 awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GError **error)
 {
@@ -88,9 +125,17 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
 
     addr = awg_device_get_address_v4(device);
     if (addr) {
+        /* METHOD_AUTO (а не MANUAL): сервис плагина добавляет маршруты из AllowedIPs
+         * только тогда, когда NM управляет маршрутами этой семьи — при MANUAL маршрутов
+         * не появляется, и профиль со списком адресов не маршрутизируется вообще.
+         * never-default включаем, если профиль не маршрутизирует всё: иначе NM делает
+         * VPN маршрутом по умолчанию и заворачивает в туннель и те адреса, что должны
+         * идти мимо него (см. allowed_ips_have_default). */
         g_object_set(s_ip4,
                      NM_SETTING_IP_CONFIG_METHOD,
-                     NM_SETTING_IP4_CONFIG_METHOD_MANUAL,
+                     NM_SETTING_IP4_CONFIG_METHOD_AUTO,
+                     NM_SETTING_IP_CONFIG_NEVER_DEFAULT,
+                     !allowed_ips_have_default(device, AF_INET),
                      NULL);
         add_ip_address(NM_SETTING_IP_CONFIG(s_ip4), (GInetAddress *)addr, 32);
     } else {
@@ -111,6 +156,8 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         g_object_set(s_ip6,
                      NM_SETTING_IP_CONFIG_METHOD,
                      NM_SETTING_IP6_CONFIG_METHOD_MANUAL,
+                     NM_SETTING_IP_CONFIG_NEVER_DEFAULT,
+                     !allowed_ips_have_default(device, AF_INET6),
                      NULL);
         add_ip_address(NM_SETTING_IP_CONFIG(s_ip6), (GInetAddress *)addr, 128);
     } else {
@@ -301,7 +348,10 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         }
         g_free(key);
 
-        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY_FLAGS, i);
+        /* The flags are stored by libnm as "<secret-name>-flags": passing the
+         * already suffixed name here wrote "<secret-name>-flags-flags" instead,
+         * which nothing ever read back. */
+        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
         nm_setting_set_secret_flags(NM_SETTING(s_vpn),
                                     key,
                                     awg_device_peer_get_shared_key_flags(peer),
@@ -623,12 +673,12 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
         }
         g_free(key);
 
-        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY_FLAGS, i);
+        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
         {
             NMSettingSecretFlags flags;
-            if (nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL)) {
+
+            if (nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL))
                 awg_device_peer_set_shared_key_flags(peer, flags);
-            }
         }
         g_free(key);
 

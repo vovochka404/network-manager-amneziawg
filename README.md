@@ -247,10 +247,9 @@ sudo systemctl restart NetworkManager
 
 Use awg-quick mode (set `NM_FORCE_AWG_QUICK=1`) when:
 
-1. Your system have the amneziawg kernel module version lower then v1.0.20251004
-2. Your system has a kernel module older than **3.0** and the profile carries AWG 3.1 parameters — the netlink backend refuses such a connection with an explicit error naming the loaded module version
-3. You prefer the `awg-quick` workflow for tunnel management
-4. Debugging connection issues (awg-quick provides more verbose output)
+1. Your system has an amneziawg kernel module older than v1.0.20251004
+2. You prefer the `awg-quick` workflow for tunnel management
+3. You are debugging connection issues (awg-quick provides more verbose output)
 
 ---
 

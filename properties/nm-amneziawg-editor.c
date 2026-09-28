@@ -57,6 +57,9 @@ typedef struct {
     gboolean new_connection;
     NMConnection *connection;
     AWGDevice *device;
+    /* NM keeps the private key of an existing connection in its own secret
+     * store, outside the connection the editor receives. */
+    gboolean connection_known_to_nm;
     gint selected_peer_index;
     AWGDevicePeer *dialog_peer;
     gint dialog_peer_index;
@@ -190,7 +193,18 @@ check_validity(AmneziaWGEditor *self, GError **error)
     nm_setting_get_secret_flags(NM_SETTING(s_vpn), NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, &flags, NULL);
 
     if (!(flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED))) {
-        if (!check(priv, "interface_private_key_entry", check_interface_private_key, AWG_CONFIG_DEVICE_PRIVATE_KEY, TRUE, error)) {
+        GtkWidget *key_entry = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_private_key_entry"));
+        const char *key_text = key_entry ? AWG_EDITABLE_GET_TEXT(GTK_ENTRY(key_entry)) : NULL;
+        /* NM keeps the key of an existing connection in its own secret store
+         * and does not hand it to the editor. An empty field therefore means
+         * "keep the stored key", not "no key": requiring it here made every
+         * edit of a saved connection impossible. It stays required for a new
+         * connection, where nothing is stored yet. */
+        gboolean key_stored = priv->connection_known_to_nm || !priv->new_connection;
+
+        if ((!key_text || !key_text[0]) && key_stored) {
+            gtk_style_context_remove_class(gtk_widget_get_style_context(key_entry), "error");
+        } else if (!check(priv, "interface_private_key_entry", check_interface_private_key, AWG_CONFIG_DEVICE_PRIVATE_KEY, TRUE, error)) {
             success = FALSE;
         }
     } else {
@@ -1277,6 +1291,16 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
         gtk_widget_set_sensitive(widget, FALSE);
     }
 
+    /* Is this a connection NM already stores? Its key then lives in NM's own
+     * secret store, which is what makes an empty field acceptable below. */
+    {
+        g_autoptr(NMClient) client = nm_client_new(NULL, NULL);
+        const gchar *uuid = nm_connection_get_uuid(connection);
+
+        if (client && uuid && *uuid)
+            priv->connection_known_to_nm = nm_client_get_connection_by_uuid(client, uuid) != NULL;
+    }
+
     return TRUE;
 }
 
@@ -1463,7 +1487,7 @@ save_interface_to_connection(AmneziaWGEditor *self)
                 nm_setting_vpn_add_secret(s_vpn, key, value);
             g_free(key);
 
-            key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY_FLAGS, i);
+            key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
             nm_setting_set_secret_flags(NM_SETTING(s_vpn), key,
                                         awg_device_peer_get_shared_key_flags(peer), NULL);
             g_free(key);

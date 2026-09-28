@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+#### Secrets & Config Handling
+- **Create the generated config with private permissions**: the configuration file handed to `awg-quick` (in the system temporary directory) contains the private key and was created with the process umask — `0644` by default — so any local user could read it until the manager `chmod`ed it to `0400`, or permanently if the service died in between. It is now created with `G_FILE_CREATE_PRIVATE` (`0600`) before a single byte is written
+- **Editing a saved connection no longer demands the private key again**: NM keeps VPN secrets in its own store and omits them from the connection handed to the editor, so the Private Key field showed up empty and the `PrivateKey` check refused every save — the field turned red on a connection that works. An empty field now means "keep the stored key" for a connection NM already has, and nothing is written, so the stored secret survives; a new connection still requires it. Reading the secret back is not an option: NM answers `GetSecrets` for a VPN connection with `No agents were available for this request`
+- **Peer preshared key flags were stored under a doubled name**: libnm persists the flags of a VPN secret as `<secret-name>-flags`, but the plugin handed its own already suffixed name to `nm_setting_set_secret_flags()`, so it wrote `peer-N-preshared-key-flags-flags` — a data item nothing ever read back. Flags therefore never had an effect: `check_peer_need_secrets()` bailed out on the first check and NM would not ask for a missing preshared key. The secret name is used now, so the flags live where libnm and the service look for them
+- **Report why a configuration was rejected**: `awg_device_new_from_config()` now returns a `GError` (`awg_config_error_quark()`) that names the offending key and value, or explains why the parsed device cannot be used. `nmcli connection import` used to fail with a bare `Failed to parse AmneziaWG config file` and leave the details in the journal; it now says `Invalid value for S1: 999999` or `PrivateKey is missing (check vpn.secrets and secret flags)`
+
+### Improvements
+
+#### Tooling
+- **`tests/` is checked for style too**: the `code-style` job and `scripts/check-style.sh` now cover the test sources, so test code can no longer drift out of the project format unnoticed
+- **Editing the dialog rebuilds its resource**: the GResource rules depended only on `gresource.xml`, so changing `properties/nm-amneziawg-dialog.ui` left the previously compiled UI inside the plugin until a clean build — a confusing no-op for anyone touching the editor. The rules now depend on every bundled file, as reported by `glib-compile-resources --generate-dependencies`
 ### Major Changes
 
 #### AmneziaWG 3.1 Protocol Support
@@ -29,6 +42,10 @@
 - **Fixed activation failure with `Unknown reason`**: `new_secrets()` could return `FALSE` without setting a `GError`, making libnm emit `g_dbus_method_invocation_take_error: assertion 'error != NULL'` so NM saw `Remote peer disconnected`. Every D-Bus virtual now sets `*error` on all `FALSE` paths, including fallbacks from manager calls
 - **Pre-flight config validation**: `connect_worker` rejects invalid devices via the new `awg_device_get_invalid_reason()` before launching any backend. A keyless device (lost `vpn.secrets`) previously produced a config that `awg setconf`/awg-quick rejected with `Configuration parsing error`; the error now names the missing piece (`PrivateKey is missing…`, `Peer N: …`)
 - **Report awg-quick failures**: the external manager converts a non-zero `awg-quick` exit status into a `GError` via `g_spawn_check_exit_status()` instead of failing silently
+
+#### Imported Configurations
+- **Imported profiles installed no routes**: `awg_device_save_to_nm_connection()` wrote `ipv4.method=manual` for every imported `.conf`. The service installs routes from `AllowedIPs` only when NM manages the routes of that address family, so a profile with an explicit `AllowedIPs` list (split tunneling) was imported successfully and then routed nothing. The method is now `auto`, which is what the service expects and what a saved connection created through the editor already used
+- **Imported profiles hijacked the default route**: `never-default` was never set, and NM makes every VPN connection the default route unless told otherwise, so a profile whose `AllowedIPs` is an explicit list still sent all traffic — including the addresses meant to bypass the tunnel — through it. `never-default` is now derived from `AllowedIPs` (set when no peer routes `0.0.0.0/0` / `::/0`, unset for a full tunnel), matching the intent of the imported configuration
 
 #### Netlink Robustness
 - **Use absolute modprobe path** in `load_kernel_module()`
