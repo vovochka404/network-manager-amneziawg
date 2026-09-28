@@ -11,6 +11,7 @@
 
 #include "awg-connection-manager-external.h"
 #include "awg-config.h"
+#include "awg-validate.h"
 #include <glib.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -76,6 +77,53 @@ awg_connection_manager_external_is_available(void)
     return awg_quick_find_exe() != NULL;
 }
 
+/* AmneziaWG 3.1 parameters do not exist in the parsers shipped before
+ * amneziawg-tools 3.0: awg-quick feeds the generated file to "awg setconf",
+ * which rejects an unknown key with "Line unrecognized" and aborts the
+ * activation without saying which tool is too old. Check the version of the
+ * binary awg-quick will actually call — the one found in PATH, like the script
+ * itself resolves it. An unreadable or unparseable version is not blocked; the
+ * command then reports its own failure, as before. */
+static gboolean
+external_check_awg31_support(AWGDevice *device, GError **error)
+{
+    g_autofree gchar *awg = NULL;
+    g_autofree gchar *output = NULL;
+    g_autofree gchar *command = NULL;
+    GError *spawn_error = NULL;
+    gint exit_status = 0;
+
+    if (!awg_device_has_awg31_params(device))
+        return TRUE;
+
+    awg = g_find_program_in_path("awg");
+    if (!awg)
+        return TRUE;
+
+    command = g_strdup_printf("%s --version", awg);
+    if (!g_spawn_command_line_sync(command, &output, NULL, &exit_status, &spawn_error) ||
+        !g_spawn_check_exit_status(exit_status, NULL)) {
+        g_clear_error(&spawn_error);
+        return TRUE;
+    }
+    g_clear_error(&spawn_error);
+
+    if (!output)
+        return TRUE;
+
+    g_strstrip(output);
+    if (awg_version_at_least(output, 3, 0))
+        return TRUE;
+
+    g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
+                "This connection uses AmneziaWG 3.1 parameters (HeaderProtectionKey, "
+                "ContentPaddingAddition, ...), which need amneziawg-tools 3.0 or newer, "
+                "but %s reports \"%s\". Upgrade amneziawg-tools, or use the kernel "
+                "backend (unset NM_FORCE_AWG_QUICK)",
+                awg, output);
+    return FALSE;
+}
+
 static gboolean
 awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
@@ -91,6 +139,9 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
                     "awg-quick executable not found");
         return FALSE;
     }
+
+    if (!external_check_awg31_support(priv->device, error))
+        return FALSE;
 
     if (!awg_device_save_to_file(priv->device, priv->conf_path)) {
         g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,

@@ -447,3 +447,79 @@ msgstr "Редактировать"
 #: properties/nm-amneziawg-dialog.ui:1457
 msgid "Remove"
 msgstr "Удалить"
+
+#: properties/nm-amneziawg-dialog.ui:1393
+msgid "Header protection key:"
+msgstr "Ключ защиты заголовка:"
+
+#: properties/nm-amneziawg-dialog.ui:1393
+msgid "Base64-encoded 32-byte key used to protect packet headers. AWG 3.1 only; leave empty for older servers."
+msgstr "Ключ защиты заголовков пакетов в base64 (ровно 32 байта). Только для AWG 3.1; для старых серверов оставьте пустым."
+
+#: properties/nm-amneziawg-dialog.ui:1432
+msgid "Content padding addition:"
+msgstr "Добавка заполнения пакета:"
+
+#: properties/nm-amneziawg-dialog.ui:1432
+msgid "Random padding added to every packet, as a single number (e.g. 10) or a range (e.g. 2-10), 0-65535. AWG 3.1 only."
+msgstr "Случайное заполнение каждого пакета: одно число (например, 10) или диапазон (например, 2-10), 0-65535. Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1471
+msgid "Rekey after time:"
+msgstr "Перевыпуск ключа через:"
+
+#: properties/nm-amneziawg-dialog.ui:1471
+msgid "Seconds after which a session is rekeyed, as a number or range (e.g. 115-125). AWG 3.1 only."
+msgstr "Через сколько секунд перевыпускать ключ сессии: число или диапазон (например, 115-125). Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1510
+msgid "Rekey timeout:"
+msgstr "Таймаут перевыпуска ключа:"
+
+#: properties/nm-amneziawg-dialog.ui:1510
+msgid "Seconds between rekey attempts, as a number or range (e.g. 5-6). AWG 3.1 only."
+msgstr "Сколько секунд между попытками перевыпуска ключа: число или диапазон (например, 5-6). Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1549
+msgid "Reject after time:"
+msgstr "Разрыв соединения через:"
+
+#: properties/nm-amneziawg-dialog.ui:1549
+msgid "Seconds after which a session is dropped, as a number or range (e.g. 175-185). AWG 3.1 only."
+msgstr "Через сколько секунд разрывать сессию: число или диапазон (например, 175-185). Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1588
+msgid "Keepalive timeout:"
+msgstr "Таймаут keepalive:"
+
+#: properties/nm-amneziawg-dialog.ui:1588
+msgid "Seconds before a keepalive is sent, as a number or range (e.g. 10-12). AWG 3.1 only."
+msgstr "Через сколько секунд отправлять keepalive: число или диапазон (например, 10-12). Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1627
+msgid "Max handshake attempts:"
+msgstr "Максимум попыток handshake:"
+
+#: properties/nm-amneziawg-dialog.ui:1627
+msgid "How many handshake attempts are made, as a number or range (e.g. 16-20). AWG 3.1 only."
+msgstr "Сколько попыток handshake выполняется: число или диапазон (например, 16-20). Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1666
+msgid "Random trailers"
+msgstr "Случайные хвосты"
+
+#: properties/nm-amneziawg-dialog.ui:1666
+msgid "Append random data to every packet. AWG 3.1 only."
+msgstr "Добавлять случайные данные в конец каждого пакета. Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1704
+msgid "Disable cookies"
+msgstr "Отключить cookies"
+
+#: properties/nm-amneziawg-dialog.ui:1704
+msgid "Do not send cookie replies. AWG 3.1 only."
+msgstr "Не отправлять cookie-ответы. Только для AWG 3.1."
+
+#: properties/nm-amneziawg-dialog.ui:1739
+msgid "AmneziaWG 3.1"
+msgstr "AmneziaWG 3.1"

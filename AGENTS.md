@@ -1058,7 +1058,7 @@ Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the
 
 Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message (`check_awg31_support()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`; `awg_device_has_awg31_params()` decides whether the configuration needs them at all. When the version cannot be read the attributes are still sent and the kernel decides, as before.
 
-The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer (`awg --version` prints the version). The plugin does not verify the tools version yet.
+The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer, and the backend checks that before writing anything — it runs `awg --version` on the binary `awg-quick` resolves from `PATH` (`external_check_awg31_support()` in `awg-connection-manager-external.c`) and refuses with an actionable message. An unreadable or unparseable version is not blocked, the command then reports its own failure.
 
 ### Extended wg_device/wg_peer Structures (shared/amneziawg.h)
 
@@ -1115,6 +1115,24 @@ All numeric interface fields use `GtkSpinButton` with individual `GtkAdjustment`
 | Keep-alive | 0 - 65535 |
 
 **Important:** MTU = 0 means auto-detect. Each H1-H4 and JMin/JMax/S1/S2/S3/S4 field has its own adjustment (not shared).
+
+### AmneziaWG 3.1 Fields
+
+The nine AWG 3.1 parameters live in the `AmneziaWG 3.1` frame of `properties/nm-amneziawg-dialog.ui` (next to the 2.0 obfuscation groups). The key and the six timing/padding values are `GtkEntry` (they accept ranges like `115-125`, which a spin button cannot express), the two flags are `GtkCheckButton`.
+
+| Widget | `vpn.data` key | Validation |
+|---|---|---|
+| `interface_header_protection_key_entry` | `connection-header-protection-key` | base64, exactly 32 decoded bytes |
+| `interface_content_padding_addition_entry` | `connection-content-padding-addition` | `awg_range_parse_u32()` |
+| `interface_rekey_after_time_entry` | `connection-rekey-after-time` | `awg_range_parse_u32()` |
+| `interface_rekey_timeout_entry` | `connection-rekey-timeout` | `awg_range_parse_u32()` |
+| `interface_reject_after_time_entry` | `connection-reject-after-time` | `awg_range_parse_u32()` |
+| `interface_keepalive_timeout_entry` | `connection-keepalive-timeout` | `awg_range_parse_u32()` |
+| `interface_max_handshake_attempts_entry` | `connection-max-handshake-attempts` | `awg_range_parse_u32()` |
+| `interface_random_trailers_check` | `connection-random-trailers` | none, written as `on`/`off` |
+| `interface_disable_cookies_check` | `connection-disable-cookies` | none, written as `on`/`off` |
+
+An empty entry means "not set": the key is removed from `vpn.data`, and a disabled switch removes its key too, so a profile that does not use 3.1 parameters stays free of them. Rejected values keep the `error` style class on the field and name the offending key in the returned `GError`.
 
 ### Secret Field Handling
 
