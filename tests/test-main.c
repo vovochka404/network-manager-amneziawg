@@ -1444,7 +1444,7 @@ test_peer_shared_key_flags_roundtrip(void)
     g_object_unref(device);
 }
 
-
+static void
 test_awg_range_parse_u32(void)
 {
     guint32 packed;
@@ -1522,7 +1522,7 @@ test_awg_config_awg31_roundtrip(void)
 {
     gchar *config_path = get_test_config_path("test-config-awg31.conf");
     gchar *output_path = g_build_filename(g_get_tmp_dir(), "output-awg31.conf", NULL);
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     AWGDevice *reloaded;
 
     g_assert_nonnull(device);
@@ -1542,7 +1542,7 @@ test_awg_config_awg31_roundtrip(void)
     g_assert_true(awg_device_save_to_file(device, output_path));
     g_object_unref(device);
 
-    reloaded = awg_device_new_from_config(output_path);
+    reloaded = awg_device_new_from_config(output_path, NULL);
     g_assert_nonnull(reloaded);
     g_assert_cmpstr(awg_device_get_header_protection_key(reloaded), ==, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304=");
     g_assert_cmpstr(awg_device_get_content_padding_addition(reloaded), ==, "2-10");
@@ -1565,7 +1565,7 @@ test_awg_nm_connection_awg31_roundtrip(void)
 {
     gchar *config_path = get_test_config_path("test-config-awg31.conf");
     NMConnection *connection = nm_simple_connection_new();
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
     AWGDevice *restored;
     GError *error = NULL;
 
@@ -1666,7 +1666,7 @@ test_awg_device_has_awg31_params(void)
 
     /* A 2.0 configuration carries none of the 3.1 parameters. */
     config_path = get_test_config_path("test-config-dual.conf");
-    device = awg_device_new_from_config(config_path);
+    device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_false(awg_device_has_awg31_params(device));
     g_object_unref(device);
@@ -1674,7 +1674,7 @@ test_awg_device_has_awg31_params(void)
 
     /* A 3.1 configuration carries all of them. */
     config_path = get_test_config_path("test-config-awg31.conf");
-    device = awg_device_new_from_config(config_path);
+    device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
     g_assert_true(awg_device_has_awg31_params(device));
     g_object_unref(device);
