@@ -1541,6 +1541,115 @@ test_awg_device_has_awg31_params(void)
     g_object_unref(device);
 }
 
+static void
+test_external_awg31_requires_new_tools(void)
+{
+    /* Hermetic stubs: awg-quick does nothing, awg reports a version. */
+    g_autofree gchar *dir = g_dir_make_tmp("awg-tools-XXXXXX", NULL);
+    g_autofree gchar *quick = g_build_filename(dir, "awg-quick", NULL);
+    g_autofree gchar *awg = g_build_filename(dir, "awg", NULL);
+    const gchar *old_path = g_getenv("PATH");
+    const gchar *old_quick_path = g_getenv("NM_AWG_QUICK_PATH");
+    const gchar *old_force = g_getenv("NM_FORCE_AWG_QUICK");
+    g_autofree gchar *saved_path = old_path ? g_strdup(old_path) : NULL;
+    g_autofree gchar *saved_quick_path = old_quick_path ? g_strdup(old_quick_path) : NULL;
+    g_autofree gchar *saved_force = old_force ? g_strdup(old_force) : NULL;
+    g_autofree gchar *search_path = g_strdup_printf("%s:%s", dir, old_path ? old_path : "");
+    AWGDevice *device;
+    AWGDevicePeer *peer;
+    AWGConnectionManager *mgr;
+    GError *error = NULL;
+
+    g_assert_nonnull(dir);
+    g_assert_true(g_file_set_contents(quick, "#!/bin/sh\nexit 0\n", -1, NULL));
+    g_assert_cmpint(chmod(quick, 0755), ==, 0);
+
+    g_setenv("NM_AWG_QUICK_PATH", quick, TRUE);
+    g_setenv("NM_FORCE_AWG_QUICK", "1", TRUE);
+    g_setenv("PATH", search_path, TRUE);
+
+    /* A 2.0 device carries no 3.1 parameter. */
+    device = awg_device_new();
+    g_assert_nonnull(device);
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    /* Tools without the 3.1 keys must not be asked to parse one. */
+    g_assert_true(g_file_set_contents(awg, "#!/bin/sh\necho 'amneziawg-tools v1.0.20260618 - https://amnezia.org'\n", -1, NULL));
+    g_assert_cmpint(chmod(awg, 0755), ==, 0);
+
+    mgr = awg_connection_manager_external_new("awgtest20", device);
+    g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+    g_assert_no_error(error);
+    g_object_unref(mgr);
+    g_object_unref(device);
+
+    /* The same tools refuse a 3.1 one ... */
+    device = awg_device_new();
+    g_assert_nonnull(device);
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_true(awg_device_set_header_protection_key(device, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304="));
+    g_assert_true(awg_device_set_content_padding_addition(device, "2-10"));
+    peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    mgr = awg_connection_manager_external_new("awgtest31", device);
+    g_assert_false(awg_connection_manager_connect(mgr, NULL, &error));
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "3.0"));
+    g_assert_nonnull(strstr(error->message, "amneziawg-tools"));
+    g_clear_error(&error);
+    g_object_unref(mgr);
+    g_object_unref(device);
+
+    /* ... and 3.1 tools accept it. */
+    g_assert_true(g_file_set_contents(awg, "#!/bin/sh\necho 'amneziawg-tools v3.1.20260812 - https://amnezia.org'\n", -1, NULL));
+    g_assert_cmpint(chmod(awg, 0755), ==, 0);
+
+    device = awg_device_new();
+    g_assert_nonnull(device);
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_true(awg_device_set_disable_cookies(device, TRUE));
+    peer = awg_device_peer_new();
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    mgr = awg_connection_manager_external_new("awgtest31new", device);
+    g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+    g_assert_no_error(error);
+    g_object_unref(mgr);
+    g_object_unref(device);
+
+    if (saved_quick_path)
+        g_setenv("NM_AWG_QUICK_PATH", saved_quick_path, TRUE);
+    else
+        g_unsetenv("NM_AWG_QUICK_PATH");
+    if (saved_force)
+        g_setenv("NM_FORCE_AWG_QUICK", saved_force, TRUE);
+    else
+        g_unsetenv("NM_FORCE_AWG_QUICK");
+    if (saved_path)
+        g_setenv("PATH", saved_path, TRUE);
+    else
+        g_unsetenv("PATH");
+
+    unlink(quick);
+    unlink(awg);
+    rmdir(dir);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1606,6 +1715,7 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/nm-connection/keyless-config-detected", test_keyless_config_detected);
     g_test_add_func("/awg/device/invalid-reason", test_invalid_reason_messages);
     g_test_add_func("/awg/manager/force-quick-selects-external", test_force_awg_quick_selects_external);
+    g_test_add_func("/awg/manager/external-awg31-needs-new-tools", test_external_awg31_requires_new_tools);
     g_test_add_func("/awg/validate/range-parse-u32", test_awg_range_parse_u32);
     g_test_add_func("/awg/device/header-protection-key", test_awg_device_header_protection_key);
     g_test_add_func("/awg/device/range-setters-reject-over-u16", test_awg_device_range_setters_reject_over_u16);
