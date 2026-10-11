@@ -185,7 +185,7 @@ validate_config(AWGDevice *device)
 static void
 test_netlink_connect(const gchar *config_path)
 {
-    AWGDevice *device = awg_device_new_from_config(config_path);
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
 
     if (!device) {
         g_printerr("Failed to load config from %s\n", config_path);

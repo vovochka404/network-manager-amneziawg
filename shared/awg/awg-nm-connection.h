@@ -20,7 +20,6 @@
 #define NM_AWG_VPN_SERVICE_TYPE "org.freedesktop.NetworkManager.amneziawg"
 
 #define NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY "local-private-key"
-#define NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY_FLAGS "local-private-key-flags"
 #define NM_AWG_VPN_CONFIG_DEVICE_PUBLIC_KEY "peer-public-key"
 #define NM_AWG_VPN_CONFIG_DEVICE_LISTEN_PORT "local-listen-port"
 #define NM_AWG_VPN_CONFIG_DEVICE_FW_MARK "interface-fw-mark"
@@ -57,7 +56,6 @@
 
 #define NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY "peer-%d-public-key"
 #define NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY "peer-%d-preshared-key"
-#define NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY_FLAGS "peer-%d-preshared-key-flags"
 #define NM_AWG_VPN_CONFIG_PEER_ALLOWED_IPS "peer-%d-allowed-ips"
 #define NM_AWG_VPN_CONFIG_PEER_ENDPOINT "peer-%d-endpoint"
 #define NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE "peer-%d-keep-alive"

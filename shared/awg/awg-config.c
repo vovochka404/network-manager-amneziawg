@@ -13,6 +13,12 @@
 #include "awg-device.h"
 #include <glib.h>
 
+GQuark
+awg_config_error_quark(void)
+{
+    return g_quark_from_static_string("awg-config-error-quark");
+}
+
 /* AWG 3.1 on/off flags; mirrors the "on"/"off" convention used for AdvancedSecurity. */
 static gboolean
 awg_parse_bool(const gchar *value)
@@ -26,9 +32,9 @@ awg_parse_bool(const gchar *value)
 }
 
 AWGDevice *
-awg_device_new_from_config(const char *config_path)
+awg_device_new_from_config(const char *config_path, GError **error)
 {
-    GError *error = NULL;
+    GError *io_error = NULL;
     GDataInputStream *data_input_stream;
     gchar *line, *key, *value;
     gboolean is_interface_section = FALSE, is_peer_section = FALSE;
@@ -37,11 +43,13 @@ awg_device_new_from_config(const char *config_path)
     gchar **parts = NULL;
     gboolean success = TRUE;
     GFile *file = g_file_new_for_path(config_path);
-    GInputStream *input_stream = (GInputStream *)g_file_read(file, NULL, &error);
+    GInputStream *input_stream = (GInputStream *)g_file_read(file, NULL, &io_error);
 
-    if (error) {
-        g_warning("Failed to open file: %s", error->message);
-        g_error_free(error);
+    if (io_error) {
+        g_warning("Failed to open file: %s", io_error->message);
+        g_set_error(error, AWG_CONFIG_ERROR, AWG_CONFIG_ERROR_READ,
+                    "Failed to open %s: %s", config_path, io_error->message);
+        g_error_free(io_error);
         g_object_unref(file);
         return NULL;
     }
@@ -49,7 +57,19 @@ awg_device_new_from_config(const char *config_path)
     device = awg_device_new();
     data_input_stream = g_data_input_stream_new(input_stream);
 
-    while ((line = g_data_input_stream_read_line_utf8(data_input_stream, NULL, NULL, &error)) != NULL) {
+    /* The setters reject a value by returning FALSE and warning; the caller
+     * needs the reason as a GError, so wrap every call and keep the first
+     * rejection, which is the one closest to the actual mistake. */
+#define SET_OR_FAIL(call)                                                        \
+    do {                                                                         \
+        gboolean ok_ = (call);                                                   \
+        if (!ok_ && !(error && *error))                                          \
+            g_set_error(error, AWG_CONFIG_ERROR, AWG_CONFIG_ERROR_INVALID_VALUE, \
+                        "Invalid value for %s: %s", key, value);                 \
+        success = success && ok_;                                                \
+    } while (0)
+
+    while ((line = g_data_input_stream_read_line_utf8(data_input_stream, NULL, NULL, &io_error)) != NULL) {
         line = g_strstrip(line);
         if (!*line || (*line == '#' && !g_str_has_prefix(line, AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED))) {
             continue;
@@ -85,69 +105,69 @@ awg_device_new_from_config(const char *config_path)
 
         if (is_interface_section) {
             if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRIVATE_KEY) == 0) {
-                success &= awg_device_set_private_key(device, value);
+                SET_OR_FAIL(awg_device_set_private_key(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PUBLIC_KEY) == 0 || g_strcmp0(key, AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED) == 0) {
-                success &= awg_device_set_public_key(device, value);
+                SET_OR_FAIL(awg_device_set_public_key(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_ADDRESS) == 0) {
-                success &= awg_device_set_address_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_address_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_LISTEN_PORT) == 0) {
-                success &= awg_device_set_listen_port_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_listen_port_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_DNS) == 0) {
-                success &= awg_device_set_dns_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_dns_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_FW_MARK) == 0) {
-                success &= awg_device_set_fw_mark_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_fw_mark_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JC) == 0) {
-                success &= awg_device_set_jc_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_jc_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JMIN) == 0) {
-                success &= awg_device_set_jmin_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_jmin_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_JMAX) == 0) {
-                success &= awg_device_set_jmax_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_jmax_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S1) == 0) {
-                success &= awg_device_set_s1_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_s1_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S2) == 0) {
-                success &= awg_device_set_s2_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_s2_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S3) == 0) {
-                success &= awg_device_set_s3_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_s3_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_S4) == 0) {
-                success &= awg_device_set_s4_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_s4_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H1) == 0) {
-                success &= awg_device_set_h1(device, value);
+                SET_OR_FAIL(awg_device_set_h1(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H2) == 0) {
-                success &= awg_device_set_h2(device, value);
+                SET_OR_FAIL(awg_device_set_h2(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H3) == 0) {
-                success &= awg_device_set_h3(device, value);
+                SET_OR_FAIL(awg_device_set_h3(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_H4) == 0) {
-                success &= awg_device_set_h4(device, value);
+                SET_OR_FAIL(awg_device_set_h4(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I1) == 0) {
-                success &= awg_device_set_i1(device, value);
+                SET_OR_FAIL(awg_device_set_i1(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I2) == 0) {
-                success &= awg_device_set_i2(device, value);
+                SET_OR_FAIL(awg_device_set_i2(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I3) == 0) {
-                success &= awg_device_set_i3(device, value);
+                SET_OR_FAIL(awg_device_set_i3(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I4) == 0) {
-                success &= awg_device_set_i4(device, value);
+                SET_OR_FAIL(awg_device_set_i4(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_I5) == 0) {
-                success &= awg_device_set_i5(device, value);
+                SET_OR_FAIL(awg_device_set_i5(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_HEADER_PROTECTION_KEY) == 0) {
-                success &= awg_device_set_header_protection_key(device, value);
+                SET_OR_FAIL(awg_device_set_header_protection_key(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_CONTENT_PADDING_ADDITION) == 0) {
-                success &= awg_device_set_content_padding_addition(device, value);
+                SET_OR_FAIL(awg_device_set_content_padding_addition(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REKEY_AFTER_TIME) == 0) {
-                success &= awg_device_set_rekey_after_time(device, value);
+                SET_OR_FAIL(awg_device_set_rekey_after_time(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REKEY_TIMEOUT) == 0) {
-                success &= awg_device_set_rekey_timeout(device, value);
+                SET_OR_FAIL(awg_device_set_rekey_timeout(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_REJECT_AFTER_TIME) == 0) {
-                success &= awg_device_set_reject_after_time(device, value);
+                SET_OR_FAIL(awg_device_set_reject_after_time(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_KEEPALIVE_TIMEOUT) == 0) {
-                success &= awg_device_set_keepalive_timeout(device, value);
+                SET_OR_FAIL(awg_device_set_keepalive_timeout(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS) == 0) {
-                success &= awg_device_set_max_handshake_attempts(device, value);
+                SET_OR_FAIL(awg_device_set_max_handshake_attempts(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_RANDOM_TRAILERS) == 0) {
-                success &= awg_device_set_random_trailers(device, awg_parse_bool(value));
+                SET_OR_FAIL(awg_device_set_random_trailers(device, awg_parse_bool(value)));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_DISABLE_COOKIES) == 0) {
-                success &= awg_device_set_disable_cookies(device, awg_parse_bool(value));
+                SET_OR_FAIL(awg_device_set_disable_cookies(device, awg_parse_bool(value)));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MTU) == 0) {
-                success &= awg_device_set_mtu_from_string(device, value);
+                SET_OR_FAIL(awg_device_set_mtu_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRE_UP) == 0) {
                 awg_device_set_pre_up(device, value);
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_POST_UP) == 0) {
@@ -159,15 +179,15 @@ awg_device_new_from_config(const char *config_path)
             }
         } else if (is_peer_section) {
             if (g_strcmp0(key, AWG_CONFIG_PEER_ENDPOINT) == 0) {
-                success &= awg_device_peer_set_endpoint(peer, value);
+                SET_OR_FAIL(awg_device_peer_set_endpoint(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_PUBLIC_KEY) == 0) {
-                success &= awg_device_peer_set_public_key(peer, value);
+                SET_OR_FAIL(awg_device_peer_set_public_key(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_PRESHARED_KEY) == 0) {
-                success &= awg_device_peer_set_shared_key(peer, value);
+                SET_OR_FAIL(awg_device_peer_set_shared_key(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ALLOWED_IPS) == 0) {
-                success &= awg_device_peer_set_allowed_ips_from_string(peer, value);
+                SET_OR_FAIL(awg_device_peer_set_allowed_ips_from_string(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_KEEP_ALIVE) == 0) {
-                success &= awg_device_peer_set_keep_alive_interval_from_string(peer, value);
+                SET_OR_FAIL(awg_device_peer_set_keep_alive_interval_from_string(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ADVANCED_SECURITY) == 0) {
                 if (g_strcmp0(value, "on") == 0) {
                     awg_device_peer_set_advanced_security(peer, TRUE);
@@ -181,9 +201,11 @@ awg_device_new_from_config(const char *config_path)
         }
     }
 
-    if (error) {
-        g_warning("Error reading file: %s", error->message);
-        g_error_free(error);
+    if (io_error) {
+        g_warning("Error reading file: %s", io_error->message);
+        g_set_error(error, AWG_CONFIG_ERROR, AWG_CONFIG_ERROR_READ,
+                    "Failed to read %s: %s", config_path, io_error->message);
+        g_error_free(io_error);
     }
 
     if (peer) {
@@ -200,9 +222,19 @@ awg_device_new_from_config(const char *config_path)
     g_object_unref(file);
 
     if (!success || !awg_device_is_valid(device)) {
+        if (!(error && *error)) {
+            gchar *reason = awg_device_get_invalid_reason(device);
+
+            g_set_error(error, AWG_CONFIG_ERROR, AWG_CONFIG_ERROR_INCOMPLETE,
+                        "Invalid AmneziaWG configuration: %s",
+                        reason ? reason : "unknown reason");
+            g_free(reason);
+        }
         g_warning("Invalid AWG device configuration.");
         g_clear_object(&device);
     }
+
+#undef SET_OR_FAIL
 
     return device;
 }
@@ -436,7 +468,7 @@ awg_device_save_to_file(AWGDevice *device, const char *config_path)
     GError *error = NULL;
     gchar *content = NULL;
     GFile *file = g_file_new_for_path(config_path);
-    GOutputStream *output_stream = (GOutputStream *)g_file_replace(file, NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION, NULL, &error);
+    GOutputStream *output_stream = (GOutputStream *)g_file_replace(file, NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION | G_FILE_CREATE_PRIVATE, NULL, &error);
 
     if (error) {
         g_warning("Failed to open file: %s", error->message);

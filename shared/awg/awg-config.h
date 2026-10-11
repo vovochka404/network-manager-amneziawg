@@ -62,7 +62,21 @@
 #define AWG_CONFIG_PEER_KEEP_ALIVE "PersistentKeepalive"
 #define AWG_CONFIG_PEER_ADVANCED_SECURITY "AdvancedSecurity"
 
-AWGDevice *awg_device_new_from_config(const char *config_path);
+#define AWG_CONFIG_ERROR (awg_config_error_quark())
+
+typedef enum {
+    AWG_CONFIG_ERROR_READ,
+    AWG_CONFIG_ERROR_INVALID_VALUE,
+    AWG_CONFIG_ERROR_INCOMPLETE
+} AWGConfigError;
+
+GQuark awg_config_error_quark(void);
+
+/* Parses a WireGuard/AmneziaWG configuration file. Returns NULL and sets
+ * "error" — naming the offending key and value where possible — when the file
+ * cannot be read, carries a value the device rejects, or describes a device
+ * that cannot be used. */
+AWGDevice *awg_device_new_from_config(const char *config_path, GError **error);
 gchar *awg_device_create_config_string(AWGDevice *device);
 gboolean awg_device_save_to_file(AWGDevice *device, const char *config_path);
 
