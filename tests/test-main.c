@@ -598,7 +598,7 @@ test_awg_validate_endpoint_valid(void)
     g_assert_true(awg_validate_endpoint("vpn.example.com:51820"));
     g_assert_true(awg_validate_endpoint("192.168.1.1:51820"));
     g_assert_true(awg_validate_endpoint("[::1]:51820"));
-    g_assert_true(awg_validate_endpoint("vpn.example.com"));
+    g_assert_false(awg_validate_endpoint("vpn.example.com"));
     g_assert_false(awg_validate_endpoint("vpn.example.com:"));
     g_assert_false(awg_validate_endpoint("vpn.example.com:99999"));
 }

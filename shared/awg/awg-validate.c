@@ -292,7 +292,6 @@ awg_validate_endpoint(const gchar *str)
 
     gchar *host = NULL;
     gchar *port_str = NULL;
-    gboolean has_colon = (g_strrstr(str, ":") != NULL);
 
     if (str[0] == '[') {
         const gchar *close_bracket = g_strrstr(str, "]");
@@ -323,11 +322,9 @@ awg_validate_endpoint(const gchar *str)
 
     gboolean valid_host = awg_validate_ip4(host) || awg_validate_ip6(host) || awg_validate_fqdn(host);
 
-    gboolean valid_port = TRUE;
+    gboolean valid_port = port_str != NULL && *port_str != '\0';
     if (port_str) {
-        valid_port = g_ascii_string_to_unsigned(port_str, 10, 0, 65535, NULL, NULL);
-    } else if (has_colon) {
-        valid_port = FALSE;
+        valid_port = g_ascii_string_to_unsigned(port_str, 10, 1, 65535, NULL, NULL);
     }
 
     g_free(host);
