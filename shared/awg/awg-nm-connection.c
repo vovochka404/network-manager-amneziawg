@@ -108,6 +108,11 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         nm_connection_add_setting(connection, NM_SETTING(s_ip6));
     }
 
+    nm_setting_ip_config_clear_addresses(NM_SETTING_IP_CONFIG(s_ip4));
+    nm_setting_ip_config_clear_dns(NM_SETTING_IP_CONFIG(s_ip4));
+    nm_setting_ip_config_clear_addresses(NM_SETTING_IP_CONFIG(s_ip6));
+    nm_setting_ip_config_clear_dns(NM_SETTING_IP_CONFIG(s_ip6));
+
     const char *old_uuid = nm_setting_connection_get_uuid(s_con);
     if (!old_uuid || !*old_uuid) {
         g_object_set(s_con,
