@@ -583,7 +583,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
         g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP6, val);
     }
 
-    config = g_variant_builder_end(&builder);
+    config = g_variant_ref_sink(g_variant_builder_end(&builder));
     ip4config = g_variant_builder_end(&ip4builder);
     ip6config = g_variant_builder_end(&ip6builder);
     if (has_ip4)
