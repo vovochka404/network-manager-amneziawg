@@ -819,7 +819,9 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
 
     if (data->entry_psk) {
         gtk_entry_set_visibility(data->entry_psk, FALSE);
-        nma_utils_setup_password_storage(GTK_WIDGET(data->entry_psk), 0, NULL, NULL, TRUE, FALSE);
+        nma_utils_setup_password_storage(GTK_WIDGET(data->entry_psk),
+                                         awg_device_peer_get_shared_key_flags(peer),
+                                         NULL, NULL, TRUE, FALSE);
     }
 
     peer_dialog_update_ui(data);
@@ -834,6 +836,7 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     g_signal_connect(data->entry_public_key, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
     g_signal_connect(data->entry_endpoint, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
     g_signal_connect(data->entry_allowed_ips, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
+    g_signal_connect(data->entry_psk, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
 
     gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
     gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(toplevel));
