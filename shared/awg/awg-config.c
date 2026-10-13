@@ -72,12 +72,14 @@ awg_device_new_from_config(const char *config_path, GError **error)
     while ((line = g_data_input_stream_read_line_utf8(data_input_stream, NULL, NULL, &io_error)) != NULL) {
         line = g_strstrip(line);
         if (!*line || (*line == '#' && !g_str_has_prefix(line, AWG_CONFIG_DEVICE_PUBLIC_KEY_COMMENTED))) {
+            g_free(line);
             continue;
         }
 
         if (g_strcmp0(line, AWG_CONFIG_INTERFACE_SECTION) == 0) {
             is_interface_section = TRUE;
             is_peer_section = FALSE;
+            g_free(line);
             continue;
         }
 
@@ -90,6 +92,7 @@ awg_device_new_from_config(const char *config_path, GError **error)
                 g_object_unref(peer);
             }
             peer = awg_device_peer_new();
+            g_free(line);
             continue;
         }
 
@@ -97,6 +100,8 @@ awg_device_new_from_config(const char *config_path, GError **error)
         if (!(parts && parts[0] && parts[1])) {
             g_warning("Invalid config line: %s", line);
             g_strfreev(parts);
+            parts = NULL;
+            g_free(line);
             continue;
         }
 
@@ -199,6 +204,10 @@ awg_device_new_from_config(const char *config_path, GError **error)
                 }
             }
         }
+
+        g_strfreev(parts);
+        parts = NULL;
+        g_free(line);
     }
 
     if (io_error) {
