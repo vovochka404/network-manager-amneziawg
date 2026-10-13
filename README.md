@@ -312,7 +312,9 @@ nmcli c import type amneziawg file /path/to/vpn.conf
 
 ## D-Bus Configuration
 
-D-Bus policy is automatically installed to `/etc/dbus-1/system.d/nm-amneziawg-service.conf`.
+D-Bus policy is installed below `${datadir}/dbus-1/system.d` (usually
+`/usr/share/dbus-1/system.d`). Do not copy an additional policy with a global
+`context="default"` deny rule into `/etc/dbus-1/system.d`.
 
 If you need to manually configure it, the file should contain:
 
@@ -323,12 +325,7 @@ If you need to manually configure it, the file should contain:
 
 <busconfig>
     <policy user="root">
-        <allow own_prefix="org.freedesktop.NetworkManager.amneziawg"/>
-        <allow send_destination="org.freedesktop.NetworkManager.amneziawg"/>
-    </policy>
-    <policy context="default">
-        <deny own_prefix="org.freedesktop.NetworkDesktop.amneziawg"/>
-        <deny send_destination="org.freedesktop.NetworkManager.amneziawg"/>
+        <allow own="org.freedesktop.NetworkManager.amneziawg"/>
     </policy>
 </busconfig>
 ```
