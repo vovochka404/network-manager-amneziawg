@@ -846,12 +846,11 @@ check_peer_need_secrets(NMSettingVpn *s_vpn, guint peer_idx, const char *key_pre
     gchar *key;
     const char *secret;
     NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NONE;
-    gboolean has_flags;
 
     key = g_strdup_printf(key_prefix, peer_idx);
 
     secret = nm_setting_vpn_get_secret(s_vpn, key);
-    has_flags = nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
+    nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
 
     g_free(key);
 
