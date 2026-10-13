@@ -267,9 +267,11 @@ awg_device_create_config_string(AWGDevice *device)
     if (address) {
         addr_str = g_inet_address_to_string((GInetAddress *)address);
         if (g_inet_address_get_family((GInetAddress *)address) == G_SOCKET_FAMILY_IPV6) {
-            g_string_append_printf(config, "%s = [%s]/128\n", AWG_CONFIG_DEVICE_ADDRESS, addr_str);
+            g_string_append_printf(config, "%s = [%s]/%u\n", AWG_CONFIG_DEVICE_ADDRESS,
+                                   addr_str, awg_device_get_address_v6_prefix(device));
         } else {
-            g_string_append_printf(config, "%s = %s/32\n", AWG_CONFIG_DEVICE_ADDRESS, addr_str);
+            g_string_append_printf(config, "%s = %s/%u\n", AWG_CONFIG_DEVICE_ADDRESS,
+                                   addr_str, awg_device_get_address_v4_prefix(device));
         }
         g_clear_pointer(&addr_str, g_free);
     }

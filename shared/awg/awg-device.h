@@ -58,6 +58,8 @@ guint32 awg_device_get_fw_mark(AWGDevice *self);
 guint16 awg_device_get_listen_port(AWGDevice *self);
 const GInetAddress *awg_device_get_address_v4(AWGDevice *self);
 const GInetAddress *awg_device_get_address_v6(AWGDevice *self);
+guint awg_device_get_address_v4_prefix(AWGDevice *self);
+guint awg_device_get_address_v6_prefix(AWGDevice *self);
 const GList *awg_device_get_dns_v4_list(AWGDevice *self);
 guint awg_device_get_dns_v4_count(AWGDevice *self);
 const GList *awg_device_get_dns_v6_list(AWGDevice *self);

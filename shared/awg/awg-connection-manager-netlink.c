@@ -893,7 +893,9 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         const GInetAddress *addr_v4 = awg_device_get_address_v4(priv->device);
         if (addr_v4) {
             g_autofree gchar *addr_str = g_inet_address_to_string((GInetAddress *)addr_v4);
-            g_autofree gchar *addr_with_prefix = g_strdup_printf("%s/32", addr_str);
+            g_autofree gchar *addr_with_prefix =
+                g_strdup_printf("%s/%u", addr_str,
+                                awg_device_get_address_v4_prefix(priv->device));
             if (!add_ip_address(ifname, addr_with_prefix, AF_INET)) {
                 g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
                             "Failed to add IPv4 address for %s", ifname);
@@ -904,7 +906,9 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         const GInetAddress *addr_v6 = awg_device_get_address_v6(priv->device);
         if (addr_v6) {
             g_autofree gchar *addr_str = g_inet_address_to_string((GInetAddress *)addr_v6);
-            g_autofree gchar *addr_with_prefix = g_strdup_printf("%s/128", addr_str);
+            g_autofree gchar *addr_with_prefix =
+                g_strdup_printf("%s/%u", addr_str,
+                                awg_device_get_address_v6_prefix(priv->device));
             if (!add_ip_address(ifname, addr_with_prefix, AF_INET6)) {
                 g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
                             "Failed to add IPv6 address for %s", ifname);

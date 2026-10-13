@@ -512,7 +512,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
             val = ip4_to_gvariant(addr_str);
             if (val) {
                 g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_ADDRESS, val);
-                val = g_variant_new_uint32(32);
+                val = g_variant_new_uint32(awg_device_get_address_v4_prefix(device));
                 g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_PREFIX, val);
                 has_ip4 = TRUE;
             }
@@ -527,7 +527,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
             val = ip6_to_gvariant(addr_str);
             if (val) {
                 g_variant_builder_add(&ip6builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_ADDRESS, val);
-                val = g_variant_new_uint32(128);
+                val = g_variant_new_uint32(awg_device_get_address_v6_prefix(device));
                 g_variant_builder_add(&ip6builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_PREFIX, val);
                 has_ip6 = TRUE;
             }

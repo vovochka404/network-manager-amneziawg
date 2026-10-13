@@ -46,6 +46,8 @@ struct AWGDevicePrivate {
     NMSettingSecretFlags private_key_flags;
     GInetAddress *address_v4;
     GInetAddress *address_v6;
+    guint8 address_v4_prefix;
+    guint8 address_v6_prefix;
     guint16 listen_port;
     GList *dns_v4;
     GList *dns_v6;
@@ -156,6 +158,8 @@ awg_device_init(AWGDevice *self)
     priv->public_key_base64 = NULL;
     priv->address_v4 = NULL;
     priv->address_v6 = NULL;
+    priv->address_v4_prefix = 0;
+    priv->address_v6_prefix = 0;
     priv->fw_mark = 0;
     priv->peers = NULL;
     priv->dns_v4 = NULL;
@@ -634,6 +638,7 @@ awg_device_set_address_from_string(AWGDevice *self, const gchar *str)
             }
             g_clear_object(&priv->address_v4);
             priv->address_v4 = address->address;
+            priv->address_v4_prefix = address->mask;
             g_object_ref(priv->address_v4);
         } else if (family == G_SOCKET_FAMILY_IPV6) {
             if (priv->address_v6) {
@@ -644,6 +649,7 @@ awg_device_set_address_from_string(AWGDevice *self, const gchar *str)
             }
             g_clear_object(&priv->address_v6);
             priv->address_v6 = address->address;
+            priv->address_v6_prefix = address->mask;
             g_object_ref(priv->address_v6);
         } else {
             g_warning("Unsupported address family: %d", family);
@@ -678,6 +684,26 @@ awg_device_get_address_v6(AWGDevice *self)
     priv = awg_device_get_instance_private(self);
 
     return priv->address_v6;
+}
+
+guint
+awg_device_get_address_v4_prefix(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    priv = awg_device_get_instance_private(self);
+    return priv->address_v4_prefix;
+}
+
+guint
+awg_device_get_address_v6_prefix(AWGDevice *self)
+{
+    AWGDevicePrivate *priv;
+
+    g_return_val_if_fail(AWG_IS_DEVICE(self), 0);
+    priv = awg_device_get_instance_private(self);
+    return priv->address_v6_prefix;
 }
 
 gboolean

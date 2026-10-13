@@ -137,7 +137,8 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
                      NM_SETTING_IP_CONFIG_NEVER_DEFAULT,
                      !allowed_ips_have_default(device, AF_INET),
                      NULL);
-        add_ip_address(NM_SETTING_IP_CONFIG(s_ip4), (GInetAddress *)addr, 32);
+        add_ip_address(NM_SETTING_IP_CONFIG(s_ip4), (GInetAddress *)addr,
+                       awg_device_get_address_v4_prefix(device));
     } else {
         g_object_set(s_ip4, NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP4_CONFIG_METHOD_DISABLED, NULL);
     }
@@ -159,7 +160,8 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
                      NM_SETTING_IP_CONFIG_NEVER_DEFAULT,
                      !allowed_ips_have_default(device, AF_INET6),
                      NULL);
-        add_ip_address(NM_SETTING_IP_CONFIG(s_ip6), (GInetAddress *)addr, 128);
+        add_ip_address(NM_SETTING_IP_CONFIG(s_ip6), (GInetAddress *)addr,
+                       awg_device_get_address_v6_prefix(device));
     } else {
         g_object_set(s_ip6, NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP6_CONFIG_METHOD_IGNORE, NULL);
     }
