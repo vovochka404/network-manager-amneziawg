@@ -1246,6 +1246,13 @@ test_nm_connection_secrets_roundtrip(void)
     {
         g_autofree gchar *psk_key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, 0);
         g_assert_cmpstr(nm_setting_vpn_get_secret(s_vpn, psk_key), ==, "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w=");
+
+        NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NOT_SAVED;
+        g_assert_true(nm_setting_get_secret_flags(NM_SETTING(s_vpn), psk_key, &flags, NULL));
+        g_assert_cmpint(flags, ==, NM_SETTING_SECRET_FLAG_NONE);
+
+        g_autofree gchar *double_flags_key = g_strdup_printf("%s-flags-flags", psk_key);
+        g_assert_null(nm_setting_vpn_get_data_item(s_vpn, double_flags_key));
     }
 
     /* NMConnection -> AWGDevice (what the service builds on activation) */
