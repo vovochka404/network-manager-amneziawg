@@ -2460,14 +2460,6 @@ awg_device_peer_is_valid(AWGDevicePeer *self)
 void
 awg_device_peer_free(AWGDevicePeer *peer)
 {
-    if (peer) {
-        AWGDevicePeerPrivate *priv = awg_device_peer_get_instance_private(peer);
-        g_clear_pointer(&priv->public_key, g_free);
-        g_clear_pointer(&priv->shared_key, g_free);
-        g_list_free_full(priv->allowed_ips, (GDestroyNotify)g_object_unref);
-        g_clear_object(&priv->endpoint);
-        g_clear_object(&priv->resolved_endpoint);
-        g_free(priv);
+    if (peer)
         g_object_unref(peer);
-    }
 }
