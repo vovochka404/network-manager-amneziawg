@@ -60,6 +60,7 @@ typedef struct {
     /* NM keeps the private key of an existing connection in its own secret
      * store, outside the connection the editor receives. */
     gboolean connection_known_to_nm;
+    gboolean private_key_changed;
     gint selected_peer_index;
     AWGDevicePeer *dialog_peer;
     gint dialog_peer_index;
@@ -359,6 +360,16 @@ static void
 stuff_changed_cb(GtkWidget *widget, gpointer user_data)
 {
     g_signal_emit_by_name(AMNEZIAWG_EDITOR(user_data), "changed");
+}
+
+static void
+private_key_changed_cb(GtkWidget *widget, gpointer user_data)
+{
+    AmneziaWGEditor *self = AMNEZIAWG_EDITOR(user_data);
+    AmneziaWGEditorPrivate *priv = AMNEZIAWG_EDITOR_GET_PRIVATE(self);
+
+    priv->private_key_changed = TRUE;
+    stuff_changed_cb(widget, user_data);
 }
 
 // callback for show private key toggle
@@ -1265,6 +1276,7 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     priv->selected_peer_index = 0;
     priv->dialog_peer_index = -1;
     priv->dialog_peer = NULL;
+    priv->private_key_changed = FALSE;
 
     fill_interface_from_connection(self);
 
@@ -1277,7 +1289,7 @@ init_editor_plugin(AmneziaWGEditor *self, NMConnection *connection, GError **err
     if (widget) {
         NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_connection_get_setting(connection, NM_TYPE_SETTING_VPN));
         nma_utils_setup_password_storage(widget, 0, NM_SETTING(s_vpn), NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, FALSE, FALSE);
-        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(stuff_changed_cb), self);
+        g_signal_connect(G_OBJECT(widget), "changed", G_CALLBACK(private_key_changed_cb), self);
     }
 
     widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_show_private_key"));
@@ -1512,6 +1524,8 @@ save_interface_to_connection(AmneziaWGEditor *self)
             nm_setting_vpn_remove_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
         } else if (str && str[0]) {
             nm_setting_vpn_add_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, str);
+        } else if (priv->private_key_changed) {
+            nm_setting_vpn_remove_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
         }
     }
     g_free(str);
