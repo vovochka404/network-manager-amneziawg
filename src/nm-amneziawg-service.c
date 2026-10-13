@@ -82,7 +82,6 @@ typedef struct _Configs {
     GVariant *config;
     GVariant *ip4config;
     GVariant *ip6config;
-    GVariant *dns_config;
 } Configs;
 
 typedef struct {
@@ -94,6 +93,7 @@ typedef struct {
     gboolean ip6_method_auto;
     GTask *connect_task;
     gboolean disconnecting;
+    guint config_source_id;
 } NMAmneziaWGPluginPrivate;
 
 typedef struct {
@@ -151,6 +151,46 @@ generate_interface_name_from_connection(NMConnection *connection)
 /*****************************************************************************/
 
 static gboolean
+send_config(gpointer data)
+{
+    Configs *cfgs = data;
+    NMAmneziaWGPluginPrivate *priv =
+        NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(cfgs->plugin);
+
+    priv->config_source_id = 0;
+    nm_vpn_service_plugin_set_config(cfgs->plugin, cfgs->config);
+
+    if (cfgs->ip4config) {
+        nm_vpn_service_plugin_set_ip4_config(cfgs->plugin, cfgs->ip4config);
+    }
+
+    if (cfgs->ip6config) {
+        nm_vpn_service_plugin_set_ip6_config(cfgs->plugin, cfgs->ip6config);
+    }
+
+    return G_SOURCE_REMOVE;
+}
+
+static void
+configs_free(Configs *configs)
+{
+    g_clear_object(&configs->plugin);
+    g_clear_pointer(&configs->config, g_variant_unref);
+    g_clear_pointer(&configs->ip4config, g_variant_unref);
+    g_clear_pointer(&configs->ip6config, g_variant_unref);
+    g_free(configs);
+}
+
+static void
+cancel_pending_config(NMAmneziaWGPluginPrivate *priv)
+{
+    if (priv->config_source_id) {
+        g_source_remove(priv->config_source_id);
+        priv->config_source_id = 0;
+    }
+}
+
+static gboolean
 cleanup_connection_manager(AWGConnectionManager *conn_manager,
                            gboolean ip4_method_auto,
                            gboolean ip6_method_auto,
@@ -202,6 +242,8 @@ wg_disconnect(NMVpnServicePlugin *plugin,
               GError **error)
 {
     NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
+
+    cancel_pending_config(priv);
 
     /* If a connect is in progress, mark as disconnecting and let the worker finish.
      * The callback will see the flag and clean up. */
@@ -310,25 +352,6 @@ ip6_to_gvariant(const char *str)
 // * the above functions cannot be called from within Connect() and ConnectInteractively()
 //   directly, because they would get blocked until after the connection timeout has completed
 //   (and thus, the connection be considered to have failed)
-static gboolean
-send_config(gpointer data)
-{
-    Configs *cfgs = data;
-
-    nm_vpn_service_plugin_set_config(cfgs->plugin, cfgs->config);
-
-    if (cfgs->ip4config) {
-        nm_vpn_service_plugin_set_ip4_config(cfgs->plugin, cfgs->ip4config);
-    }
-
-    if (cfgs->ip6config) {
-        nm_vpn_service_plugin_set_ip6_config(cfgs->plugin, cfgs->ip6config);
-    }
-
-    // if we don't return FALSE, it's gonna get called again and again and again and...
-    return FALSE;
-}
-
 // create a Config, Ip4Config and Ip6Config from AWGDevice
 // and create a timer that sends the configuration to the plugin (see 'send_config()' above)
 static GInetAddress *
@@ -359,8 +382,7 @@ static gboolean
 set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean ip4_method_auto, gboolean ip6_method_auto)
 {
     GVariantBuilder builder, ip4builder, ip6builder;
-    GVariantBuilder dns_builder;
-    GVariant *config, *ip4config, *ip6config, *dns_config;
+    GVariant *config, *ip4config, *ip6config;
     GVariant *val;
     const GInetAddress *addr;
     const GList *dns_list;
@@ -368,13 +390,11 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     gchar *addr_str;
     gboolean has_ip4 = FALSE;
     gboolean has_ip6 = FALSE;
-    gboolean has_dns = FALSE;
     Configs *configs = g_new0(Configs, 1);
 
     g_variant_builder_init(&builder, G_VARIANT_TYPE_VARDICT);
     g_variant_builder_init(&ip4builder, G_VARIANT_TYPE_VARDICT);
     g_variant_builder_init(&ip6builder, G_VARIANT_TYPE_VARDICT);
-    g_variant_builder_init(&dns_builder, G_VARIANT_TYPE_VARDICT);
 
     peers_list = awg_device_get_peers_list(device);
     if (!peers_list) {
@@ -502,7 +522,6 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
                 val = g_variant_new_string(dns_str);
                 g_variant_builder_add(&ip4builder, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_DNS, val);
                 g_free(dns_str);
-                has_dns = TRUE;
             }
         }
     }
@@ -516,7 +535,6 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
                 val = g_variant_new_string(dns_str);
                 g_variant_builder_add(&ip6builder, "{sv}", NM_VPN_PLUGIN_IP6_CONFIG_DNS, val);
                 g_free(dns_str);
-                has_dns = TRUE;
             }
         }
     }
@@ -543,14 +561,16 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     config = g_variant_builder_end(&builder);
     ip4config = g_variant_builder_end(&ip4builder);
     ip6config = g_variant_builder_end(&ip6builder);
-    dns_config = g_variant_builder_end(&dns_builder);
-
     configs->ip4config = (has_ip4) ? ip4config : NULL;
     configs->ip6config = (has_ip6) ? ip6config : NULL;
-    configs->dns_config = (has_dns) ? dns_config : NULL;
-    configs->plugin = plugin;
+    configs->plugin = g_object_ref(plugin);
     configs->config = config;
-    g_timeout_add(0, send_config, configs);
+    {
+        NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
+        priv->config_source_id = g_timeout_add_full(G_PRIORITY_DEFAULT, 0,
+                                                    send_config, configs,
+                                                    (GDestroyNotify)configs_free);
+    }
 
     return TRUE;
 }
@@ -891,6 +911,8 @@ dispose(GObject *object)
 {
     NMAmneziaWGPlugin *plugin = NM_AMNEZIAWG_PLUGIN(object);
     NMAmneziaWGPluginPrivate *priv = NM_AMNEZIAWG_PLUGIN_GET_PRIVATE(plugin);
+
+    cancel_pending_config(priv);
 
     /* A running worker keeps the task (and the plugin via the task's
      * source reference) alive until connect_task_completed() runs, which
