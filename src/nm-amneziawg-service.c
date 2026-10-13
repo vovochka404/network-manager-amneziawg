@@ -378,6 +378,28 @@ resolve_host(const char *host, int port)
     return addr;
 }
 
+static gchar *
+endpoint_get_host(const gchar *endpoint)
+{
+    const gchar *end;
+
+    if (!endpoint || !*endpoint)
+        return NULL;
+
+    if (endpoint[0] == '[') {
+        end = strchr(endpoint, ']');
+        if (!end || end == endpoint + 1 || end[1] != ':')
+            return NULL;
+        return g_strndup(endpoint + 1, end - endpoint - 1);
+    }
+
+    end = strrchr(endpoint, ':');
+    if (!end || end == endpoint || end[1] == '\0')
+        return NULL;
+
+    return g_strndup(endpoint, end - endpoint);
+}
+
 static gboolean
 set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, gboolean ip4_method_auto, gboolean ip6_method_auto)
 {
@@ -410,13 +432,13 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
         gateway_addr = awg_device_peer_get_resolved_endpoint(peer);
 
         if (!gateway_addr && endpoint) {
-            gchar **parts = g_strsplit(endpoint, ":", 2);
-            if (parts[0]) {
-                gateway_addr = g_inet_address_new_from_string(parts[0]);
+            g_autofree gchar *host = endpoint_get_host(endpoint);
+
+            if (host) {
+                gateway_addr = g_inet_address_new_from_string(host);
                 if (!gateway_addr)
-                    gateway_addr = resolve_host(parts[0], 0);
+                    gateway_addr = resolve_host(host, 0);
             }
-            g_strfreev(parts);
         }
 
         if (gateway_addr) {
