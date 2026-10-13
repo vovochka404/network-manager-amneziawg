@@ -427,6 +427,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     {
         AWGDevicePeer *peer = peers_list->data;
         GInetAddress *gateway_addr = NULL;
+        gboolean gateway_addr_owned = FALSE;
         const gchar *endpoint = awg_device_peer_get_endpoint(peer);
 
         gateway_addr = awg_device_peer_get_resolved_endpoint(peer);
@@ -438,6 +439,7 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
                 gateway_addr = g_inet_address_new_from_string(host);
                 if (!gateway_addr)
                     gateway_addr = resolve_host(host, 0);
+                gateway_addr_owned = gateway_addr != NULL;
             }
         }
 
@@ -451,7 +453,8 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
                     g_variant_builder_add(&builder, "{sv}", NM_VPN_PLUGIN_CONFIG_EXT_GATEWAY, gateway_val);
                 g_free(ip_str);
             }
-            g_object_unref(gateway_addr);
+            if (gateway_addr_owned)
+                g_object_unref(gateway_addr);
         }
 
         const gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
