@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 # Get version from git tag if available, otherwise use default
 find_package(Git QUIET)
@@ -220,12 +220,20 @@ set(COMMON_DEFINITIONS
 set(PROPERTIES_RESOURCES_DIR ${CMAKE_SOURCE_DIR}/properties)
 set(PROPERTIES_RESOURCES_XML ${CMAKE_SOURCE_DIR}/properties/gresource.xml)
 
+# find_program(REQUIRED) needs CMake 3.18; the explicit check works on the
+# 3.13 minimum and fails with a clear message instead of a confusing
+# execute_process error later.
+find_program(GLIB_COMPILE_RESOURCES glib-compile-resources)
+if(NOT GLIB_COMPILE_RESOURCES)
+    message(FATAL_ERROR "glib-compile-resources not found (install the GLib development tools)")
+endif()
+
 # The resource bundles files that gresource.xml refers to (.ui and friends).
 # Depending on the XML alone means editing one of them rebuilds nothing — the
 # stale resource is then linked into the plugin. Let glib-compile-resources list
 # them, so every bundled file is a dependency.
 execute_process(
-    COMMAND /usr/bin/glib-compile-resources
+    COMMAND ${GLIB_COMPILE_RESOURCES}
         ${PROPERTIES_RESOURCES_XML}
         --generate-dependencies
         --sourcedir=${PROPERTIES_RESOURCES_DIR}
@@ -248,7 +256,7 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/properties)
 
 add_custom_command(
     OUTPUT properties/resources.h
-    COMMAND /usr/bin/glib-compile-resources
+    COMMAND ${GLIB_COMPILE_RESOURCES}
         ${PROPERTIES_RESOURCES_XML}
         --target=properties/resources.h
         --sourcedir=${PROPERTIES_RESOURCES_DIR}
@@ -260,7 +268,7 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT properties/resources.c
-    COMMAND /usr/bin/glib-compile-resources
+    COMMAND ${GLIB_COMPILE_RESOURCES}
         ${PROPERTIES_RESOURCES_XML}
         --target=properties/resources.c
         --sourcedir=${PROPERTIES_RESOURCES_DIR}
