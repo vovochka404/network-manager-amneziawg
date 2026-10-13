@@ -411,6 +411,15 @@ set_widget_text(GtkBuilder *builder, const char *widget_name, const char *text)
     }
 }
 
+static void
+save_data_item(NMSettingVpn *s_vpn, const char *key, const gchar *value)
+{
+    if (value && value[0])
+        nm_setting_vpn_add_data_item(s_vpn, key, value);
+    else
+        nm_setting_vpn_remove_data_item(s_vpn, key);
+}
+
 // Helper: fill interface fields from NMConnection
 static void
 fill_interface_from_connection(AmneziaWGEditor *self)
@@ -1478,117 +1487,79 @@ save_interface_to_connection(AmneziaWGEditor *self)
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_port_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_LISTEN_PORT, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_LISTEN_PORT, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_mtu_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MTU, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_MTU, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_fwmark_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_FW_MARK, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_FW_MARK, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_jc_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JC, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JC, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_jmin_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JMIN, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JMIN, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_jmax_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JMAX, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_JMAX, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_s1_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S1, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S1, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_s2_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S2, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S2, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_s3_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S3, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_s4_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_S4, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_h1_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H1, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_h2_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H2, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_h3_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H3, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_h4_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_H4, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_i1_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I1, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_i2_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I2, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_i3_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I3, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_i4_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I4, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_i5_entry");
-    if (str && str[0]) {
-        nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, str);
-    }
+    save_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_I5, str);
     g_free(str);
 
     str = get_widget_text(priv->builder, "interface_header_protection_key_entry");
