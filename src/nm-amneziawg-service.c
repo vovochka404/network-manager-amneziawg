@@ -855,11 +855,7 @@ check_peer_need_secrets(NMSettingVpn *s_vpn, guint peer_idx, const char *key_pre
 
     g_free(key);
 
-    if (!has_flags) {
-        return FALSE;
-    }
-
-    if (secret) {
+    if (secret && *secret) {
         return FALSE;
     }
 
@@ -889,7 +885,8 @@ wg_need_secrets(NMVpnServicePlugin *plugin,
     secret = nm_setting_vpn_get_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
     has_flags = nm_setting_get_secret_flags(NM_SETTING(s_vpn), NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, &flags, NULL);
 
-    if (has_flags && !secret && !(flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED)) {
+    if ((!has_flags || !secret || !*secret) &&
+        !(flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED)) {
         *setting_name = NM_SETTING_VPN_SETTING_NAME;
         return TRUE;
     }
