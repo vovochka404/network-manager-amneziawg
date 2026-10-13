@@ -71,6 +71,15 @@ test_awg_device_new_from_config_ipv4(void)
 }
 
 static void
+test_awg_i_packet_requires_closing_delimiter(void)
+{
+    g_assert_true(awg_validate_i_packet("<r 16><c>"));
+    g_assert_false(awg_validate_i_packet("<r 16"));
+    g_assert_false(awg_validate_i_packet("<c"));
+    g_assert_false(awg_validate_i_packet("<t"));
+}
+
+static void
 test_awg_device_new_from_config_ipv6(void)
 {
     gchar *config_path = get_test_config_path("test-config-ipv6.conf");
@@ -1825,6 +1834,8 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/config/save-private-permissions", test_awg_device_save_uses_private_permissions);
     g_test_add_func("/awg/config/invalid-value-reported", test_awg_config_invalid_value_is_reported);
     g_test_add_func("/awg/config/incomplete-reported", test_awg_config_incomplete_is_reported);
+    g_test_add_func("/awg/validate/i-packet-closing-delimiter",
+                    test_awg_i_packet_requires_closing_delimiter);
     g_test_add_func("/awg/config/nm-connection-never-default", test_nm_connection_never_default);
     g_test_add_func("/awg/config/save-load-multi-peer", test_awg_device_save_and_load_multi_peer);
     g_test_add_func("/awg/config/mtu-not-exported-when-zero", test_awg_device_mtu_not_exported_when_zero);

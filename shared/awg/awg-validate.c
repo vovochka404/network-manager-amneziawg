@@ -601,8 +601,11 @@ awg_validate_i_packet(const gchar *str)
         if (token_len == 0)
             continue;
 
-        if (token[token_len - 1] == '>')
-            token[--token_len] = '\0';
+        if (token[token_len - 1] != '>') {
+            valid = FALSE;
+            break;
+        }
+        token[--token_len] = '\0';
 
         if (token_len == 0)
             continue;
