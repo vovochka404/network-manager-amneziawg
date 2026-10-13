@@ -150,6 +150,52 @@ generate_interface_name_from_connection(NMConnection *connection)
 
 /*****************************************************************************/
 
+static gboolean
+cleanup_connection_manager(AWGConnectionManager *conn_manager,
+                           gboolean ip4_method_auto,
+                           gboolean ip6_method_auto,
+                           GError **error)
+{
+    GError *cleanup_error = NULL;
+    gboolean success = TRUE;
+
+    if (!conn_manager)
+        return TRUE;
+
+    if (!awg_connection_manager_manages_routes(conn_manager)) {
+        if (!ip4_method_auto &&
+            !awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET,
+                                                          &cleanup_error)) {
+            success = FALSE;
+        }
+        if (cleanup_error) {
+            g_clear_error(&cleanup_error);
+        }
+
+        if (!ip6_method_auto &&
+            !awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET6,
+                                                          &cleanup_error)) {
+            success = FALSE;
+        }
+        if (cleanup_error) {
+            g_clear_error(&cleanup_error);
+        }
+    }
+
+    if (!awg_connection_manager_disconnect(conn_manager, &cleanup_error)) {
+        success = FALSE;
+    }
+
+    if (cleanup_error) {
+        if (error && !*error)
+            *error = g_steal_pointer(&cleanup_error);
+        else
+            g_clear_error(&cleanup_error);
+    }
+
+    return success;
+}
+
 // disconnect from the current connection
 static gboolean
 wg_disconnect(NMVpnServicePlugin *plugin,
@@ -170,31 +216,10 @@ wg_disconnect(NMVpnServicePlugin *plugin,
         return TRUE;
     }
 
-    /* If method=manual and netlink, plugin added routes itself — clean them up */
-    if (!awg_connection_manager_manages_routes(priv->conn_manager)) {
-        GError *route_error = NULL;
-
-        if (!priv->ip4_method_auto) {
-            _LOGI("IPv4 manual mode: cleaning up routes via netlink");
-            awg_connection_manager_netlink_delete_routes(priv->conn_manager, AF_INET, &route_error);
-            if (route_error) {
-                _LOGW("Warning: Could not delete IPv4 routes: %s", route_error->message);
-                g_error_free(route_error);
-                route_error = NULL;
-            }
-        }
-
-        if (!priv->ip6_method_auto) {
-            _LOGI("IPv6 manual mode: cleaning up routes via netlink");
-            awg_connection_manager_netlink_delete_routes(priv->conn_manager, AF_INET6, &route_error);
-            if (route_error) {
-                _LOGW("Warning: Could not delete IPv6 routes: %s", route_error->message);
-                g_error_free(route_error);
-            }
-        }
-    }
-
-    if (!awg_connection_manager_disconnect(priv->conn_manager, error)) {
+    if (!cleanup_connection_manager(priv->conn_manager,
+                                    priv->ip4_method_auto,
+                                    priv->ip6_method_auto,
+                                    error)) {
         _LOGW("Error: Could not disconnect!");
         if (error && !*error) {
             g_set_error_literal(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
@@ -687,6 +712,18 @@ connect_task_completed(GObject *source_object, GAsyncResult *res, gpointer user_
 
     if (!set_config(plugin, device, if_name, ip4_method_auto, ip6_method_auto)) {
         _LOGW("Error: Could not set config!");
+        GError *cleanup_error = NULL;
+
+        cleanup_connection_manager(priv->conn_manager,
+                                   ip4_method_auto,
+                                   ip6_method_auto,
+                                   &cleanup_error);
+        if (cleanup_error) {
+            _LOGW("Error while cleaning up failed connection: %s",
+                  cleanup_error->message);
+            g_clear_error(&cleanup_error);
+        }
+        g_clear_object(&priv->conn_manager);
         nm_vpn_service_plugin_failure(plugin, NM_VPN_PLUGIN_FAILURE_CONNECT_FAILED);
     }
 
