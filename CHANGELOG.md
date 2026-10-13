@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.12]
 
 ### Bug Fixes
 
@@ -8,13 +8,38 @@
 - **Create the generated config with private permissions**: the configuration file handed to `awg-quick` (in the system temporary directory) contains the private key and was created with the process umask — `0644` by default — so any local user could read it until the manager `chmod`ed it to `0400`, or permanently if the service died in between. It is now created with `G_FILE_CREATE_PRIVATE` (`0600`) before a single byte is written
 - **Editing a saved connection no longer demands the private key again**: NM keeps VPN secrets in its own store and omits them from the connection handed to the editor, so the Private Key field showed up empty and the `PrivateKey` check refused every save — the field turned red on a connection that works. An empty field now means "keep the stored key" for a connection NM already has, and nothing is written, so the stored secret survives; a new connection still requires it. Reading the secret back is not an option: NM answers `GetSecrets` for a VPN connection with `No agents were available for this request`
 - **Peer preshared key flags were stored under a doubled name**: libnm persists the flags of a VPN secret as `<secret-name>-flags`, but the plugin handed its own already suffixed name to `nm_setting_set_secret_flags()`, so it wrote `peer-N-preshared-key-flags-flags` — a data item nothing ever read back. Flags therefore never had an effect: `check_peer_need_secrets()` bailed out on the first check and NM would not ask for a missing preshared key. The secret name is used now, so the flags live where libnm and the service look for them
+- **Optional peer PSKs no longer block activation**: `NeedSecrets` now skips peer slots that have no public key and does not request an unset PSK unless that existing peer has explicit secret flags. A profile without a PSK, or with an unused peer index, therefore reaches the backend without a spurious `Required secrets ... are still missing` failure
 - **Report why a configuration was rejected**: `awg_device_new_from_config()` now returns a `GError` (`awg_config_error_quark()`) that names the offending key and value, or explains why the parsed device cannot be used. `nmcli connection import` used to fail with a bare `Failed to parse AmneziaWG config file` and leave the details in the journal; it now says `Invalid value for S1: 999999` or `PrivateKey is missing (check vpn.secrets and secret flags)`
+- **Cleared editor values are removed from the profile**: empty data fields, removed peers, and explicitly cleared private keys no longer leave stale `vpn.data` entries or secrets behind when a connection is saved
+
+#### Configuration Parsing and Validation
+- **Reject malformed configuration input early**: unterminated CPS tags, multiline AWG values, malformed `key=value` lines, invalid boolean values, missing endpoint ports, and malformed bracketed IPv6 subnets are now rejected instead of being silently accepted or truncated
+- **Preserve valid boundary values**: the parser and validators now accept the maximum keepalive interval and preserve interface address prefixes through config-file, NetworkManager, service, and netlink conversions
+- **Replace stale IP and DNS settings**: importing or saving a profile now removes old address and DNS entries before writing the current configuration, avoiding values left over from an earlier edit
+
+#### VPN Service Lifecycle
+- **Stop releasing borrowed gateway addresses**: the service used to unref the `GInetAddress` returned by the peer getter even though the getter returns a borrowed reference. Hostname endpoint activation could consequently trigger a GLib refcount assertion during cleanup
+- **Keep configuration variants alive across D-Bus dispatch**: the service now retains owned references to the VPN, IPv4 and IPv6 configuration variants until the deferred `SetConfig`/`SetIp*Config` calls have completed, preventing a second unref after a successful route setup
+- **Clean up asynchronous connections safely**: pending configuration callbacks are cancelled, failed configuration attempts tear down the backend, plugin disposal disconnects an active backend, and peer/device cleanup no longer frees GObject private data manually
+
+#### Netlink and Backend Handling
+- **Handle IPv6 endpoints and route failures correctly**: hostname and bracketed IPv6 VPN gateways are converted to NetworkManager gateway values, route requests now require and validate kernel ACKs and prefixes, and cleanup keeps the first route error while continuing to remove remaining routes
+- **Invoke `awg-quick` without shell parsing**: the external backend now passes an argument vector to GLib instead of constructing a shell command, avoiding quoting errors and command injection through paths or interface names
+
+#### D-Bus Policy
+- **Allow only the VPN service owner and NetworkManager calls**: the installed policy now uses the correct `org.freedesktop.NetworkManager.amneziawg` name, permits root to own and receive calls for the service, and removes the global default-deny rules that could interfere with D-Bus policy loading
 
 ### Improvements
 
 #### Tooling
 - **`tests/` is checked for style too**: the `code-style` job and `scripts/check-style.sh` now cover the test sources, so test code can no longer drift out of the project format unnoticed
 - **Editing the dialog rebuilds its resource**: the GResource rules depended only on `gresource.xml`, so changing `properties/nm-amneziawg-dialog.ui` left the previously compiled UI inside the plugin until a clean build — a confusing no-op for anyone touching the editor. The rules now depend on every bundled file, as reported by `glib-compile-resources --generate-dependencies`
+- **Build configuration is more portable**: CMake now uses standard install-directory variables and discovers `glib-compile-resources` through the configured GLib tools, making builds and package layouts work across distributions
+
+### Testing
+
+- **Guard secret flag round-trips**: tests now verify that peer PSK flags are stored as `peer-N-preshared-key-flags` and that the erroneous doubled key is never generated
+
 ### Major Changes
 
 #### AmneziaWG 3.1 Protocol Support
