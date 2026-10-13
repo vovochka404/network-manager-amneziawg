@@ -130,7 +130,7 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
     AWGConnectionManagerExternal *self = AWG_CONNECTION_MANAGER_EXTERNAL(mgr);
     AWGConnectionManagerExternalPrivate *priv = AWG_CONNECTION_MANAGER_EXTERNAL_GET_PRIVATE(self);
     const gchar *awg_quick = awg_quick_find_exe();
-    gchar *command = NULL;
+    gchar *argv[] = { (gchar *)awg_quick, "up", priv->conf_path, NULL };
     gint exit_status = 0;
     gboolean success = FALSE;
 
@@ -156,11 +156,10 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
         return FALSE;
     }
 
-    command = g_strdup_printf("%s up '%s'", awg_quick, priv->conf_path);
-    success = g_spawn_command_line_sync(command, NULL, NULL, &exit_status, error);
+    success = g_spawn_sync(NULL, argv, NULL, 0, NULL, NULL, NULL, NULL,
+                           &exit_status, error);
 
     unlink(priv->conf_path);
-    g_free(command);
 
     if (!success)
         return FALSE;
@@ -176,7 +175,7 @@ awg_connection_manager_external_disconnect(AWGConnectionManager *mgr, GError **e
     AWGConnectionManagerExternal *self = AWG_CONNECTION_MANAGER_EXTERNAL(mgr);
     AWGConnectionManagerExternalPrivate *priv = AWG_CONNECTION_MANAGER_EXTERNAL_GET_PRIVATE(self);
     const gchar *awg_quick = awg_quick_find_exe();
-    gchar *command = NULL;
+    gchar *argv[] = { (gchar *)awg_quick, "down", priv->conf_path, NULL };
     gint exit_status = 0;
     gboolean success = FALSE;
 
@@ -199,11 +198,10 @@ awg_connection_manager_external_disconnect(AWGConnectionManager *mgr, GError **e
         return FALSE;
     }
 
-    command = g_strdup_printf("%s down '%s'", awg_quick, priv->conf_path);
-    success = g_spawn_command_line_sync(command, NULL, NULL, &exit_status, error);
+    success = g_spawn_sync(NULL, argv, NULL, 0, NULL, NULL, NULL, NULL,
+                           &exit_status, error);
 
     unlink(priv->conf_path);
-    g_free(command);
 
     if (!success)
         return FALSE;
