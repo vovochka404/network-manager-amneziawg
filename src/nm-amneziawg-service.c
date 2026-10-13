@@ -844,15 +844,30 @@ static gboolean
 check_peer_need_secrets(NMSettingVpn *s_vpn, guint peer_idx, const char *key_prefix)
 {
     gchar *key;
+    gchar *public_key;
     const char *secret;
     NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NONE;
+    gboolean has_flags;
+
+    public_key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY, peer_idx);
+    if (!nm_setting_vpn_get_data_item(s_vpn, public_key)) {
+        g_free(public_key);
+        return FALSE;
+    }
+    g_free(public_key);
 
     key = g_strdup_printf(key_prefix, peer_idx);
 
     secret = nm_setting_vpn_get_secret(s_vpn, key);
-    nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
+    has_flags = nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
 
     g_free(key);
+
+    /* A peer without an explicitly configured PSK does not need a secret.
+     * Secret flags are written for configured PSKs by the editor/import path,
+     * so their absence distinguishes an optional, unset PSK. */
+    if (!has_flags)
+        return FALSE;
 
     if (secret && *secret) {
         return FALSE;
