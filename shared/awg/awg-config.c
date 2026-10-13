@@ -21,14 +21,28 @@ awg_config_error_quark(void)
 
 /* AWG 3.1 on/off flags; mirrors the "on"/"off" convention used for AdvancedSecurity. */
 static gboolean
-awg_parse_bool(const gchar *value)
+awg_parse_bool(const gchar *value, gboolean *result)
 {
-    if (!value || !*value)
+    if (!value || !*value || !result)
         return FALSE;
-    return g_ascii_strcasecmp(value, "on") == 0 ||
-           g_ascii_strcasecmp(value, "true") == 0 ||
-           g_ascii_strcasecmp(value, "yes") == 0 ||
-           g_ascii_strcasecmp(value, "1") == 0;
+
+    if (g_ascii_strcasecmp(value, "on") == 0 ||
+        g_ascii_strcasecmp(value, "true") == 0 ||
+        g_ascii_strcasecmp(value, "yes") == 0 ||
+        g_ascii_strcasecmp(value, "1") == 0) {
+        *result = TRUE;
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp(value, "off") == 0 ||
+        g_ascii_strcasecmp(value, "false") == 0 ||
+        g_ascii_strcasecmp(value, "no") == 0 ||
+        g_ascii_strcasecmp(value, "0") == 0) {
+        *result = FALSE;
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 AWGDevice *
@@ -168,9 +182,27 @@ awg_device_new_from_config(const char *config_path, GError **error)
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MAX_HANDSHAKE_ATTEMPTS) == 0) {
                 SET_OR_FAIL(awg_device_set_max_handshake_attempts(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_RANDOM_TRAILERS) == 0) {
-                SET_OR_FAIL(awg_device_set_random_trailers(device, awg_parse_bool(value)));
+                gboolean bool_value;
+                if (!awg_parse_bool(value, &bool_value)) {
+                    if (!(error && *error))
+                        g_set_error(error, AWG_CONFIG_ERROR,
+                                    AWG_CONFIG_ERROR_INVALID_VALUE,
+                                    "Invalid value for %s: %s", key, value);
+                    success = FALSE;
+                } else {
+                    SET_OR_FAIL(awg_device_set_random_trailers(device, bool_value));
+                }
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_DISABLE_COOKIES) == 0) {
-                SET_OR_FAIL(awg_device_set_disable_cookies(device, awg_parse_bool(value)));
+                gboolean bool_value;
+                if (!awg_parse_bool(value, &bool_value)) {
+                    if (!(error && *error))
+                        g_set_error(error, AWG_CONFIG_ERROR,
+                                    AWG_CONFIG_ERROR_INVALID_VALUE,
+                                    "Invalid value for %s: %s", key, value);
+                    success = FALSE;
+                } else {
+                    SET_OR_FAIL(awg_device_set_disable_cookies(device, bool_value));
+                }
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_MTU) == 0) {
                 SET_OR_FAIL(awg_device_set_mtu_from_string(device, value));
             } else if (g_strcmp0(key, AWG_CONFIG_DEVICE_PRE_UP) == 0) {
