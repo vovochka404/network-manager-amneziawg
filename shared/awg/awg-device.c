@@ -2360,7 +2360,7 @@ awg_device_peer_set_keep_alive_interval(AWGDevicePeer *self, guint64 interval)
 
     priv = awg_device_peer_get_instance_private(self);
 
-    if (interval < G_MAXUINT16) {
+    if (interval <= G_MAXUINT16) {
         priv->keep_alive = (guint16)interval;
         return TRUE;
     }

@@ -63,6 +63,9 @@ test_awg_device_new_from_config_ipv4(void)
     g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer), ==, 25);
     g_assert_true(awg_device_peer_get_advanced_security(peer));
 
+    g_assert_true(awg_device_peer_set_keep_alive_interval(peer, G_MAXUINT16));
+    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer), ==, G_MAXUINT16);
+
     g_object_unref(device);
     g_free(config_path);
 }
