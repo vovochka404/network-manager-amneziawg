@@ -586,8 +586,14 @@ set_config(NMVpnServicePlugin *plugin, AWGDevice *device, const gchar *if_name, 
     config = g_variant_builder_end(&builder);
     ip4config = g_variant_builder_end(&ip4builder);
     ip6config = g_variant_builder_end(&ip6builder);
-    configs->ip4config = (has_ip4) ? ip4config : NULL;
-    configs->ip6config = (has_ip6) ? ip6config : NULL;
+    if (has_ip4)
+        configs->ip4config = g_variant_ref_sink(ip4config);
+    else
+        g_variant_unref(ip4config);
+    if (has_ip6)
+        configs->ip6config = g_variant_ref_sink(ip6config);
+    else
+        g_variant_unref(ip6config);
     configs->plugin = g_object_ref(plugin);
     configs->config = config;
     {
