@@ -902,8 +902,17 @@ dispose(GObject *object)
     }
 
     if (priv->conn_manager) {
-        g_object_unref(priv->conn_manager);
-        priv->conn_manager = NULL;
+        GError *error = NULL;
+
+        if (!cleanup_connection_manager(priv->conn_manager,
+                                        priv->ip4_method_auto,
+                                        priv->ip6_method_auto,
+                                        &error)) {
+            _LOGW("Error while cleaning up connection during dispose: %s",
+                  error ? error->message : "unknown error");
+        }
+        g_clear_error(&error);
+        g_clear_object(&priv->conn_manager);
     }
 
     G_OBJECT_CLASS(nm_amneziawg_plugin_parent_class)->dispose(object);
