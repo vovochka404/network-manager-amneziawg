@@ -420,6 +420,33 @@ save_data_item(NMSettingVpn *s_vpn, const char *key, const gchar *value)
         nm_setting_vpn_remove_data_item(s_vpn, key);
 }
 
+static void
+remove_peer_items(NMSettingVpn *s_vpn)
+{
+    guint length;
+    const char **keys;
+    GPtrArray *data_keys = g_ptr_array_new_with_free_func(g_free);
+    GPtrArray *secret_keys = g_ptr_array_new_with_free_func(g_free);
+
+    keys = nm_setting_vpn_get_data_keys(s_vpn, &length);
+    for (guint i = 0; i < length; i++) {
+        if (g_str_has_prefix(keys[i], "peer-"))
+            g_ptr_array_add(data_keys, g_strdup(keys[i]));
+    }
+    for (guint i = 0; i < data_keys->len; i++)
+        nm_setting_vpn_remove_data_item(s_vpn, g_ptr_array_index(data_keys, i));
+    g_ptr_array_unref(data_keys);
+
+    keys = nm_setting_vpn_get_secret_keys(s_vpn, &length);
+    for (guint i = 0; i < length; i++) {
+        if (g_str_has_prefix(keys[i], "peer-"))
+            g_ptr_array_add(secret_keys, g_strdup(keys[i]));
+    }
+    for (guint i = 0; i < secret_keys->len; i++)
+        nm_setting_vpn_remove_secret(s_vpn, g_ptr_array_index(secret_keys, i));
+    g_ptr_array_unref(secret_keys);
+}
+
 // Helper: fill interface fields from NMConnection
 static void
 fill_interface_from_connection(AmneziaWGEditor *self)
@@ -1636,6 +1663,8 @@ save_interface_to_connection(AmneziaWGEditor *self)
     }
 
     if (priv->device) {
+        remove_peer_items(s_vpn);
+
         const GList *peers = awg_device_get_peers_list(priv->device);
         guint i = 0;
         for (const GList *l = peers; l; l = l->next, i++) {
