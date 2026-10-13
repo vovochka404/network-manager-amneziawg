@@ -206,20 +206,20 @@ cleanup_connection_manager(AWGConnectionManager *conn_manager,
         if (!ip4_method_auto &&
             !awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET,
                                                           &cleanup_error)) {
+            _LOGW("Warning: Could not delete IPv4 routes: %s",
+                  cleanup_error ? cleanup_error->message : "unknown error");
             success = FALSE;
         }
-        if (cleanup_error) {
-            g_clear_error(&cleanup_error);
-        }
+        g_clear_error(&cleanup_error);
 
         if (!ip6_method_auto &&
             !awg_connection_manager_netlink_delete_routes(conn_manager, AF_INET6,
                                                           &cleanup_error)) {
+            _LOGW("Warning: Could not delete IPv6 routes: %s",
+                  cleanup_error ? cleanup_error->message : "unknown error");
             success = FALSE;
         }
-        if (cleanup_error) {
-            g_clear_error(&cleanup_error);
-        }
+        g_clear_error(&cleanup_error);
     }
 
     if (!awg_connection_manager_disconnect(conn_manager, &cleanup_error)) {

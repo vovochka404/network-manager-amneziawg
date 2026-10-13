@@ -337,7 +337,10 @@ manage_route(const gchar *ifname,
     memset(&req, 0, sizeof(req));
     req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
     req.nlh.nlmsg_type = add ? RTM_NEWROUTE : RTM_DELROUTE;
-    req.nlh.nlmsg_flags = add ? NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL : NLM_F_REQUEST;
+    /* NLM_F_ACK is required: the kernel answers a successful request only
+     * when it is set, and the ACK is read below to validate the result. */
+    req.nlh.nlmsg_flags = add ? NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK
+                              : NLM_F_REQUEST | NLM_F_ACK;
     req.nlh.nlmsg_seq = 1;
     req.nlh.nlmsg_pid = getpid();
 
@@ -479,9 +482,18 @@ add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **error
                 if ((family == AF_INET && is_ipv6) || (family == AF_INET6 && !is_ipv6))
                     continue;
 
+                /* Keep trying the remaining routes, but keep only the first
+                 * error: re-setting an already-set GError leaks it and makes
+                 * GLib warn about setting an error over the top. */
+                GError *route_error = NULL;
                 if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
-                                  TRUE, error))
+                                  TRUE, &route_error)) {
+                    if (error && !*error)
+                        *error = g_steal_pointer(&route_error);
+                    else
+                        g_clear_error(&route_error);
                     success = FALSE;
+                }
             }
             g_strfreev(ip_list);
         }
@@ -513,9 +525,18 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **er
                 if ((family == AF_INET && is_ipv6) || (family == AF_INET6 && !is_ipv6))
                     continue;
 
+                /* Keep trying the remaining routes, but keep only the first
+                 * error: re-setting an already-set GError leaks it and makes
+                 * GLib warn about setting an error over the top. */
+                GError *route_error = NULL;
                 if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
-                                  FALSE, error))
+                                  FALSE, &route_error)) {
+                    if (error && !*error)
+                        *error = g_steal_pointer(&route_error);
+                    else
+                        g_clear_error(&route_error);
                     success = FALSE;
+                }
             }
             g_strfreev(ip_list);
         }
