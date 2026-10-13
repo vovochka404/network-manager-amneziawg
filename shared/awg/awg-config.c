@@ -113,6 +113,11 @@ awg_device_new_from_config(const char *config_path, GError **error)
         parts = g_strsplit(line, "=", 2);
         if (!(parts && parts[0] && parts[1])) {
             g_warning("Invalid config line: %s", line);
+            if (!(error && *error))
+                g_set_error(error, AWG_CONFIG_ERROR,
+                            AWG_CONFIG_ERROR_INVALID_VALUE,
+                            "Invalid configuration line: %s", line);
+            success = FALSE;
             g_strfreev(parts);
             parts = NULL;
             g_free(line);
