@@ -296,7 +296,11 @@ set_interface_mtu(const gchar *ifname, guint32 mtu)
 }
 
 static gboolean
-manage_route(const gchar *ifname, const gchar *destination, int family, gboolean add)
+manage_route(const gchar *ifname,
+             const gchar *destination,
+             int family,
+             gboolean add,
+             GError **error)
 {
     struct {
         struct nlmsghdr nlh;
@@ -307,12 +311,16 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
     struct sockaddr_nl addr;
     g_autofree gchar *dest_copy = NULL;
     gchar *prefix_str, *ip_str;
+    guint64 parsed_prefix;
     guint prefix;
     struct rtattr *rta;
 
     sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-    if (sock < 0)
+    if (sock < 0) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
+                    "Failed to open route netlink socket: %s", g_strerror(errno));
         return FALSE;
+    }
 
     memset(&addr, 0, sizeof(addr));
     addr.nl_family = AF_NETLINK;
@@ -320,6 +328,8 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
     addr.nl_groups = 0;
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
+                    "Failed to bind route netlink socket: %s", g_strerror(errno));
         close(sock);
         return FALSE;
     }
@@ -345,7 +355,15 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
     prefix_str = strchr(dest_copy, '/');
     if (prefix_str) {
         *prefix_str = '\0';
-        prefix = atoi(prefix_str + 1);
+        if (!g_ascii_string_to_unsigned(prefix_str + 1, 10, 0,
+                                        family == AF_INET ? 32 : 128,
+                                        &parsed_prefix, NULL)) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, EINVAL,
+                        "Invalid route prefix in %s", destination);
+            close(sock);
+            return FALSE;
+        }
+        prefix = parsed_prefix;
     } else {
         prefix = (family == AF_INET) ? 32 : 128;
     }
@@ -362,6 +380,8 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
             req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
             rta = (struct rtattr *)((char *)rta + RTA_ALIGN(rta->rta_len));
         } else {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, EINVAL,
+                        "Invalid IPv4 route destination: %s", ip_str);
             close(sock);
             return FALSE;
         }
@@ -374,6 +394,8 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
             req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
             rta = (struct rtattr *)((char *)rta + RTA_ALIGN(rta->rta_len));
         } else {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, EINVAL,
+                        "Invalid IPv6 route destination: %s", ip_str);
             close(sock);
             return FALSE;
         }
@@ -383,6 +405,8 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
     rta->rta_len = RTA_LENGTH(sizeof(int));
     int ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
+                    "Interface %s was not found", ifname);
         close(sock);
         return FALSE;
     }
@@ -390,8 +414,42 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
     req.nlh.nlmsg_len += RTA_ALIGN(rta->rta_len);
 
     if (send(sock, &req, req.nlh.nlmsg_len, 0) < 0) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
+                    "Failed to send route request: %s", g_strerror(errno));
         close(sock);
         return FALSE;
+    }
+
+    {
+        struct {
+            struct nlmsghdr nlh;
+            struct nlmsgerr error;
+        } response;
+        ssize_t received = recv(sock, &response, sizeof(response), 0);
+
+        if (received < 0) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
+                        "Failed to receive route ACK: %s", g_strerror(errno));
+            close(sock);
+            return FALSE;
+        }
+        if ((size_t)received < NLMSG_LENGTH(sizeof(struct nlmsgerr)) ||
+            response.nlh.nlmsg_type != NLMSG_ERROR) {
+            g_set_error_literal(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR,
+                                EPROTO, "Invalid route ACK from netlink");
+            close(sock);
+            return FALSE;
+        }
+        if (response.error.error != 0) {
+            gint route_errno = response.error.error < 0
+                                   ? -response.error.error
+                                   : response.error.error;
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR,
+                        route_errno, "Route operation failed: %s",
+                        g_strerror(route_errno));
+            close(sock);
+            return FALSE;
+        }
     }
 
     close(sock);
@@ -399,13 +457,14 @@ manage_route(const gchar *ifname, const gchar *destination, int family, gboolean
 }
 
 static gboolean
-add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family)
+add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **error)
 {
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
     AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);
     const gchar *ifname = priv->interface_name;
     const GList *peers_list = awg_device_get_peers_list(priv->device);
     const GList *iter;
+    gboolean success = TRUE;
 
     for (iter = peers_list; iter; iter = g_list_next(iter)) {
         AWGDevicePeer *awg_peer = iter->data;
@@ -420,23 +479,26 @@ add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family)
                 if ((family == AF_INET && is_ipv6) || (family == AF_INET6 && !is_ipv6))
                     continue;
 
-                manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET, TRUE);
+                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                                  TRUE, error))
+                    success = FALSE;
             }
             g_strfreev(ip_list);
         }
     }
 
-    return TRUE;
+    return success;
 }
 
 static gboolean
-delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family)
+delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **error)
 {
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
     AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);
     const gchar *ifname = priv->interface_name;
     const GList *peers_list = awg_device_get_peers_list(priv->device);
     const GList *iter;
+    gboolean success = TRUE;
 
     for (iter = peers_list; iter; iter = g_list_next(iter)) {
         AWGDevicePeer *awg_peer = iter->data;
@@ -451,27 +513,30 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family)
                 if ((family == AF_INET && is_ipv6) || (family == AF_INET6 && !is_ipv6))
                     continue;
 
-                manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET, FALSE);
+                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                                  FALSE, error))
+                    success = FALSE;
             }
             g_strfreev(ip_list);
         }
     }
 
-    return TRUE;
+    return success;
 }
 
 gboolean
 awg_connection_manager_netlink_add_routes(AWGConnectionManager *mgr, int family, GError **error)
 {
-    if (!add_routes_for_allowed_ips(mgr, family)) {
-        int saved_errno = errno;
-        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, saved_errno,
-                    "Failed to add routes for %s",
-                    AWG_CONNECTION_MANAGER_NETLINK(mgr) != NULL
-                        ? AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(
-                              AWG_CONNECTION_MANAGER_NETLINK(mgr))
-                              ->interface_name
-                        : "unknown");
+    if (!add_routes_for_allowed_ips(mgr, family, error)) {
+        if (error && !*error) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, EIO,
+                        "Failed to add routes for %s",
+                        AWG_CONNECTION_MANAGER_NETLINK(mgr) != NULL
+                            ? AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(
+                                  AWG_CONNECTION_MANAGER_NETLINK(mgr))
+                                  ->interface_name
+                            : "unknown");
+        }
         return FALSE;
     }
     return TRUE;
@@ -480,15 +545,16 @@ awg_connection_manager_netlink_add_routes(AWGConnectionManager *mgr, int family,
 gboolean
 awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int family, GError **error)
 {
-    if (!delete_routes_for_allowed_ips(mgr, family)) {
-        int saved_errno = errno;
-        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, saved_errno,
-                    "Failed to delete routes for %s",
-                    AWG_CONNECTION_MANAGER_NETLINK(mgr) != NULL
-                        ? AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(
-                              AWG_CONNECTION_MANAGER_NETLINK(mgr))
-                              ->interface_name
-                        : "unknown");
+    if (!delete_routes_for_allowed_ips(mgr, family, error)) {
+        if (error && !*error) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, EIO,
+                        "Failed to delete routes for %s",
+                        AWG_CONNECTION_MANAGER_NETLINK(mgr) != NULL
+                            ? AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(
+                                  AWG_CONNECTION_MANAGER_NETLINK(mgr))
+                                  ->interface_name
+                            : "unknown");
+        }
         return FALSE;
     }
     return TRUE;
