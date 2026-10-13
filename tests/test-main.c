@@ -828,6 +828,8 @@ test_awg_validate_awg_string(void)
     g_assert_true(awg_validate_awg_string(""));
     g_assert_true(awg_validate_awg_string("short string"));
     g_assert_true(awg_validate_awg_string("a"));
+    g_assert_false(awg_validate_awg_string("line one\nline two"));
+    g_assert_false(awg_validate_awg_string("line one\rline two"));
 
     gchar *too_long_str = g_malloc(5 * 1024 + 2);
     memset(too_long_str, 'a', 5 * 1024 + 1);

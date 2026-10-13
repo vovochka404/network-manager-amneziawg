@@ -36,7 +36,10 @@ awg_validate_awg_string(const gchar *str)
 {
     if (awg_validate_empty(str))
         return TRUE;
-    return strlen(str) <= MAX_AWG_STRING_LEN;
+    if (strlen(str) > MAX_AWG_STRING_LEN)
+        return FALSE;
+
+    return strchr(str, '\n') == NULL && strchr(str, '\r') == NULL;
 }
 
 gboolean
