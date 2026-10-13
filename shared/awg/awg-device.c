@@ -271,6 +271,7 @@ awg_device_peer_finalize(GObject *object)
     g_clear_pointer(&priv->shared_key, g_free);
     g_clear_pointer(&priv->shared_key_base64, g_free);
     g_clear_pointer(&priv->endpoint, g_free);
+    g_clear_object(&priv->resolved_endpoint);
     g_list_free_full(priv->allowed_ips, (GDestroyNotify)g_object_unref);
 
     G_OBJECT_CLASS(awg_device_peer_parent_class)->finalize(object);
