@@ -326,6 +326,7 @@ If you need to manually configure it, the file should contain:
 <busconfig>
     <policy user="root">
         <allow own="org.freedesktop.NetworkManager.amneziawg"/>
+        <allow send_destination="org.freedesktop.NetworkManager.amneziawg"/>
     </policy>
 </busconfig>
 ```
