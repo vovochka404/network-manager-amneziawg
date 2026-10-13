@@ -423,6 +423,9 @@ awg_subnet_new_from_string(const char *str)
         if (bracket_end == NULL) {
             return NULL; // Неправильный формат
         }
+        if (bracket_end[1] != '\0' && bracket_end[1] != '/') {
+            return NULL;
+        }
         address_start = str + 1;   // Пропускаем '['
         address_end = bracket_end; // До ']'
         str = bracket_end + 1;     // После ']'

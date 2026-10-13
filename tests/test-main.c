@@ -416,6 +416,9 @@ test_awg_subnet_ipv6_brackets(void)
     g_free(str);
 
     g_object_unref(subnet);
+
+    g_assert_null(awg_subnet_new_from_string("[2001:db8::1]garbage/64"));
+    g_assert_null(awg_subnet_new_from_string("[2001:db8::1]garbage"));
 }
 
 static void
