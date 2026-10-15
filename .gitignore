@@ -65,3 +65,11 @@ compile_commands.json
 *.cmake
 .cache/
 .github/workflows/builds/
+
+# Arch package build artifacts
+/packaging/arch/src/
+/packaging/arch/pkg/
+/packaging/arch/network-manager-amneziawg/
+/packaging/arch/*.pkg.tar.zst
+/packaging/arch/*.pkg.tar.zst.sig
+/packaging/arch/*.log
