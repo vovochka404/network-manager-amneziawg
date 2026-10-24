@@ -158,8 +158,14 @@ void wg_generate_public_key(wg_key public_key, const wg_key private_key);
 void wg_generate_private_key(wg_key private_key);
 void wg_generate_preshared_key(wg_key preshared_key);
 
+/* Plugin addition: where the loaded amneziawg module reports its release. */
+#define AMNEZIAWG_MODULE_VERSION_FILE "/sys/module/amneziawg/version"
+
 /* Plugin addition: release version the loaded amneziawg module reports, e.g.
- * "3.1.20260812", or NULL when it cannot be read. Free with g_free(). */
+ * "3.1.20260812", or NULL when it cannot be read (no module loaded). Free with
+ * g_free(). amneziawg_kernel_version_from() reads it from @path instead,
+ * AMNEZIAWG_MODULE_VERSION_FILE when NULL. */
 char *amneziawg_kernel_version(void);
+char *amneziawg_kernel_version_from(const char *path);
 
 #endif

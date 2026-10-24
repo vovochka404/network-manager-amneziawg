@@ -40,12 +40,11 @@
 #include "awg/awg-connection-manager.h"
 #include "awg/awg-device.h"
 #include "awg/awg-nm-connection.h"
+#include "awg/awg-secrets.h"
 
 #if !defined(DIST_VERSION)
 #define DIST_VERSION VERSION
 #endif
-
-#define NM_AWG_MAX_PEERS 16
 
 static struct {
     gboolean debug;
@@ -849,43 +848,27 @@ wg_connect_interactive(NMVpnServicePlugin *plugin,
     return connect_common(plugin, connection, error);
 }
 
+/* Lists the secrets of @connection into @secrets and sets @missing to the
+ * first required one without a value, NULL if none is. The auth dialog
+ * decides what to ask for from the same list. A FALSE return always sets
+ * @error: without one libnm emits "g_dbus_method_invocation_take_error:
+ * assertion 'error != NULL'" and NM sees "Remote peer disconnected". */
 static gboolean
-check_peer_need_secrets(NMSettingVpn *s_vpn, guint peer_idx, const char *key_prefix)
+find_missing_secret(NMConnection *connection,
+                    GPtrArray **secrets,
+                    const AWGSecret **missing,
+                    GError **error)
 {
-    gchar *key;
-    gchar *public_key;
-    const char *secret;
-    NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NONE;
-    gboolean has_flags;
+    NMSettingVpn *s_vpn = nm_connection_get_setting_vpn(connection);
 
-    public_key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY, peer_idx);
-    if (!nm_setting_vpn_get_data_item(s_vpn, public_key)) {
-        g_free(public_key);
-        return FALSE;
-    }
-    g_free(public_key);
-
-    key = g_strdup_printf(key_prefix, peer_idx);
-
-    secret = nm_setting_vpn_get_secret(s_vpn, key);
-    has_flags = nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
-
-    g_free(key);
-
-    /* A peer without an explicitly configured PSK does not need a secret.
-     * Secret flags are written for configured PSKs by the editor/import path,
-     * so their absence distinguishes an optional, unset PSK. */
-    if (!has_flags)
-        return FALSE;
-
-    if (secret && *secret) {
+    if (!s_vpn) {
+        g_set_error_literal(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_INVALID_CONNECTION,
+                            "Connection has no VPN setting");
         return FALSE;
     }
 
-    if (flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED) {
-        return FALSE;
-    }
-
+    *secrets = awg_secrets_list(s_vpn);
+    *missing = awg_secrets_find_missing(*secrets);
     return TRUE;
 }
 
@@ -895,33 +878,35 @@ wg_need_secrets(NMVpnServicePlugin *plugin,
                 const char **setting_name,
                 GError **error)
 {
-    NMSettingVpn *s_vpn;
-    NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NONE;
-    const char *secret;
-    gboolean has_flags;
+    g_autoptr(GPtrArray) secrets = NULL;
+    const AWGSecret *missing = NULL;
+    const char *uuid = nm_connection_get_uuid(connection);
 
-    s_vpn = nm_connection_get_setting_vpn(connection);
-    if (!s_vpn) {
+    if (!find_missing_secret(connection, &secrets, &missing, error) || !missing)
         return FALSE;
+
+    _LOGI("NeedSecrets: %s is missing (flags %u)", missing->name, (guint)missing->flags);
+
+    /* The same remedies are in the prompt of the auth dialog, which is what
+     * users see: NetworkManager passes these lines on only with VPN_PLUGIN
+     * logging enabled. */
+    for (guint i = 0; i < secrets->len; i++) {
+        const AWGSecret *secret = g_ptr_array_index(secrets, i);
+
+        if (!awg_secret_is_missing_stored(secret))
+            continue;
+
+        if (secret->peer >= 0)
+            _LOGW("%s: NetworkManager should store it (flags 0) but has none. "
+                  "If peer %d has no PresharedKey, run: nmcli connection modify uuid %s -vpn.data %s-flags",
+                  secret->name, secret->peer, uuid, secret->name);
+        _LOGW("%s: a key stored for all users is kept from a secret agent only if polkit grants the user %s. "
+              "Otherwise restore it with: sudo nmcli connection modify uuid %s +vpn.secrets %s=KEY",
+              secret->name, awg_secrets_modify_action(connection), uuid, secret->name);
     }
 
-    secret = nm_setting_vpn_get_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
-    has_flags = nm_setting_get_secret_flags(NM_SETTING(s_vpn), NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, &flags, NULL);
-
-    if ((!has_flags || !secret || !*secret) &&
-        !(flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED)) {
-        *setting_name = NM_SETTING_VPN_SETTING_NAME;
-        return TRUE;
-    }
-
-    for (guint i = 0; i < NM_AWG_MAX_PEERS; i++) {
-        if (check_peer_need_secrets(s_vpn, i, NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY)) {
-            *setting_name = NM_SETTING_VPN_SETTING_NAME;
-            return TRUE;
-        }
-    }
-
-    return FALSE;
+    *setting_name = NM_SETTING_VPN_SETTING_NAME;
+    return TRUE;
 }
 
 static gboolean
@@ -929,14 +914,15 @@ wg_new_secrets(NMVpnServicePlugin *plugin,
                NMConnection *connection,
                GError **error)
 {
-    const char *setting_name;
+    g_autoptr(GPtrArray) secrets = NULL;
+    const AWGSecret *missing = NULL;
 
-    if (wg_need_secrets(plugin, connection, &setting_name, error)) {
-        /* A FALSE return without a set error makes libnm emit
-         * "g_dbus_method_invocation_take_error: assertion 'error != NULL'"
-         * and NM sees "Remote peer disconnected". Always set the error. */
+    if (!find_missing_secret(connection, &secrets, &missing, error))
+        return FALSE;
+
+    if (missing) {
         g_set_error(error, NM_VPN_PLUGIN_ERROR, NM_VPN_PLUGIN_ERROR_FAILED,
-                    "Required secrets for '%s' are still missing", setting_name);
+                    "Required secret %s is still missing", missing->name);
         return FALSE;
     }
 

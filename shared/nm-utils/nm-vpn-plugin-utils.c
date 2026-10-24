@@ -1,5 +1,9 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4 -*- */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE /* for dladdr() */
+#endif
+
 /*
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,6 +31,47 @@
 
 /*****************************************************************************/
 
+char *
+nm_vpn_plugin_utils_get_editor_module_path(const char *module_name, GError **error)
+{
+    char *module_path = NULL;
+    char *dirname     = NULL;
+    Dl_info plugin_info;
+
+    g_return_val_if_fail(module_name, NULL);
+    g_return_val_if_fail(!error || !*error, NULL);
+
+    /*
+     * Look for the editor from the same directory this plugin is in.
+     * Ideally, we'd get our .so name from the NMVpnEditorPlugin if it
+     * would just have a property with it...
+     */
+    if (!dladdr((void *)nm_vpn_plugin_utils_load_editor, &plugin_info)) {
+        g_set_error(error,
+                    NM_CONNECTION_ERROR,
+                    NM_CONNECTION_ERROR_FAILED,
+                    _("unable to get editor plugin name: %s"),
+                    dlerror());
+        return NULL;
+    }
+
+    dirname     = g_path_get_dirname(plugin_info.dli_fname);
+    module_path = g_build_filename(dirname, module_name, NULL);
+    g_free(dirname);
+
+    if (!g_file_test(module_path, G_FILE_TEST_EXISTS)) {
+        g_set_error(error,
+                    G_FILE_ERROR,
+                    G_FILE_ERROR_NOENT,
+                    _("missing plugin file \"%s\""),
+                    module_path);
+        g_free(module_path);
+        return NULL;
+    }
+
+    return module_path;
+}
+
 NMVpnEditor *
 nm_vpn_plugin_utils_load_editor(const char *module_name,
                                 const char *factory_name,
@@ -44,13 +89,23 @@ nm_vpn_plugin_utils_load_editor(const char *module_name,
         char *factory_name;
     } cached = { 0 };
     NMVpnEditor *editor;
+    g_autofree char *compat_module_path = NULL;
 
-    g_return_val_if_fail(module_name && g_path_is_absolute(module_name), NULL);
+    g_return_val_if_fail(module_name, NULL);
     g_return_val_if_fail(factory_name && factory_name[0], NULL);
     g_return_val_if_fail(editor_factory, NULL);
     g_return_val_if_fail(NM_IS_VPN_EDITOR_PLUGIN(editor_plugin), NULL);
     g_return_val_if_fail(NM_IS_CONNECTION(connection), NULL);
     g_return_val_if_fail(!error || !*error, NULL);
+
+    if (!g_path_is_absolute(module_name)) {
+        /* resolve the relative module name against the directory of the
+         * plugin .so that contains this function */
+        compat_module_path = nm_vpn_plugin_utils_get_editor_module_path(module_name, error);
+        if (!compat_module_path)
+            return NULL;
+        module_name = compat_module_path;
+    }
 
     /* we really expect this function to be called with unchanging @module_name
      * and @factory_name. And we only want to load the module once, hence it would

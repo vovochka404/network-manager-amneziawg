@@ -32,6 +32,13 @@ gboolean awg_connection_manager_netlink_is_available(void);
 
 AWGConnectionManager *awg_connection_manager_netlink_new(const gchar *interface_name, AWGDevice *device);
 
+/* Refuses @device when it uses an AmneziaWG 3.x parameter the loaded amneziawg
+ * kernel module does not know, reading the module release from @version_file
+ * (AMNEZIAWG_MODULE_VERSION_FILE when NULL). A version that cannot be read (no
+ * module loaded) or parsed is not refused: the kernel then decides. Applies to
+ * the awg-quick backend as well, which uses the same module. */
+gboolean awg_connection_manager_netlink_check_module(AWGDevice *device, const gchar *version_file, GError **error);
+
 gboolean awg_connection_manager_netlink_add_routes(AWGConnectionManager *mgr, int family, GError **error);
 gboolean awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int family, GError **error);
 

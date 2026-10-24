@@ -120,19 +120,10 @@ check_interface_magic_header(const char *str)
 static gboolean
 check_interface_header_protection_key(const char *str)
 {
-    guchar *decoded;
-    gsize len = 0;
-
     if (!str || !str[0])
         return TRUE;
 
-    if (!awg_validate_base64(str))
-        return FALSE;
-
-    decoded = g_base64_decode(str, &len);
-    g_free(decoded);
-
-    return len == 32;
+    return awg_validate_key(str);
 }
 
 static gboolean
@@ -149,7 +140,7 @@ check_interface_range(const char *str)
 static gboolean
 check_interface_private_key(const char *str)
 {
-    return awg_validate_base64(str) && str && str[0];
+    return awg_validate_key(str);
 }
 
 static gboolean
@@ -161,7 +152,15 @@ check_interface_listen_port(const char *str)
 static gboolean
 check_peer_public_key(const char *str)
 {
-    return awg_validate_base64(str) && str && str[0];
+    return awg_validate_key(str);
+}
+
+/* Empty means "no preshared key"; anything else must be a whole key, or
+ * awg_device_peer_set_shared_key() would drop it. */
+static gboolean
+check_peer_psk(const char *str)
+{
+    return !str || !str[0] || awg_validate_key(str);
 }
 
 static gboolean
@@ -198,7 +197,7 @@ check(const AmneziaWGEditorPrivate *priv,
       GError **error)
 {
     GtkWidget *widget = GTK_WIDGET(gtk_builder_get_object(priv->builder, widget_name));
-    const char *str = AWG_EDITABLE_GET_TEXT(GTK_ENTRY(widget));
+    const char *str = AWG_EDITABLE_GET_TEXT(widget);
     if (str && chk(str))
         gtk_style_context_remove_class(gtk_widget_get_style_context(widget), "error");
     else {
@@ -233,7 +232,7 @@ check_validity(AmneziaWGEditor *self, GError **error)
 
     if (!(flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED))) {
         GtkWidget *key_entry = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_private_key_entry"));
-        const char *key_text = key_entry ? AWG_EDITABLE_GET_TEXT(GTK_ENTRY(key_entry)) : NULL;
+        const char *key_text = key_entry ? AWG_EDITABLE_GET_TEXT(key_entry) : NULL;
         /* NM keeps the key of an existing connection in its own secret store
          * and does not hand it to the editor. An empty field therefore means
          * "keep the stored key", not "no key": requiring it here made every
@@ -391,7 +390,7 @@ show_private_key_toggled(GtkWidget *widget, gpointer user_data)
 
     entry = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_private_key_entry"));
     if (entry) {
-        gtk_entry_set_visibility(GTK_ENTRY(entry), gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+        gtk_entry_set_visibility(GTK_ENTRY(entry), AWG_CHECK_BUTTON_GET_ACTIVE(widget));
     }
 }
 
@@ -408,7 +407,7 @@ get_widget_text(GtkBuilder *builder, const char *widget_name)
         return g_strdup_printf("%d", value);
     }
 
-    const char *str = AWG_EDITABLE_GET_TEXT(GTK_ENTRY(widget));
+    const char *str = AWG_EDITABLE_GET_TEXT(widget);
     return (str && str[0]) ? g_strdup(str) : NULL;
 }
 
@@ -615,7 +614,7 @@ fill_interface_from_connection(AmneziaWGEditor *self)
         GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_random_trailers_check"));
         if (toggle) {
             str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS);
-            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(toggle), g_strcmp0(str, "on") == 0);
+            AWG_CHECK_BUTTON_SET_ACTIVE(toggle, g_strcmp0(str, "on") == 0);
         }
     }
 
@@ -623,7 +622,7 @@ fill_interface_from_connection(AmneziaWGEditor *self)
         GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_disable_cookies_check"));
         if (toggle) {
             str = nm_setting_vpn_get_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES);
-            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(toggle), g_strcmp0(str, "on") == 0);
+            AWG_CHECK_BUTTON_SET_ACTIVE(toggle, g_strcmp0(str, "on") == 0);
         }
     }
 }
@@ -639,8 +638,8 @@ typedef struct {
     GtkInfoBar *info_bar;
     GtkLabel *label_info;
     GtkButton *button_apply;
-    GtkToggleButton *toggle_show_psk;
-    GtkToggleButton *toggle_advanced_security;
+    GtkWidget *toggle_show_psk;
+    GtkWidget *toggle_advanced_security;
     gboolean is_new;
 } PeerDialogData;
 
@@ -662,12 +661,13 @@ peer_dialog_update_ui(PeerDialogData *data)
 
     AWG_EDITABLE_SET_TEXT(GTK_EDITABLE(data->entry_keepalive), awg_device_peer_get_keep_alive(data->peer) ?: "");
 
-    gtk_toggle_button_set_active(data->toggle_advanced_security, awg_device_peer_get_advanced_security(data->peer));
+    AWG_CHECK_BUTTON_SET_ACTIVE(data->toggle_advanced_security, awg_device_peer_get_advanced_security(data->peer));
 }
 
 static void
 peer_dialog_update_peer(PeerDialogData *data)
 {
+    NMSettingSecretFlags psk_flags;
     const char *str;
 
     str = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
@@ -679,18 +679,16 @@ peer_dialog_update_peer(PeerDialogData *data)
     str = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
     awg_device_peer_set_endpoint(data->peer, str && str[0] ? str : NULL);
 
+    /* Validated by the caller; a rejected key leaves key and flags as they
+     * were rather than storing flags for a key that is not there. */
     str = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
-    awg_device_peer_set_shared_key(data->peer, str && str[0] ? str : NULL);
-
-    if (data->entry_psk) {
-        NMSettingSecretFlags flags = nma_utils_menu_to_secret_flags(GTK_WIDGET(data->entry_psk));
-        awg_device_peer_set_shared_key_flags(data->peer, flags);
-    }
+    psk_flags = nma_utils_menu_to_secret_flags(GTK_WIDGET(data->entry_psk));
+    awg_nm_connection_apply_edited_psk(data->peer, psk_flags, str);
 
     str = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
     awg_device_peer_set_keep_alive(data->peer, str);
 
-    awg_device_peer_set_advanced_security(data->peer, gtk_toggle_button_get_active(data->toggle_advanced_security));
+    awg_device_peer_set_advanced_security(data->peer, AWG_CHECK_BUTTON_GET_ACTIVE(data->toggle_advanced_security));
 }
 
 static void
@@ -708,7 +706,7 @@ peer_dialog_cancel_clicked(GtkWidget *widget, PeerDialogData *data)
 static void
 peer_dialog_show_psk_toggled(GtkWidget *widget, PeerDialogData *data)
 {
-    gtk_entry_set_visibility(data->entry_psk, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+    gtk_entry_set_visibility(data->entry_psk, AWG_CHECK_BUTTON_GET_ACTIVE(widget));
 }
 
 static gboolean
@@ -719,7 +717,7 @@ peer_dialog_validate_fields(PeerDialogData *data)
     const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
     const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
     const char *keepalive = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
-    NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(data->peer);
+    NMSettingSecretFlags psk_flags = nma_utils_menu_to_secret_flags(GTK_WIDGET(data->entry_psk));
 
     gboolean valid = TRUE;
 
@@ -740,7 +738,7 @@ peer_dialog_validate_fields(PeerDialogData *data)
     }
 
     if (!(psk_flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED))) {
-        if (!awg_validate_base64(psk) && psk && psk[0]) {
+        if (!check_peer_psk(psk)) {
             valid = FALSE;
         }
     }
@@ -755,6 +753,8 @@ peer_dialog_update_apply_button(PeerDialogData *data)
     const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
     const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
     const char *keepalive = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
+    const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
+    NMSettingSecretFlags psk_flags = nma_utils_menu_to_secret_flags(GTK_WIDGET(data->entry_psk));
 
     if (!check_peer_public_key(public_key)) {
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_public_key)), "error");
@@ -778,6 +778,12 @@ peer_dialog_update_apply_button(PeerDialogData *data)
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_keepalive)), "error");
     } else {
         gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_keepalive)), "error");
+    }
+
+    if (!(psk_flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED)) && !check_peer_psk(psk)) {
+        gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_psk)), "error");
+    } else {
+        gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_psk)), "error");
     }
 
     gboolean valid = peer_dialog_validate_fields(data);
@@ -835,8 +841,8 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     data->info_bar = GTK_INFO_BAR(gtk_builder_get_object(builder, "peer_dialog_info_bar"));
     data->label_info = GTK_LABEL(gtk_builder_get_object(builder, "peer_dialog_label_info"));
     data->button_apply = GTK_BUTTON(gtk_builder_get_object(builder, "peer_dialog_button_apply"));
-    data->toggle_show_psk = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "peer_dialog_show_psk"));
-    data->toggle_advanced_security = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "peer_dialog_advanced_security"));
+    data->toggle_show_psk = GTK_WIDGET(gtk_builder_get_object(builder, "peer_dialog_show_psk"));
+    data->toggle_advanced_security = GTK_WIDGET(gtk_builder_get_object(builder, "peer_dialog_advanced_security"));
     button_cancel = GTK_WIDGET(gtk_builder_get_object(builder, "peer_dialog_button_cancel"));
 
     g_object_set_data_full(G_OBJECT(dialog), "peer-data", data, (GDestroyNotify)peer_dialog_data_free);
@@ -846,9 +852,15 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     g_signal_connect_data(G_OBJECT(dialog), "response", G_CALLBACK(peer_dialog_response), info, (GClosureNotify)g_free, 0);
 
     if (data->entry_psk) {
+        NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(peer);
+
+        /* A peer without a preshared key gets an editable empty field (left
+         * empty it stays without one) rather than the "not required" state. */
+        if (!awg_device_peer_get_shared_key(peer) && (psk_flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED))
+            psk_flags = NM_SETTING_SECRET_FLAG_NONE;
+
         gtk_entry_set_visibility(data->entry_psk, FALSE);
-        nma_utils_setup_password_storage(GTK_WIDGET(data->entry_psk),
-                                         awg_device_peer_get_shared_key_flags(peer),
+        nma_utils_setup_password_storage(GTK_WIDGET(data->entry_psk), psk_flags,
                                          NULL, NULL, TRUE, FALSE);
     }
 
@@ -874,6 +886,15 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     return dialog;
 }
 
+/* One problem per line in the info bar. */
+static void
+peer_dialog_append_error(GString *error_msg, const char *message)
+{
+    if (error_msg->len)
+        g_string_append_c(error_msg, '\n');
+    g_string_append(error_msg, message);
+}
+
 static void
 peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info)
 {
@@ -886,28 +907,28 @@ peer_dialog_response(GtkDialog *dialog, gint response_id, PeerDialogInfo *info)
             const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
             const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
             const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
-            NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(data->peer);
+            NMSettingSecretFlags psk_flags = nma_utils_menu_to_secret_flags(GTK_WIDGET(data->entry_psk));
 
             gboolean valid = TRUE;
             GString *error_msg = g_string_new(NULL);
 
             if (!check_peer_public_key(public_key)) {
-                g_string_append(error_msg, _("Public key is required and must be valid base64\n"));
+                peer_dialog_append_error(error_msg, _("Public key is required and must be a 32-byte base64 key"));
                 valid = FALSE;
             }
             if (!check_peer_endpoint(endpoint)) {
-                g_string_append(error_msg, _("Endpoint is required and must be valid (host:port)"));
+                peer_dialog_append_error(error_msg, _("Endpoint is required and must be valid (host:port)"));
                 valid = FALSE;
             }
             const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
             if (!check_peer_allowed_ips(allowed_ips)) {
-                g_string_append(error_msg, _("Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"));
+                peer_dialog_append_error(error_msg, _("Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"));
                 valid = FALSE;
             }
 
             if (!(psk_flags & (NM_SETTING_SECRET_FLAG_NOT_REQUIRED | NM_SETTING_SECRET_FLAG_NOT_SAVED))) {
-                if (!awg_validate_base64(psk)) {
-                    g_string_append(error_msg, _("Preshared key must be valid base64 or empty"));
+                if (!check_peer_psk(psk)) {
+                    peer_dialog_append_error(error_msg, _("Preshared key must be a 32-byte base64 key or empty"));
                     valid = FALSE;
                 }
             }
@@ -1680,7 +1701,7 @@ save_interface_to_connection(AmneziaWGEditor *self)
         GtkWidget *toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_random_trailers_check"));
 
         if (toggle) {
-            if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(toggle))) {
+            if (AWG_CHECK_BUTTON_GET_ACTIVE(toggle)) {
                 nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS, "on");
             } else {
                 nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_RANDOM_TRAILERS);
@@ -1689,7 +1710,7 @@ save_interface_to_connection(AmneziaWGEditor *self)
 
         toggle = GTK_WIDGET(gtk_builder_get_object(priv->builder, "interface_disable_cookies_check"));
         if (toggle) {
-            if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(toggle))) {
+            if (AWG_CHECK_BUTTON_GET_ACTIVE(toggle)) {
                 nm_setting_vpn_add_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES, "on");
             } else {
                 nm_setting_vpn_remove_data_item(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_DISABLE_COOKIES);
@@ -1713,16 +1734,7 @@ save_interface_to_connection(AmneziaWGEditor *self)
                 nm_setting_vpn_add_data_item(s_vpn, key, value);
             g_free(key);
 
-            key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-            value = awg_device_peer_get_shared_key(peer);
-            if (value)
-                nm_setting_vpn_add_secret(s_vpn, key, value);
-            g_free(key);
-
-            key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-            nm_setting_set_secret_flags(NM_SETTING(s_vpn), key,
-                                        awg_device_peer_get_shared_key_flags(peer), NULL);
-            g_free(key);
+            awg_nm_connection_set_peer_preshared_key(s_vpn, i, peer);
 
             key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_ENDPOINT, i);
             value = awg_device_peer_get_endpoint(peer);
