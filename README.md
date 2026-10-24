@@ -196,7 +196,7 @@ nmcli c delete "My AmneziaWG VPN"
    - **Endpoint**: Server address (host:port), required
    - **Allowed IPs**: Comma-separated list of subnets (e.g., `0.0.0.0/0,::/0`)
    - **Preshared Key**: Optional, for extra security
-   - **Keep-alive**: Optional, seconds
+   - **Keep-alive**: Optional, seconds as a number or an AWG 3.1 range (e.g. `25-35`)
 
 5. Click **Save**
 
@@ -295,7 +295,8 @@ Endpoint = vpn.example.com:51820
 # Allowed IPs (required - defines what traffic goes through VPN)
 AllowedIPs = 0.0.0.0/0, ::/0
 
-# Persistent keepalive (optional, in seconds)
+# Persistent keepalive (optional, in seconds; AWG 3.1 also accepts a range,
+# e.g. 25-35, which needs amneziawg-tools / kernel module 3.0 or newer)
 PersistentKeepalive = 25
 
 # Preshared key (optional, for post-quantum security)

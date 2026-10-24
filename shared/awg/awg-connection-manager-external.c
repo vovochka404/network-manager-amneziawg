@@ -93,7 +93,7 @@ external_check_awg31_support(AWGDevice *device, GError **error)
     GError *spawn_error = NULL;
     gint exit_status = 0;
 
-    if (!awg_device_has_awg31_params(device))
+    if (!awg_device_has_awg31_params(device) && !awg_device_has_peer_keepalive_range(device))
         return TRUE;
 
     awg = g_find_program_in_path("awg");
@@ -117,7 +117,8 @@ external_check_awg31_support(AWGDevice *device, GError **error)
 
     g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
                 "This connection uses AmneziaWG 3.1 parameters (HeaderProtectionKey, "
-                "ContentPaddingAddition, ...), which need amneziawg-tools 3.0 or newer, "
+                "ContentPaddingAddition, PersistentKeepalive ranges, ...), which need "
+                "amneziawg-tools 3.0 or newer, "
                 "but %s reports \"%s\". Upgrade amneziawg-tools, or use the kernel "
                 "backend (unset NM_FORCE_AWG_QUICK)",
                 awg, output);

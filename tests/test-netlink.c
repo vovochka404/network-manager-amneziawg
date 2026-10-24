@@ -221,7 +221,7 @@ test_netlink_connect(const gchar *config_path)
         AWGDevicePeer *peer = peers->data;
         g_print("Peer endpoint: %s\n", awg_device_peer_get_endpoint(peer) ?: "none");
         g_print("Peer allowed IPs: %s\n", awg_device_peer_get_allowed_ips_as_string(peer) ?: "none");
-        g_print("Peer keepalive: %d\n", awg_device_peer_get_keep_alive_interval(peer));
+        g_print("Peer keepalive: %s\n", awg_device_peer_get_keep_alive(peer) ?: "off");
         g_print("Peer advanced security: %d\n", awg_device_peer_get_advanced_security(peer));
     }
 

@@ -176,6 +176,15 @@ check_peer_allowed_ips(const char *str)
     return awg_validate_allowed_ips(str);
 }
 
+/* Empty, "off" or a u16 number/range ("25", "25-35"), as the peer setter takes. */
+static gboolean
+check_peer_keepalive(const char *str)
+{
+    guint32 packed;
+
+    return !str || !str[0] || g_strcmp0(str, "off") == 0 || awg_range_parse_u32(str, &packed);
+}
+
 // used in 'check()', matches the functions above
 typedef gboolean (*CheckFunc)(const char *str);
 
@@ -626,7 +635,7 @@ typedef struct {
     GtkEntry *entry_allowed_ips;
     GtkEntry *entry_endpoint;
     GtkEntry *entry_psk;
-    GtkSpinButton *spin_keepalive;
+    GtkEntry *entry_keepalive;
     GtkInfoBar *info_bar;
     GtkLabel *label_info;
     GtkButton *button_apply;
@@ -651,8 +660,7 @@ peer_dialog_update_ui(PeerDialogData *data)
     AWG_EDITABLE_SET_TEXT(GTK_EDITABLE(data->entry_endpoint), awg_device_peer_get_endpoint(data->peer) ?: "");
     AWG_EDITABLE_SET_TEXT(GTK_EDITABLE(data->entry_psk), awg_device_peer_get_shared_key(data->peer) ?: "");
 
-    guint16 ka = awg_device_peer_get_keep_alive_interval(data->peer);
-    gtk_spin_button_set_value(data->spin_keepalive, ka);
+    AWG_EDITABLE_SET_TEXT(GTK_EDITABLE(data->entry_keepalive), awg_device_peer_get_keep_alive(data->peer) ?: "");
 
     gtk_toggle_button_set_active(data->toggle_advanced_security, awg_device_peer_get_advanced_security(data->peer));
 }
@@ -679,8 +687,8 @@ peer_dialog_update_peer(PeerDialogData *data)
         awg_device_peer_set_shared_key_flags(data->peer, flags);
     }
 
-    gint keepalive = gtk_spin_button_get_value_as_int(data->spin_keepalive);
-    awg_device_peer_set_keep_alive_interval(data->peer, keepalive);
+    str = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
+    awg_device_peer_set_keep_alive(data->peer, str);
 
     awg_device_peer_set_advanced_security(data->peer, gtk_toggle_button_get_active(data->toggle_advanced_security));
 }
@@ -710,6 +718,7 @@ peer_dialog_validate_fields(PeerDialogData *data)
     const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
     const char *psk = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_psk));
     const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
+    const char *keepalive = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
     NMSettingSecretFlags psk_flags = awg_device_peer_get_shared_key_flags(data->peer);
 
     gboolean valid = TRUE;
@@ -723,6 +732,10 @@ peer_dialog_validate_fields(PeerDialogData *data)
     }
 
     if (!check_peer_allowed_ips(allowed_ips)) {
+        valid = FALSE;
+    }
+
+    if (!check_peer_keepalive(keepalive)) {
         valid = FALSE;
     }
 
@@ -741,6 +754,7 @@ peer_dialog_update_apply_button(PeerDialogData *data)
     const char *public_key = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_public_key));
     const char *endpoint = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_endpoint));
     const char *allowed_ips = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_allowed_ips));
+    const char *keepalive = AWG_EDITABLE_GET_TEXT(GTK_EDITABLE(data->entry_keepalive));
 
     if (!check_peer_public_key(public_key)) {
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_public_key)), "error");
@@ -758,6 +772,12 @@ peer_dialog_update_apply_button(PeerDialogData *data)
         gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_allowed_ips)), "error");
     } else {
         gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_allowed_ips)), "error");
+    }
+
+    if (!check_peer_keepalive(keepalive)) {
+        gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_keepalive)), "error");
+    } else {
+        gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(data->entry_keepalive)), "error");
     }
 
     gboolean valid = peer_dialog_validate_fields(data);
@@ -811,7 +831,7 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     data->entry_allowed_ips = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_allowed_ips"));
     data->entry_endpoint = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_endpoint"));
     data->entry_psk = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_psk"));
-    data->spin_keepalive = GTK_SPIN_BUTTON(gtk_builder_get_object(builder, "peer_dialog_keepalive"));
+    data->entry_keepalive = GTK_ENTRY(gtk_builder_get_object(builder, "peer_dialog_keepalive"));
     data->info_bar = GTK_INFO_BAR(gtk_builder_get_object(builder, "peer_dialog_info_bar"));
     data->label_info = GTK_LABEL(gtk_builder_get_object(builder, "peer_dialog_label_info"));
     data->button_apply = GTK_BUTTON(gtk_builder_get_object(builder, "peer_dialog_button_apply"));
@@ -824,9 +844,6 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     info = g_new0(PeerDialogInfo, 1);
     info->editor = editor;
     g_signal_connect_data(G_OBJECT(dialog), "response", G_CALLBACK(peer_dialog_response), info, (GClosureNotify)g_free, 0);
-
-    gtk_spin_button_set_range(data->spin_keepalive, 0, 65535);
-    gtk_spin_button_set_value(data->spin_keepalive, 0);
 
     if (data->entry_psk) {
         gtk_entry_set_visibility(data->entry_psk, FALSE);
@@ -848,6 +865,7 @@ peer_dialog_create(GtkWidget *toplevel, AWGDevicePeer *peer, AmneziaWGEditor *ed
     g_signal_connect(data->entry_endpoint, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
     g_signal_connect(data->entry_allowed_ips, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
     g_signal_connect(data->entry_psk, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
+    g_signal_connect(data->entry_keepalive, "changed", G_CALLBACK(peer_dialog_entry_changed), data);
 
     gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
     gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(toplevel));
@@ -1719,8 +1737,7 @@ save_interface_to_connection(AmneziaWGEditor *self)
             g_free(key);
 
             key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE, i);
-            guint16 keep_alive = awg_device_peer_get_keep_alive_interval(peer);
-            nm_setting_vpn_add_data_item(s_vpn, key, g_strdup_printf("%u", keep_alive));
+            nm_setting_vpn_add_data_item(s_vpn, key, awg_device_peer_get_keep_alive(peer) ?: "0");
             g_free(key);
 
             key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_ADVANCED_SECURITY, i);
