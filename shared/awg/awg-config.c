@@ -226,6 +226,10 @@ awg_device_new_from_config(const char *config_path, GError **error)
                 SET_OR_FAIL(awg_device_peer_set_public_key(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_PRESHARED_KEY) == 0) {
                 SET_OR_FAIL(awg_device_peer_set_shared_key(peer, value));
+                /* Stored by NetworkManager, as nmcli imports a WireGuard
+                 * PresharedKey; peers without one keep NOT_REQUIRED. */
+                if (awg_device_peer_get_shared_key(peer))
+                    awg_device_peer_set_shared_key_flags(peer, NM_SETTING_SECRET_FLAG_NONE);
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ALLOWED_IPS) == 0) {
                 SET_OR_FAIL(awg_device_peer_set_allowed_ips_from_string(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_KEEP_ALIVE) == 0) {
@@ -369,13 +373,22 @@ awg_device_create_config_string(AWGDevice *device)
         g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_MTU, mtu);
     }
 
+    /* Every AmneziaWG version knows Jc..S2. S3 and S4 came later and mean
+     * nothing when 0, so they are only written when set, as the netlink
+     * backend only sends them then. */
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JC, awg_device_get_jc(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JMIN, awg_device_get_jmin(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_JMAX, awg_device_get_jmax(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S1, awg_device_get_s1(device));
     g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S2, awg_device_get_s2(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S3, awg_device_get_s3(device));
-    g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S4, awg_device_get_s4(device));
+    uint_value = awg_device_get_s3(device);
+    if (uint_value) {
+        g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S3, uint_value);
+    }
+    uint_value = awg_device_get_s4(device);
+    if (uint_value) {
+        g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_DEVICE_S4, uint_value);
+    }
 
     const gchar *h1 = awg_device_get_h1(device);
     if (h1 && *h1) {
@@ -491,15 +504,18 @@ awg_device_create_config_string(AWGDevice *device)
             if (value) {
                 g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ENDPOINT, value);
             }
+            /* Nothing for 0: "off" is rejected by amneziawg-tools 3.0 and
+             * newer, which parse the value as a number range. */
             uint_value = awg_device_peer_get_keep_alive_interval(peer);
             if (uint_value) {
                 g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_PEER_KEEP_ALIVE, uint_value);
-            } else {
-                g_string_append_printf(config, "%s = off\n", AWG_CONFIG_PEER_KEEP_ALIVE);
             }
-            value = awg_device_peer_get_allowed_ips_as_string(peer);
-            if (value) {
-                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ALLOWED_IPS, value);
+            {
+                g_autofree gchar *allowed_ips = awg_device_peer_get_allowed_ips_as_string(peer);
+
+                if (allowed_ips) {
+                    g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ALLOWED_IPS, allowed_ips);
+                }
             }
             if (awg_device_peer_get_advanced_security(peer)) {
                 g_string_append_printf(config, "%s = on\n", AWG_CONFIG_PEER_ADVANCED_SECURITY);

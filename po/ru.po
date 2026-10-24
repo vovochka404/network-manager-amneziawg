@@ -28,9 +28,9 @@ msgstr "Диапазоны магических заголовков H1-H4 не 
 msgid "JMax must be greater than or equal to JMin"
 msgstr "JMax должен быть больше или равен JMin"
 
-#: properties/nm-amneziawg-editor.c:725
-msgid "Public key is required and must be valid base64\n"
-msgstr "Открытый ключ обязателен и должен быть в формате base64\n"
+#: properties/nm-amneziawg-editor.c:898
+msgid "Public key is required and must be a 32-byte base64 key"
+msgstr "Открытый ключ обязателен и должен быть 32-байтовым ключом в base64"
 
 #: properties/nm-amneziawg-editor.c:729
 msgid "Endpoint is required and must be valid (host:port)"
@@ -40,9 +40,9 @@ msgstr "Адрес подключения обязательна и должна
 msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 msgstr "Allowed IPs должны быть допустимыми подсетями (например, 10.0.0.0/24)"
 
-#: properties/nm-amneziawg-editor.c:740
-msgid "Preshared key must be valid base64 or empty"
-msgstr "Общий ключ должен быть в формате base64 или пустым"
+#: properties/nm-amneziawg-editor.c:913
+msgid "Preshared key must be a 32-byte base64 key or empty"
+msgstr "Общий ключ должен быть 32-байтовым ключом в base64 или пустым"
 
 #: properties/nm-amneziawg-editor.c:1060 properties/nm-amneziawg-editor.c:1073
 #, c-format
@@ -103,6 +103,11 @@ msgid ""
 msgstr ""
 "значение \"%s\" типа '%s' недопустимо или выходит за диапазон для свойства "
 "'%s' типа '%s'"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:53
+#, c-format
+msgid "unable to get editor plugin name: %s"
+msgstr "не удалось получить имя плагина редактора: %s"
 
 #: shared/nm-utils/nm-vpn-plugin-utils.c:80
 #, c-format
@@ -523,3 +528,41 @@ msgstr "Не отправлять cookie-ответы. Только для AWG 3
 #: properties/nm-amneziawg-dialog.ui:1739
 msgid "AmneziaWG 3.1"
 msgstr "AmneziaWG 3.1"
+
+#: src/nm-amneziawg-auth-dialog.c:102
+msgid "Private key"
+msgstr "Закрытый ключ"
+
+#. TRANSLATORS: %d is the number of the peer as in its peer-N-* keys
+#. * (from 0), %s its endpoint (host:port) or, without one, its public key
+#: src/nm-amneziawg-auth-dialog.c:114
+#, c-format
+msgid "Preshared key of peer %d (%s)"
+msgstr "Общий ключ пира %d (%s)"
+
+#: src/nm-amneziawg-auth-dialog.c:137
+#, c-format
+msgid "You need to authenticate to access the Virtual Private Network “%s”."
+msgstr "Для доступа к виртуальной частной сети «%s» требуется аутентификация."
+
+#: src/nm-amneziawg-auth-dialog.c:155
+msgid ""
+"If a peer has no preshared key, choose “The password is not required” for its "
+"preshared key in the connection editor, or run:"
+msgstr ""
+"Если у пира нет общего ключа, выберите для поля общего ключа «Пароль не требуется» "
+"в редакторе подключения или выполните:"
+
+#. TRANSLATORS: keep KEY as it is, the command that follows uses it
+#: src/nm-amneziawg-auth-dialog.c:164
+msgid ""
+"A key stored for all users that is typed in here is saved only if you may "
+"modify this connection. Otherwise restore it, with the key in place of KEY:"
+msgstr ""
+"Ключ «для всех пользователей», введённый здесь, сохранится, только если у "
+"вас есть право изменять это подключение. Иначе восстановите его командой "
+"ниже, подставив ключ вместо KEY:"
+
+#: src/nm-amneziawg-auth-dialog.c:187
+msgid "Authenticate VPN"
+msgstr "Аутентификация VPN"

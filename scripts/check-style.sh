@@ -35,7 +35,7 @@ else
     echo "Checking code style..."
     ERRORS=0
     for file in $FILES; do
-        if ! $CLANG_FORMAT --style=file --dry-run --Werror "$file" 2>/dev/null; then
+        if ! $CLANG_FORMAT --style=file --dry-run --Werror "$file"; then
             echo "  ✗ $file"
             ERRORS=$((ERRORS + 1))
         fi

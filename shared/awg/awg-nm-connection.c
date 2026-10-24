@@ -11,6 +11,7 @@
 
 #include "awg-nm-connection.h"
 #include "awg-device.h"
+#include "awg-secrets.h"
 #include <netinet/in.h>
 #include <string.h>
 
@@ -348,22 +349,7 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         }
         g_free(key);
 
-        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-        value = awg_device_peer_get_shared_key(peer);
-        if (value) {
-            nm_setting_vpn_add_secret(s_vpn, key, value);
-        }
-        g_free(key);
-
-        /* The flags are stored by libnm as "<secret-name>-flags": passing the
-         * already suffixed name here wrote "<secret-name>-flags-flags" instead,
-         * which nothing ever read back. */
-        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-        nm_setting_set_secret_flags(NM_SETTING(s_vpn),
-                                    key,
-                                    awg_device_peer_get_shared_key_flags(peer),
-                                    NULL);
-        g_free(key);
+        awg_nm_connection_set_peer_preshared_key(s_vpn, i, peer);
 
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_ENDPOINT, i);
         value = awg_device_peer_get_endpoint(peer);
@@ -390,6 +376,69 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         g_free(key);
     }
 
+    return TRUE;
+}
+
+/* Stores the preshared key of peer @index together with its flags.
+ *
+ * A peer without a key whose flags say NOT_REQUIRED has no preshared key at
+ * all (the default of awg_device_peer_new(), as for nm_wireguard_peer_new()).
+ * Nothing is written for it, so awg_secrets_list() skips it and no secret is
+ * ever requested. Every other combination keeps its flags: a key stored by
+ * NetworkManager that later goes missing is asked for instead of being
+ * dropped silently. */
+void
+awg_nm_connection_set_peer_preshared_key(NMSettingVpn *s_vpn, guint index, AWGDevicePeer *peer)
+{
+    g_autofree gchar *key = NULL;
+    const gchar *value;
+    NMSettingSecretFlags flags;
+
+    g_return_if_fail(NM_IS_SETTING_VPN(s_vpn));
+    g_return_if_fail(AWG_IS_DEVICE_PEER(peer));
+
+    key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, index);
+    value = awg_device_peer_get_shared_key(peer);
+    flags = awg_device_peer_get_shared_key_flags(peer);
+
+    if (value)
+        nm_setting_vpn_add_secret(s_vpn, key, value);
+
+    /* libnm stores the flags as "<secret-name>-flags" itself. */
+    if (value || !(flags & NM_SETTING_SECRET_FLAG_NOT_REQUIRED))
+        nm_setting_set_secret_flags(NM_SETTING(s_vpn), key, flags, NULL);
+}
+
+/* Applies an edited preshared key field to @peer: @psk is the field text,
+ * @chosen the flags picked in the storage menu.
+ *
+ * A key that awg_device_peer_set_shared_key() rejects (not base64 of exactly
+ * 32 bytes) changes nothing and returns FALSE, so no flags are ever stored
+ * for a key that is not there. The flags follow what was stored: a key keeps
+ * @chosen. An empty field means "no preshared key" (NOT_REQUIRED) when the
+ * peer had none or its key was shown and cleared, unless "ask every time" is
+ * chosen. A stored key the editor was not given (flags other than
+ * NOT_REQUIRED, no value) keeps @chosen, so it is still asked for instead of
+ * being dropped. */
+gboolean
+awg_nm_connection_apply_edited_psk(AWGDevicePeer *peer, NMSettingSecretFlags chosen, const gchar *psk)
+{
+    gboolean had_key;
+    gboolean had_none;
+    NMSettingSecretFlags flags = chosen;
+
+    g_return_val_if_fail(AWG_IS_DEVICE_PEER(peer), FALSE);
+
+    had_key = awg_device_peer_get_shared_key(peer) != NULL;
+    had_none = !had_key && (awg_device_peer_get_shared_key_flags(peer) & NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+
+    if (!awg_device_peer_set_shared_key(peer, psk))
+        return FALSE;
+
+    if (!awg_device_peer_get_shared_key(peer) && !(chosen & NM_SETTING_SECRET_FLAG_NOT_SAVED) && (had_key || had_none))
+        flags = NM_SETTING_SECRET_FLAG_NOT_REQUIRED;
+
+    awg_device_peer_set_shared_key_flags(peer, flags);
     return TRUE;
 }
 
@@ -653,7 +702,7 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
         g_string_free(dns_str, TRUE);
     }
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < NM_AWG_MAX_PEERS; i++) {
         gchar *key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY, i);
         value = nm_setting_vpn_get_data_item(s_vpn, key);
 
@@ -678,14 +727,14 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
         if (value) {
             awg_device_peer_set_shared_key(peer, value);
         }
-        g_free(key);
 
-        key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY, i);
-        {
-            NMSettingSecretFlags flags;
+        /* A peer without a preshared key keeps the NOT_REQUIRED default, so
+         * saving it again does not write flags that would ask for one. */
+        if (awg_secrets_has_preshared_key(s_vpn, i)) {
+            NMSettingSecretFlags flags = NM_SETTING_SECRET_FLAG_NONE;
 
-            if (nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL))
-                awg_device_peer_set_shared_key_flags(peer, flags);
+            nm_setting_get_secret_flags(NM_SETTING(s_vpn), key, &flags, NULL);
+            awg_device_peer_set_shared_key_flags(peer, flags);
         }
         g_free(key);
 

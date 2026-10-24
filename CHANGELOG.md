@@ -1,5 +1,40 @@
 # Changelog
 
+## [Unreleased]
+
+### Major Changes
+
+#### Secrets Prompt (Auth Dialog)
+- **New `nm-amneziawg-auth-dialog` helper**: registered in the `[GNOME]` section of `nm-amneziawg-service.name` (with `supports-external-ui-mode=true`), so GNOME Shell, nm-applet and `nmcli --ask` can ask for a private key or preshared key that is set to "Ask for this password every time" or missing from the store. Before, these agents could not ask, and GNOME Settings waited for a 25-second timeout every time it opened a saved profile. The helper needs GLib and libnm only and is built in every configuration
+- **One rule for which secrets are needed**: the service (`NeedSecrets`/`NewSecrets`) and the helper share `shared/awg/awg-secrets.c`; peers are walked as the service uses them (from 0 up to the first index without a public key). A still-missing secret is named in the error: `Required secret peer-0-preshared-key is still missing`
+- **Ways out where users see them**: when a key stored for all users (flags `0`) is missing, the prompt and the service log name the commands that restore it, and for a preshared key the one that marks the peer as having none
+
+#### GTK4 Editor
+- **The GTK4 editor works**: the descriptor plugin used to load the GTK3 editor by absolute path in every process. It now picks the GTK3 or GTK4 module at run time and finds it next to itself; the GTK4 dialog is generated from the GTK3 one at build time with `gtk4-builder-tool --3to4` (`scripts/gtk3to4-ui.sh`), and each editor links its own GResource. Building the GTK4 editor needs `gtk4-builder-tool`
+- **Release packages and CI build both editors**
+
+### Bug Fixes
+
+#### Secrets & Config Handling
+- **Peers without a preshared key no longer look like lost keys**: version 0.9.12 wrote `peer-N-preshared-key-flags=0` for every peer, on import and in the editor, so a peer without `PresharedKey` asked for one. Such a peer now has no flags (not required); imported `PresharedKey`s are stored by NetworkManager (flags `0`), as `nmcli` imports WireGuard ones. Profiles written by 0.9.12 keep asking, and the prompt says how to fix them (see README, "Peers without a preshared key")
+- **Invalid keys are no longer written to the log**: a private or preshared key that does not decode was logged in full
+- **The awg-quick configuration lives in `/run/nm-amneziawg`**: NetworkManager runs with a private `/tmp`, which is gone after a restart of NetworkManager, while the service outlives it and still has to write that file to take the tunnel down. An interface left over from an earlier activation is taken down before `awg-quick up`
+- **Generated configuration accepted by amneziawg-tools 3.x**: `PersistentKeepalive = off` (rejected by tools 3.0 and newer) and zero `S3`/`S4` are no longer written
+
+#### AmneziaWG 3.1
+- **Versions checked per parameter**: `RandomTrailers` and `DisableCookies` need module and tools 3.1, the other 3.1 parameters 3.0; the refusal names the parameter and the version it needs
+- **The awg-quick backend checks the kernel module too**: awg-quick creates the interface through the `amneziawg` module, so a module too old for a parameter is refused there as well, not only old tools. A module that is installed but not loaded yet is loaded first, as `ip link add` in awg-quick would do. The refusal on the kernel backend no longer suggests `NM_FORCE_AWG_QUICK=1`, which does not get around an old module, and says how to load a new one
+
+### Build and Packaging
+- **`WITH_GTK3`/`WITH_GTK4` take `AUTO` (default), `ON` or `OFF`**: re-running `cmake` in the same build directory no longer drops editors that were auto-detected, which happened because `option()` cached `OFF` on the first run. A build directory configured by an older version gets that `OFF` reset to `AUTO` once, with a warning; a cached `ON` is kept and offered as `AUTO`/`ON`/`OFF` in `ccmake` and `cmake-gui`
+- **An explicit `CMAKE_INSTALL_PREFIX` is kept** (it was silently replaced by `/usr`, still the default). The paths in `nm-amneziawg-service.name`, the plugin directory and the packages follow it; the `.name` file and the D-Bus policy go to the directories NetworkManager and the system bus read, whatever the prefix
+- **Translations are found**: the service was given a relative locale directory
+- **No C++ compiler needed** any more
+- **DEB dependencies come from `dpkg-shlibdeps`**, including GTK and libnma for the editors. The release DEB is built on Ubuntu 24.04 (no longer on whatever `ubuntu-latest` is) and therefore needs Ubuntu 24.04 or newer, or Debian 13 or newer; on Ubuntu 22.04 and Debian 12 the `t64` library packages it depends on do not exist
+- **The release RPM has the release version**: the Fedora job installed git only after the checkout, which then had no `.git`, so every release RPM was versioned `0.9.5-1` whatever its file name said. CMake now reports why `git describe` failed instead of silently using the default version
+- **Optional Fedora helper**: `make -C packaging/fedora deps rpm` builds an RPM with both editors, also inside a toolbox on Fedora Atomic
+- **Style check**: CI runs `scripts/check-style.sh`, which now prints what clang-format objects to
+
 ## [0.9.12]
 
 ### Bug Fixes

@@ -27,11 +27,12 @@
 #include "awg/awg-validate.h"
 
 char *
-amneziawg_kernel_version(void)
+amneziawg_kernel_version_from(const char *path)
 {
-    const char *path = "/sys/module/amneziawg/version";
     char *contents = NULL;
 
+    if (!path)
+        path = AMNEZIAWG_MODULE_VERSION_FILE;
     if (!g_file_get_contents(path, &contents, NULL, NULL))
         return NULL;
 
@@ -42,6 +43,12 @@ amneziawg_kernel_version(void)
     }
 
     return contents;
+}
+
+char *
+amneziawg_kernel_version(void)
+{
+    return amneziawg_kernel_version_from(NULL);
 }
 
 /*

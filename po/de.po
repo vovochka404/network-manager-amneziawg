@@ -28,10 +28,11 @@ msgstr "H1-H4 Magic-Header-Bereiche dürfen sich nicht überschneiden"
 msgid "JMax must be greater than or equal to JMin"
 msgstr "JMax muss größer oder gleich JMin sein"
 
-#: properties/nm-amneziawg-editor.c:725
-msgid "Public key is required and must be valid base64\n"
+#: properties/nm-amneziawg-editor.c:898
+msgid "Public key is required and must be a 32-byte base64 key"
 msgstr ""
-"Öffentlicher Schlüssel ist erforderlich und muss gültiges Base64 sein\n"
+"Öffentlicher Schlüssel ist erforderlich und muss ein Base64-kodierter "
+"32-Byte-Schlüssel sein"
 
 #: properties/nm-amneziawg-editor.c:729
 msgid "Endpoint is required and must be valid (host:port)"
@@ -41,9 +42,11 @@ msgstr "Endpunkt ist erforderlich und muss gültig sein (host:port)"
 msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 msgstr "Erlaubte IPs müssen gültige Subnetze sein (z.B. 10.0.0.0/24)"
 
-#: properties/nm-amneziawg-editor.c:740
-msgid "Preshared key must be valid base64 or empty"
-msgstr "Vorheriger Schlüssel muss gültiges Base64 oder leer sein"
+#: properties/nm-amneziawg-editor.c:913
+msgid "Preshared key must be a 32-byte base64 key or empty"
+msgstr ""
+"Vorher geteilter Schlüssel muss ein Base64-kodierter 32-Byte-Schlüssel oder "
+"leer sein"
 
 #: properties/nm-amneziawg-editor.c:1060 properties/nm-amneziawg-editor.c:1073
 #, c-format
@@ -105,6 +108,11 @@ msgid ""
 msgstr ""
 "Wert »%s« des Typs »%s« ist ungültig oder außerhalb des zulässigen Bereichs "
 "der Eigenschaft »%s« des Typs »%s«"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:53
+#, c-format
+msgid "unable to get editor plugin name: %s"
+msgstr "Name der Editor-Erweiterung konnte nicht ermittelt werden: %s"
 
 #: shared/nm-utils/nm-vpn-plugin-utils.c:80
 #, c-format
@@ -444,3 +452,41 @@ msgstr "Bearbeiten"
 #: properties/nm-amneziawg-dialog.ui:1457
 msgid "Remove"
 msgstr "Entfernen"
+
+#: src/nm-amneziawg-auth-dialog.c:102
+msgid "Private key"
+msgstr "Privater Schlüssel"
+
+#. TRANSLATORS: %d is the number of the peer as in its peer-N-* keys
+#. * (from 0), %s its endpoint (host:port) or, without one, its public key
+#: src/nm-amneziawg-auth-dialog.c:114
+#, c-format
+msgid "Preshared key of peer %d (%s)"
+msgstr "Vorher geteilter Schlüssel von Peer %d (%s)"
+
+#: src/nm-amneziawg-auth-dialog.c:137
+#, c-format
+msgid "You need to authenticate to access the Virtual Private Network “%s”."
+msgstr "Sie müssen sich authentifizieren, um auf das virtuelle private Netzwerk „%s“ zuzugreifen."
+
+#: src/nm-amneziawg-auth-dialog.c:155
+msgid ""
+"If a peer has no preshared key, choose “The password is not required” for its "
+"preshared key in the connection editor, or run:"
+msgstr ""
+"Wenn ein Peer keinen vorher geteilten Schlüssel hat, wählen Sie dafür im "
+"Verbindungseditor „Das Passwort ist nicht erforderlich“ oder führen Sie aus:"
+
+#. TRANSLATORS: keep KEY as it is, the command that follows uses it
+#: src/nm-amneziawg-auth-dialog.c:164
+msgid ""
+"A key stored for all users that is typed in here is saved only if you may "
+"modify this connection. Otherwise restore it, with the key in place of KEY:"
+msgstr ""
+"Ein hier eingegebener Schlüssel, der für alle Benutzer gespeichert wird, "
+"wird nur übernommen, wenn Sie diese Verbindung ändern dürfen. Andernfalls "
+"stellen Sie ihn wieder her, mit dem Schlüssel anstelle von KEY:"
+
+#: src/nm-amneziawg-auth-dialog.c:187
+msgid "Authenticate VPN"
+msgstr "VPN-Authentifizierung"

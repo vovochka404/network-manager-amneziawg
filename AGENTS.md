@@ -18,6 +18,14 @@ NetworkManager-amneziawg is a C VPN plugin for NetworkManager providing client-s
 sudo cmake --install build
 ```
 
+### RPM on Fedora (optional helper)
+```bash
+make -C packaging/fedora deps   # build dependencies (dnf), once
+make -C packaging/fedora rpm    # both editors, tests, package in build/rpm/
+```
+Fedora-only convenience, also for Fedora Atomic inside a toolbox; see
+`packaging/fedora/README.md`. The generic build is CMake/CPack below.
+
 ### Check Code Style
 ```bash
 # Check
@@ -46,10 +54,40 @@ sudo cmake --install .  # requires root
 ### CMake Options
 | Option | Description | Default |
 |--------|-------------|---------|
-| `WITH_GTK3` | Build with GTK3 editor (requires libnma) | Auto-detect |
-| `WITH_GTK4` | Build with GTK4 editor (requires libnma-gtk4) | Auto-detect |
+| `WITH_GTK3` | GTK3 editor (requires libnma): `AUTO`, `ON` or `OFF` | `AUTO` |
+| `WITH_GTK4` | GTK4 editor (requires libnma-gtk4 and `gtk4-builder-tool`): `AUTO`, `ON` or `OFF` | `AUTO` |
 | `CMAKE_INSTALL_PREFIX` | Install prefix | `/usr` |
-| `CMAKE_INSTALL_LIBDIR` | Library directory (e.g., lib64) | Auto-detect |
+| `CMAKE_INSTALL_LIBDIR` | Library directory (e.g., lib64) | GNUInstallDirs |
+
+`AUTO` builds an editor when its dependencies are found, `ON` fails the configure
+step without them, `OFF` leaves it out. Each option is independent, and its value
+stays in the cache, so re-running `cmake` in the same build directory keeps the
+choice (an `option()` cached the first auto-detected `OFF`, which a re-run then took
+for the user's). The resolved result is `BUILD_GTK3_EDITOR`/`BUILD_GTK4_EDITOR`;
+CMake code tests those, not `WITH_GTK*`. Build trees configured while these were
+`option()`s still hold that `BOOL` `OFF`; they are recognised by the old help string
+(`Build with GTK3 support ...`), reset to `AUTO` once and warned about. A `-D` on the
+command line replaces the help string, so an explicit `OFF` on that run is kept. An
+`ON` from those trees (or a `-DWITH_GTK3:BOOL=ON`) keeps its value, but `set(CACHE)`
+does not touch the type of an existing entry, so every run sets `TYPE STRING`, the
+new `HELPSTRING` and `STRINGS` explicitly; otherwise ccmake and cmake-gui would show
+a `BOOL` checkbox without `AUTO`.
+
+`CMAKE_INSTALL_PREFIX` defaults to `/usr` (NetworkManager loads plugins from its own
+directories only); an explicit prefix is kept. The `program=` and `auth-dialog=`
+paths in `nm-amneziawg-service.name` come from `CMAKE_INSTALL_FULL_LIBEXECDIR`, so
+`GNUInstallDirs` is included only after the prefix is settled, and CPack packages
+into the same prefix (`CPACK_PACKAGING_INSTALL_PREFIX`). The `.name` file itself goes
+to libnm's `vpnservicedir`, which does not depend on the prefix. Neither does the
+D-Bus policy: the system bus reads `system.d` only below its own data directory and
+`/etc` (dbus-daemon refuses the service name with `AccessDenied` otherwise), so it goes
+to `DBUS_SYSTEM_POLICY_DIR`, from `pkg-config --variable datadir dbus-1` (normalised,
+Fedora's is `${pcfiledir}/../..`), or libnm's prefix + `/share` without `dbus-1.pc`.
+`NM_PLUGIN_DIR` stays empty in the cache unless set and is then derived from
+`CMAKE_INSTALL_FULL_LIBDIR` on every run, so it follows a changed prefix. `LOCALEDIR`
+is `CMAKE_INSTALL_FULL_LOCALEDIR`.
+
+`project()` enables C only: there are no C++ sources, so no C++ compiler is needed.
 
 ### Version Detection
 
@@ -80,15 +118,22 @@ cmake .. -DWITH_GTK3=OFF -DWITH_GTK4=ON
 cmake .. -DWITH_GTK3=OFF -DWITH_GTK4=OFF
 
 # System installation (for RPM packages)
-cmake .. -DWITH_GTK3=ON -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
+cmake .. -DWITH_GTK3=ON -DWITH_GTK4=ON -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
 cmake --build .
 cpack -G RPM
 
 # Build DEB package (Debian/Ubuntu)
-cmake .. -DWITH_GTK3=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake .. -DWITH_GTK3=ON -DWITH_GTK4=ON -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib
 cmake --build .
 cpack -G DEB
 ```
+
+Package dependencies: rpmbuild adds the shared-library requirements by itself;
+the DEB gets them from `dpkg-shlibdeps` (`CPACK_DEBIAN_PACKAGE_SHLIBDEPS`, needs
+`dpkg-dev`), which finds the private core library in the staged package through its
+`RUNPATH` (`$ORIGIN`). `CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS` (CMake 3.20+) is
+therefore not needed; checked with CMake 3.13, 3.18, 3.22 and 3.28. Only
+`network-manager` is listed by hand.
 
 ### Library Architecture
 
@@ -97,8 +142,13 @@ The project uses a shared library for common code:
 ```
 libnm-vpn-plugin-amneziawg-core.so  ← AWGDevice, AWGConfig, etc.
     ↓                                    ↓
-libnm-vpn-plugin-amneziawg.so     libnm-vpn-plugin-amneziawg-editor.so (GTK3/GTK4)
+libnm-vpn-plugin-amneziawg.so     libnm-vpn-plugin-amneziawg-editor.so (GTK3)
+                                  libnm-gtk4-vpn-plugin-amneziawg-editor.so (GTK4)
 ```
+
+The service (`nm-amneziawg-service`) and the auth dialog helper
+(`nm-amneziawg-auth-dialog`) are executables that compile the shared sources they
+need themselves and do not link the core library.
 
 **Why:** Prevents code duplication and ensures GObject type registration happens in a single library, avoiding deadlock issues with `g_once_init_enter()` when types are registered in multiple libraries loaded via dlopen.
 
@@ -122,7 +172,8 @@ cmake ..
 ctest
 
 # Run specific test
-ctest -R amneziawg-test
+ctest -R amneziawg-test     # tests/test-main.c: shared/awg units, config files, connection managers with stub tools
+ctest -R auth-dialog-test   # tests/test-auth-dialog.c: runs the built nm-amneziawg-auth-dialog with crafted agent input
 
 # Build and run test executable directly
 cmake --build . --target nm-amneziawg-test
@@ -188,6 +239,8 @@ add_test(NAME amneziawg-test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND nm-am
 - Use `g_assert_*()` macros for assertions
 - Test functions take no arguments and return void
 - Use `g_object_unref()` for GObject cleanup
+- `g_test_init()` makes warnings fatal: a test that triggers a setter's `g_warning()` wraps the call in `g_test_expect_message()` / `g_test_assert_expected_messages()`
+- Connection managers are tested with stub `awg-quick`/`awg` scripts reached through `NM_AWG_QUICK_PATH` and `PATH`; the external manager takes a writable `config-dir` instead of `/run/nm-amneziawg` (see `ExternalStubs` in `tests/test-main.c`)
 
 ### Common Testing Patterns
 ```c
@@ -217,7 +270,8 @@ Validators are defined in `shared/awg/awg-validate.c`.
 **Available validators:**
 | Function | Description | Range/Limits |
 |----------|-------------|--------------|
-| `awg_validate_base64()` | Validates base64-encoded key | 32 bytes decoded |
+| `awg_validate_base64()` | Base64 alphabet and padding only | No length check |
+| `awg_validate_key()` | A WireGuard key (private, public, preshared, HeaderProtectionKey): what the `AWGDevice` key setters accept | Base64, exactly 32 bytes decoded |
 | `awg_validate_endpoint()` | Validates host:port format | - |
 | `awg_validate_mtu()` | Validates MTU value | 0 (auto), 68-1500 |
 | `awg_validate_port()` | Validates port number | 0-65535 |
@@ -335,16 +389,25 @@ cd po && msgattrib --untranslated de.po | grep "^msgid" | grep -v 'msgid ""'
 The project uses GitHub Actions for continuous integration and delivery:
 
 **CI Checks** (`.github/workflows/ci.yml`) - Runs on every PR and push:
-- Code style validation (clang-format)
-- Build on Ubuntu (GTK3) + tests + DEB artifact
-- Build on Fedora (GTK3) + tests + RPM artifact
-- Minimal build (no GTK, service only)
-- GTK4 build
+- Code style: `./scripts/check-style.sh` with the clang-format of `ubuntu-latest` (18 on Ubuntu 24.04), so every `.c`/`.h` below `src/`, `shared/`, `properties/` and `tests/` is covered without listing files
+- Build on Ubuntu (GTK3 + GTK4) + tests + DEB artifact; prints the DEB's `Depends`
+- Build on Fedora (GTK3 + GTK4) + tests + RPM artifact
 
 **Release Packages** (`.github/workflows/release.yml`) - Runs on release:
-- Builds RPM (Fedora) and DEB (Ubuntu) packages
+- Builds RPM (Fedora) and DEB (Ubuntu 24.04, pinned) packages, both editors in each
 - Uploads to GitHub Releases
 - Can be triggered manually via workflow_dispatch
+
+The GTK4 editor needs `gtk4-builder-tool` at build time: `gtk4-devel` on Fedora,
+`libgtk-4-bin` on Ubuntu. The DEB's library dependencies come from `dpkg-shlibdeps`
+(`dpkg-dev`), so the release DEB installs only on the Ubuntu release it was built on
+and newer ones; that is why `build-deb` is pinned to `ubuntu-24.04`.
+
+The Fedora jobs run in a `fedora:latest` container, which has no git: they install
+it *before* `actions/checkout` (otherwise the checkout is a tarball without `.git`)
+and then add the workspace to `safe.directory` (it belongs to the runner user, not
+to root in the container). Without either, `git describe` fails and the package
+gets the default version 0.9.5.
 
 ### Local Pre-commit Checks
 
@@ -369,6 +432,9 @@ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib64
 cmake --build .
 cpack -G RPM
 ```
+
+On Fedora, `make -C packaging/fedora rpm` does the RPM steps with both editors
+(optional helper, see `packaging/fedora/README.md`).
 
 ## Linting
 ```bash
@@ -404,6 +470,7 @@ clang-format --style=file -i src/file.c
 ### Temporary Files
 - Use `g_get_tmp_dir()` from GLib instead of hardcoded `/tmp/`
 - This ensures proper handling across different systems and environments
+- Files the service needs for the lifetime of a connection go to `/run/nm-amneziawg`, not `/tmp`: NetworkManager.service has `PrivateTmp=true`, and that `/tmp` is gone when the service tears a tunnel down after NetworkManager stopped (see "External Implementation (awg-quick)")
 
 ### Includes
 - Keep includes minimal - only include what's actually used
@@ -413,7 +480,7 @@ clang-format --style=file -i src/file.c
 ## Directory Layout
 
 ```
-├── src/              # Service binary (nm-amneziawg-service)
+├── src/              # Service binary (nm-amneziawg-service), auth dialog helper (nm-amneziawg-auth-dialog)
 ├── properties/       # Connection editor plugin (GTK3/GTK4)
 ├── shared/           # Shared utility code
 │   ├── awg/          # AmneziaWG core module
@@ -421,7 +488,8 @@ clang-format --style=file -i src/file.c
 │   └── amneziawg.c   # Netlink helper
 ├── tests/            # Unit tests using GLib test framework
 ├── po/               # Translations
-├── scripts/          # Helper scripts (build.sh, check-style.sh, fix-pot-paths.sh)
+├── scripts/          # Helper scripts (build.sh, check-style.sh, fix-pot-paths.sh, gtk3to4-ui.sh)
+├── packaging/        # Distribution helpers: arch/PKGBUILD, fedora/Makefile (optional RPM build)
 ├── .github/
 │   └── workflows/    # GitHub Actions CI/CD workflows
 ├── appdata/          # AppData/metainfo files
@@ -436,11 +504,13 @@ clang-format --style=file -i src/file.c
 | `scripts/build.sh` | Build and test script |
 | `scripts/check-style.sh` | Code style checker (clang-format) |
 | `scripts/fix-pot-paths.sh` | Post-process POT file to use relative paths |
+| `scripts/gtk3to4-ui.sh` | Build step: converts the GTK3 dialog into the GTK4 one (see "GTK3/GTK4 Compatibility") |
 
 ### Build Script Usage
 ```bash
-./scripts/build.sh              # Default build (GTK3 if available)
-./scripts/build.sh --gtk4       # Build with GTK4
+./scripts/build.sh              # Default build (every editor whose dependencies are installed)
+./scripts/build.sh --gtk3       # GTK3 editor only
+./scripts/build.sh --gtk4       # GTK4 editor only
 ./scripts/build.sh --minimal    # Build without editor (service only)
 ./scripts/build.sh --clean       # Clean and rebuild
 ```
@@ -452,9 +522,9 @@ clang-format --style=file -i src/file.c
 ```
 
 ## Runtime Requirements
-- **amneziawg-tools** must be installed (external VPN tunnel dependency)
-- D‑Bus policy file needs `/etc/dbus-1/system.d`
-- Plugins installed to `/usr/lib/NetworkManager/VPN`
+- A backend: the `amneziawg` kernel module (netlink), or **amneziawg-tools** (`awg-quick`) with the module or the `amneziawg-go` userspace implementation; see "Connection Manager Module"
+- D‑Bus policy is installed to the system bus policy directory (`DBUS_SYSTEM_POLICY_DIR`, usually `/usr/share/dbus-1/system.d`) whatever the prefix
+- The `.name` file goes to libnm's `vpnservicedir` (usually `/usr/lib/NetworkManager/VPN`), the plugin libraries to `${libdir}/NetworkManager`, the service and the auth dialog to `${libexecdir}`
 
 ## References
 - https://developer.gnome.org/NetworkManager/stable/gdbus-org.freedesktop.NetworkManager.VPN.Plugin.html
@@ -497,6 +567,7 @@ The VPN editor handles only:
   - `awg_device_create_config_string()` - generate WireGuard config format
   - `awg_device_save_to_file()` - save to file
   - DNS automatically splits by IP type on import, combines on export
+  - The generated file is what `awg setconf` parses for the awg-quick backend, so it carries only keys the tools know: `Jc`..`S2` always (every AmneziaWG version has them); `S3`/`S4`, `PersistentKeepalive`, `ListenPort`, `FwMark`, `MTU` only when non-zero (parsers without S3/S4 reject the keys, and amneziawg-tools 3.0+ parse `PersistentKeepalive` as a number range, so `off` is a `Configuration parsing error`); string and AWG 3.1 keys only when set. Import still accepts `PersistentKeepalive = off`.
 
 ### AmneziaWG Parameters
 
@@ -682,8 +753,17 @@ This means partial configuration is NOT possible - all params must be valid toge
 - `shared/awg/awg-nm-connection.h/c` - NMConnection translation
   - `awg_device_new_from_nm_connection()` - restore from NMConnection
   - `awg_device_save_to_nm_connection()` - save to NMConnection
+  - `awg_nm_connection_set_peer_preshared_key()` - write a peer PSK and its flags (see "Preshared Keys")
+  - `awg_nm_connection_apply_edited_psk()` - applies the editor's PSK field and storage choice to a peer (see "Preshared Keys")
   - Uses NMSettingIP4Config/NMSettingIP6Config for addresses and DNS
-  - Multiple peers supported via indexed keys
+  - Multiple peers supported via indexed keys, consecutive from 0, at most `NM_AWG_MAX_PEERS` (16)
+
+- `shared/awg/awg-secrets.h/c` - which secrets a connection uses and which are missing
+  - `awg_secrets_list()` - private key plus every configured peer PSK, with flags
+  - `awg_secrets_has_preshared_key()` - whether a peer has a PSK at all; `awg_device_new_from_nm_connection()` reads PSK flags only then
+  - `awg_secrets_find_missing()` / `awg_secret_is_missing()` - the NeedSecrets decision
+  - `awg_secret_is_missing_stored()` - a missing secret with flags 0 (private key or PSK), the case that needs the remedies below
+  - GLib + libnm only, so the auth dialog links it without the rest of `shared/awg`; it is part of the core library too
 
 ### VPN Data Keys (defined in awg-nm-connection.h)
 
@@ -736,7 +816,7 @@ This means partial configuration is NOT possible - all params must be valid toge
 The properties editor (`properties/nm-amneziawg-editor.c`) validates input fields before allowing save:
 
 ### Interface Fields
-- **Private Key** (required): Must be valid base64-encoded 32-byte key
+- **Private Key** (required): `awg_validate_key()`, base64 of exactly 32 bytes (what the key setters accept)
 - **Listen Port** (optional): Valid port number (0-65535)
 - **MTU** (optional): Value 0 means auto, 68-1500 for custom
 - **FwMark** (optional): 32-bit unsigned integer
@@ -745,10 +825,10 @@ The properties editor (`properties/nm-amneziawg-editor.c`) validates input field
 - **i1-i5** (optional): Init packet content - arbitrary strings, max length 5KB each, preserves whitespace
 
 ### Peer Fields (via dialog)
-- **Public Key** (required): Must be valid base64-encoded 32-byte key
+- **Public Key** (required): `awg_validate_key()`, base64 of exactly 32 bytes
 - **Endpoint** (required): Must be valid format (host:port)
 - **Allowed IPs** (optional): Comma-separated list of subnets
-- **Preshared Key** (optional): Must be valid base64 if provided
+- **Preshared Key** (optional): empty, or a key `awg_validate_key()` accepts (checked unless "Ask every time"/"not required" is picked, which clear the field)
 - **Keep-alive** (optional): 0-65535 seconds
 
 ### Empty Key Handling
@@ -761,6 +841,8 @@ The editor does not expose pre-up, post-up, pre-down, post-down script fields in
 ## Secrets Handling
 
 The plugin uses NM's built-in secret agent system. Secrets are stored using `nm_setting_vpn_add_secret()` and retrieved via `nm_setting_vpn_get_secret()`.
+
+There are two kinds of secrets: `local-private-key` (always used) and `peer-N-preshared-key` (only for peers that have one).
 
 ### Secret Flags
 
@@ -776,29 +858,65 @@ The plugin uses NM's built-in secret agent system. Secrets are stored using `nm_
 - **Storage**: Use `nm_setting_vpn_add_secret()` for private keys and preshared keys
 - **Retrieval**: Use `nm_setting_vpn_get_secret()` in `awg-nm-connection.c`
 - **Flags**: Use `nm_setting_set_secret_flags()` / `nm_setting_get_secret_flags()`
+- **Which secrets are needed**: only `awg_secrets_list()` (`shared/awg/awg-secrets.c`) decides. The service answers `NeedSecrets`/`NewSecrets` with it and the auth dialog builds its prompt from it, so the two cannot disagree. Do not add a second copy of the rules.
+
+### Preshared Keys
+
+Modelled on NetworkManager's own WireGuard peers (`nm_wireguard_peer_new()` defaults PSK flags to NOT_REQUIRED; `nmcli connection import type wireguard` sets flags 0 only for a `PresharedKey` line):
+
+- `awg_device_peer_new()` starts with `NM_SETTING_SECRET_FLAG_NOT_REQUIRED`: no PSK. `awg-config.c` sets flags 0 when it parses a `PresharedKey`.
+- `awg_nm_connection_set_peer_preshared_key()` writes nothing for a peer without a key and with NOT_REQUIRED, so its `vpn.data` has no `peer-N-preshared-key-flags`. Every other combination keeps its flags.
+- `awg_secrets_has_preshared_key()` treats "neither a non-empty key nor flags" as "no PSK". An empty stored value counts as none: `nmcli --ask` sends one when its PSK prompt is answered empty, and NM adds it to the connection's secrets (nm-applet leaves empty fields out of its reply). Do not test for flags with `nm_setting_get_secret_flags()`: it also succeeds without a `-flags` item whenever a value, even an empty one, is stored. Flags present without a value means a key is expected.
+- **Flags 0 without a value stay required**, as for NetworkManager's own WireGuard peers. Version 0.9.12 wrote `peer-N-preshared-key-flags=0` for every peer, on import and in the editor alike; that is indistinguishable from a stored PSK that went missing from `vpn.secrets` (for example after an editor saved other secrets, which replaces the stored ones). Treating it as optional would connect without the PSK, and WireGuard then drops the handshake without any error. Such profiles never connected with 0.9.12 either. So the key is asked for, and the remedy goes where users see it: the auth dialog adds it to the prompt's `Description` (shown by gnome-shell, nm-applet and nmcli, with or without `--ask`): "The password is not required" for that PSK in the editor, or `nmcli connection modify uuid <uuid> -vpn.data peer-N-preshared-key-flags`. `need_secrets()` logs the same at `<warn>`, which NM only passes on with `VPN_PLUGIN` logging enabled (otherwise it starts the service with `NM_VPN_LOG_LEVEL=0`).
+- **A lost secret stored for all users (flags 0)**, private key or PSK, can be typed in again only by a user allowed to modify the connection: NM keeps system-owned secrets from an agent only if polkit grants its user `org.freedesktop.NetworkManager.settings.modify.own` for a profile whose `connection.permissions` name exactly one user, `...settings.modify.system` for any other (`nm-agent-manager.c`, `_con_get_request_start()`; `nm-settings-connection.c`), and for other agents it marks the existing ones NOT_REQUIRED (`nm-agent-manager.c`, `set_secrets_not_required()`). Otherwise the prompt is futile, so the auth dialog's `Description` and the `<warn>` log name the way out: `sudo nmcli connection modify uuid <uuid> +vpn.secrets <name>=KEY`. (`-vpn.secrets <name>` does not remove a secret in nmcli 1.58; switching the flags to 2 drops a stored one.)
+- Peers are numbered from 0 in every user-visible text (prompt labels, remedy, log), as in their `peer-N-*` keys.
+- Editor peer dialog (`awg_nm_connection_apply_edited_psk()`): the field goes through `awg_device_peer_set_shared_key()` first, and the flags follow what was stored. A key it rejects changes neither key nor flags (the dialog validates with `awg_validate_key()` before, so this does not happen through the UI); storing flags for a key that is not there would ask for it forever. An empty PSK field means "no PSK" when the peer had none or the key shown was cleared, whatever storage was picked, except "Ask for this password every time". A peer whose stored key the editor was not given (flags 0 or 1, no value) keeps the picked flags, so the key is still asked for. The field is validated with the flags chosen in the menu, not the old ones.
 
 ### VPN Plugin Interface
 
 The service implements these methods from `NMVpnServicePlugin`:
 
-- `need_secrets()` - Checks if private key or any preshared key is missing (and not NOT_REQUIRED)
-- `new_secrets()` - Validates updated secrets from NM before connection
+- `need_secrets()` - Returns the `vpn` setting when `awg_secrets_find_missing()` finds a required secret without a value (logged at `<info>`, the remedies for a missing flags-0 secret at `<warn>`; both only with `VPN_PLUGIN` logging enabled)
+- `new_secrets()` - Fails with `Required secret <name> is still missing` if one is still missing. Both go through `find_missing_secret()`, which also sets the error for a connection without a `vpn` setting
 - `connect()` / `connect_interactive()` - Creates AWGDevice from NMConnection (secrets loaded automatically)
+
+The service never emits `SecretsRequired`, so there are no hints and the `.name` file does not set `supports-hints`.
 
 ### Flow
 
 1. User creates VPN connection with empty key + "Ask every time" flag
 2. NM calls `need_secrets()` → returns TRUE
-3. NM's built-in secret agent prompts user for the key
-4. NM calls `new_secrets()` with the provided key
+3. NM asks the registered secret agent (gnome-shell, nm-applet, `nmcli --ask`). The agent runs `nm-amneziawg-auth-dialog` (the `[GNOME] auth-dialog` key of `nm-amneziawg-service.name`) and draws the prompt it describes
+4. NM calls `need_secrets()` again with the secrets the agent returned; while it still returns TRUE, NM goes on to the next pass and finally fails with `no-secrets`
 5. NM calls `connect()` with connection containing the key
 6. Plugin creates AWGDevice from connection (key now available)
+
+`new_secrets()` is not part of this flow: NM calls `NewSecrets` only on the interactive pass that follows a `SecretsRequired` signal (`nm-vpn-connection.c`), and the service never emits one. It is implemented for the Failure Contract.
+
+Passes NM makes for a VPN (`nm-vpn-connection.c`): system secrets only, then agents without interaction (`-i` not given), then agents with interaction. VPNs never get `REQUEST_NEW`. Editors (GNOME Settings, nm-connection-editor) call `GetSecrets` when they open a saved profile, which also goes through the agent.
+
+### Auth Dialog (`src/nm-amneziawg-auth-dialog.c`)
+
+A GTK-free helper (GLib + libnm), installed to `${libexecdir}` and built in every configuration. Modelled on `nm-openvpn-auth-dialog`. The `.name` file declares it with `supports-external-ui-mode=true`.
+
+- **Invocation**: `-u UUID -n NAME -s SERVICE [-i] [-r] [-t HINT]... [--external-ui-mode]`. Reads `DATA_KEY=/DATA_VAL=/SECRET_KEY=/SECRET_VAL=` up to `DONE` with `nm_vpn_service_plugin_read_vpn_details()`.
+- **External UI mode** (gnome-shell, nm-applet, nmcli): prints a key file. `[VPN Plugin UI]` comes first with `Version=2`, `Title` and `Description` (nm-applet and nmcli refuse the reply otherwise). Then one group per secret with `Value`, `Label`, `IsSecret=true`, `ShouldAsk`, `ForceEcho=false`. Secrets with nothing to hand back and nothing to ask are left out. Exits 0.
+- **Old protocol** (agents without external UI mode): prints `name\nvalue\n` pairs, then two empty lines, then waits for `QUIT` on stdin (at most 20 s). The agent ends the request when the helper exits, so exiting early loses the reply. If a secret would have to be typed in, it prints nothing and exits 1: there is no window to ask with.
+- **What is asked** (`should_ask()`): never without `-i`; never NOT_REQUIRED; always NOT_SAVED; everything with `-r`; otherwise only a missing secret. The value of a NOT_SAVED secret is neither handed back nor prefilled.
+- **Description**: when a secret with flags 0 and no value is asked (`awg_secret_is_missing_stored()`), the standard sentence is followed by
+  - for a PSK, the remedy for a peer without one: one `nmcli connection modify uuid <uuid> -vpn.data peer-N-preshared-key-flags` line per such key. An empty answer does not mean "no PSK" (gnome-shell keeps OK insensitive, nm-applet leaves the empty field out of its reply, nmcli sends the empty value; the key stays missing either way), so this is the way out users see;
+  - for any of them, that NM saves a typed-in key stored for all users only for a user allowed to modify the connection, and one `sudo nmcli connection modify uuid <uuid> +vpn.secrets <name>=KEY` line per such key (see "Preshared Keys"). The helper cannot tell whether the agent has that permission, nor which one applies (it gets `vpn.data`, not `connection.permissions`), so it says "if you may modify this connection"; the service's `<warn>` names the polkit action (`awg_secrets_modify_action()`).
+- A plain lookup without `-i` never fails because something is missing: the editor would lose the other stored secrets.
+- `signal(SIGPIPE, SIG_IGN)` comes first. gnome-shell closes the read end of the helper's stderr, so any diagnostic would otherwise kill it before it answers.
+- Do not copy openvpn's dummy `no-secret=true` entry: NM would store it as a system-owned secret in the profile.
+- nm-applet shows at most three asked secrets in one dialog. Others are dropped with a warning.
+- gnome-shell 51 throws on a missing `auth-dialog` path and never answers, so before this helper GNOME Settings waited out libnm's 25 s D-Bus timeout each time it opened a saved profile.
 
 ### Failure Contract
 
 No silent failures: every failure path must produce a diagnosable error, never a NULL `GError` or a bare log line.
 
-- **D-Bus virtuals**: any `NMVpnServicePlugin` method returning `FALSE` must set `*error`. A `FALSE` with NULL error makes libnm emit `g_dbus_method_invocation_take_error: assertion 'error != NULL'`, send no reply, and NM fails activation with `Unknown reason` (`NoReply: Remote peer disconnected`). Guard every `FALSE` path, including fallbacks from manager calls (`new_secrets()` with still-missing secrets, `disconnect()` when the manager fails error-less).
+- **D-Bus virtuals**: any `NMVpnServicePlugin` method returning `FALSE` must set `*error`. A `FALSE` with NULL error makes libnm emit `g_dbus_method_invocation_take_error: assertion 'error != NULL'`, send no reply, and NM fails activation with `Unknown reason` (`NoReply: Remote peer disconnected`). Guard every `FALSE` path, including fallbacks from manager calls (`new_secrets()` with still-missing secrets, which names the secret, `disconnect()` when the manager fails error-less).
 - **Pre-flight validation**: `connect_worker` rejects invalid devices via `awg_device_get_invalid_reason()` before launching any backend. A device without PrivateKey (lost `vpn.secrets`) or peers otherwise produces a keyless config that `awg setconf`/awg-quick rejects with `Configuration parsing error`. Name the missing piece (`PrivateKey is missing…`, `Peer N: …`) so the log is actionable.
 - **Backend exit codes**: the external manager reports non-zero `awg-quick` status via `g_spawn_check_exit_status()` instead of failing without an error. A failed `set_config()` signals `CONNECT_FAILED` instead of stalling NM into a timeout.
 
@@ -982,7 +1100,7 @@ AWGDevice -> AWGConnectionManager -> (netlink | external | dummy)
 struct _AWGConnectionManagerInterface {
     GTypeInterface parent_iface;
 
-    gboolean (*connect)(AWGConnectionManager *self, GError **error);
+    gboolean (*connect)(AWGConnectionManager *self, GCancellable *cancellable, GError **error);
     gboolean (*disconnect)(AWGConnectionManager *self, GError **error);
     gboolean (*manages_routes)(AWGConnectionManager *self);
 };
@@ -998,7 +1116,7 @@ struct _AWGConnectionManagerInterface {
 ### Availability Check Functions
 
 - `awg_connection_manager_dummy_is_available()` - always returns TRUE
-- `awg_connection_manager_external_is_available()` - checks for awg-quick presence
+- `awg_connection_manager_external_is_available()` - checks for awg-quick presence (`NM_AWG_QUICK_PATH`, else `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin`, `/bin`; not `PATH`)
 - `awg_connection_manager_netlink_is_available()` - loads the `amneziawg` kernel module if needed (`modprobe`) and reports whether it is present
 
 ### Route Management
@@ -1026,6 +1144,12 @@ Selection order:
 - `NM_AWG_QUICK_PATH` - path to awg-quick (for external implementation)
 - `NM_FORCE_AWG_QUICK` - force using external implementation
 
+### External Implementation (awg-quick)
+
+- The configuration is generated from the `AWGDevice` (`awg_device_save_to_file()`) as `/run/nm-amneziawg/<ifname>.conf` (directory 0700, file 0400; awg-quick takes the interface name from the file name), right before `awg-quick up` and again before `awg-quick down` (which re-reads the hooks), and removed after each run. The `config-dir` construct property overrides the directory; only the tests use it.
+- Why `/run`: NetworkManager.service has `PrivateTmp=true` and `KillMode=process`. When NetworkManager restarts with the tunnel up, the service (and `amneziawg-go`) outlive it, notice it gone (`NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER`) and disconnect, by then without the old private `/tmp`: with the file there, `awg-quick down` failed with `'/tmp/awg-….conf' does not exist`, the interface stayed, and every later activation failed with `'awg-…' already exists`.
+- An interface that already has the connection's name when connecting is left over from an activation whose teardown never ran (the service was killed) or failed: `connect()` runs `awg-quick down` on it with the freshly generated file first (a failure there is only logged), then `awg-quick up`. The netlink backend does not do this; it tears down without files, so a NetworkManager restart does not leave interfaces behind.
+
 ### Netlink Implementation
 
 **IMPORTANT: wgdevice_attribute enum**
@@ -1046,9 +1170,9 @@ Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the
 
 **IMPORTANT:** `WG_GENL_VERSION` is **not** a compatibility gate. The 3.x module declares version 3 (`amneziawg-linux-kernel-module/src/uapi/wireguard.h:161`), the kernel stamps that value on replies only and never validates the version of an incoming `genlmsghdr`, and the vendored mini-libmnl in `shared/amneziawg.c` does not compare it either. What matters is attribute compatibility, and that is derived from the module *release* version (`/sys/module/amneziawg/version`) — see "AmneziaWG 3.1 Attributes" below.
 
-#### AmneziaWG 3.1 Attributes (module 3.0+)
+#### AmneziaWG 3.1 Attributes (module 3.0+, flags 3.1+)
 
-`WGDEVICE_A_HEADER_PROTECTION_KEY` … `WGDEVICE_A_DISABLE_COOKIES` are the last nine entries of the kernel's `wgdevice_attribute` enum. They appeared in module release 3.0 (`v3.0.20260730`); the last 1.x release (`v1.0.20260725`) ends the enum at `WGDEVICE_A_I5` and encodes H1-H4 as `NLA_NUL_STRING` instead of packed `NLA_U64` ranges.
+`WGDEVICE_A_HEADER_PROTECTION_KEY` … `WGDEVICE_A_DISABLE_COOKIES` are the last nine entries of the kernel's `wgdevice_attribute` enum. The first seven (`HEADER_PROTECTION_KEY` … `MAX_HANDSHAKE_ATTEMPTS`) appeared in module release 3.0 (`v3.0.20260730`), `RANDOM_TRAILERS` and `DISABLE_COOKIES` only in 3.1 (`v3.1.20260812`); the last 1.x release (`v1.0.20260725`) ends the enum at `WGDEVICE_A_I5` and encodes H1-H4 as `NLA_NUL_STRING` instead of packed `NLA_U64` ranges. amneziawg-tools gained the matching `.conf` keys in the same two steps (`src/config.c`: the seven in `v3.0.20260730`, `RandomTrailers`/`DisableCookies` in `v3.1.20260812`).
 
 | Parameter (`.conf`) | Netlink attribute | Encoding |
 |---|---|---|
@@ -1056,9 +1180,9 @@ Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the
 | `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts` | matching `WGDEVICE_A_*` | `u16_range_t` packed as `hi<<16 \| lo`, transmitted as `u32` |
 | `RandomTrailers`, `DisableCookies` | `WGDEVICE_A_RANDOM_TRAILERS`, `WGDEVICE_A_DISABLE_COOKIES` | `u8` flag, only sent when enabled (`= on`) |
 
-Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message (`check_awg31_support()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`; `awg_device_has_awg31_params()` decides whether the configuration needs them at all. When the version cannot be read the attributes are still sent and the kernel decides, as before.
+Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message naming the parameter and the release it needs (`awg_connection_manager_netlink_check_module()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`. The message must not suggest `NM_FORCE_AWG_QUICK=1`: awg-quick creates the interface with `ip link add … type amneziawg`, i.e. through the same module (the kernel loads an installed one on demand, `MODULE_ALIAS_RTNL_LINK`), and falls back to `amneziawg-go` only when no module can be loaded (`add_if()` in `wg-quick/linux.bash`). The way out is a newer module, loaded (reboot, or `modprobe -r amneziawg` with no interface up). `awg_device_get_required_awg_version()` decides per parameter: 3.1 for an enabled `RandomTrailers`/`DisableCookies`, 3.0 for the other seven, nothing otherwise. When the version cannot be read the attributes are still sent and the kernel decides, as before.
 
-The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. AWG 3.1 configurations therefore need `amneziawg-tools` 3.0 or newer, and the backend checks that before writing anything — it runs `awg --version` on the binary `awg-quick` resolves from `PATH` (`external_check_awg31_support()` in `awg-connection-manager-external.c`) and refuses with an actionable message. An unreadable or unparseable version is not blocked, the command then reports its own failure.
+The external (`awg-quick`) backend has the same requirement on the tools side: the parser (`awg setconf`) rejects unknown keys with `Line unrecognized`. The backend checks the same required version against `awg --version` before writing anything, on the `awg` that `awg-quick` itself calls (found in `PATH`; awg-quick is found through the fixed list above) (`external_check_awg31_support()` in `awg-connection-manager-external.c`), and refuses with an actionable message. An unreadable or unparseable version is not blocked, the command then reports its own failure. Before the tools it runs the module check above (`awg_connection_manager_netlink_check_module()`), since awg-quick uses the module as well. A module that is installed but not loaded yet (`NM_FORCE_AWG_QUICK=1` skips the netlink probe that would load it) is loaded first with `modprobe amneziawg` from `PATH` (`external_load_module()`), because `ip link add` in awg-quick would load it anyway; skipping the check there let the first activation after boot reach `awg setconf`, which tools 3.x accept, and fail with `EINVAL` from the module. Only when no module can be loaded (awg-quick then uses `amneziawg-go`) is there no version, and the tools decide. Nothing is loaded for a configuration without 3.x parameters. The module version file is the construct-only property `module-version-file` (`AMNEZIAWG_MODULE_VERSION_FILE` by default), and the tests put a stub `modprobe` first in `PATH`, so they do not depend on the module of the host.
 
 ### Extended wg_device/wg_peer Structures (shared/amneziawg.h)
 
@@ -1088,11 +1212,45 @@ The editor uses compatibility macros in `properties/gtk-compat.h`:
 | `gtk_box_pack_start()` | Same | Box unchanged |
 | `gtk_label_new()` | Same | Labels unchanged |
 | `gtk_spin_button_get_value()` | Same | SpinButtons unchanged |
+| `gtk_toggle_button_get/set_active()` | `AWG_CHECK_BUTTON_GET/SET_ACTIVE()` | Use macro for every GtkCheckButton |
+
+**GTK3 source, GTK4 copy generated at build time** (same scheme as
+NetworkManager-openvpn): `properties/nm-amneziawg-dialog.ui` is a GTK3 file and the
+only one to edit. With `WITH_GTK4=ON` the build converts it with
+`scripts/gtk3to4-ui.sh` (`gtk4-builder-tool simplify --3to4`) into
+`<build>/gtk4/nm-amneziawg-dialog.ui`. Each editor module embeds its own GResource
+(`properties/resources.c` for GTK3, `gtk4/resources.c` for GTK4); the core library
+carries none. The `.pot` is extracted from the source file only.
+
+Rules for the source `.ui`:
+- every widget that must be shown needs `visible=True`: `--3to4` turns a missing
+  `visible` into `visible=0`, matching GTK3 semantics
+- no `GtkButtonBox`, `GtkDialog.type-hint` or `<packing>` on GtkDialog/GtkInfoBar
+  internal children — `--3to4` cannot convert them, and the script fails the build
+  if any survive (Glade writes them back when it re-saves a GtkDialog)
+- `can-focus`, `can-default` and `shadow-type` are handled by the conversion
+
+`validate` passing is not enough: visibility and focus problems only show up in a
+running editor, so check both GTK versions after layout changes.
+
+Build dependency for `WITH_GTK4=ON`: `gtk4-builder-tool` (Fedora `gtk4-devel`,
+Debian/Ubuntu `libgtk-4-bin`, Arch `gtk4`). GTK3-only and minimal builds don't need it.
 
 **GTK4-specific:**
-- No `wrap` property on GtkLabel
-- GtkGrid does NOT support `expand` and `fill` (only GtkBox does)
+- GtkCheckButton is not a GtkToggleButton: use `AWG_CHECK_BUTTON_GET/SET_ACTIVE()`
+- GtkSpinButton is not a GtkEntry: pass the widget to `AWG_EDITABLE_GET_TEXT()` without
+  a `GTK_ENTRY()` cast
 - Use `gtk_widget_get_root()` which returns `GtkRoot*`, cast to `GtkWindow*` for dialogs
+
+**Editor module selection:** the descriptor plugin
+(`properties/nm-amneziawg-editor-plugin.c:get_editor()`) chooses between
+`libnm-vpn-plugin-amneziawg-editor.so` (GTK3) and
+`libnm-gtk4-vpn-plugin-amneziawg-editor.so` (GTK4) at runtime by probing the calling
+process for the GTK3-only symbol `gtk_container_add`. The relative module name is
+resolved by `nm_vpn_plugin_utils_get_editor_module_path()` (dladdr) against the
+directory of `libnm-vpn-plugin-amneziawg-core.so`, which contains that function, so
+both editor modules must be installed next to the core library in `NM_PLUGIN_DIR`
+(where the descriptor lives too).
 
 ### Numeric Fields
 
