@@ -728,7 +728,7 @@ This means partial configuration is NOT possible - all params must be valid toge
 | NM_AWG_VPN_CONFIG_PEER_PRESHARED_KEY | peer-%d-preshared-key | yes |
 | NM_AWG_VPN_CONFIG_PEER_ALLOWED_IPS | peer-%d-allowed-ips | no |
 | NM_AWG_VPN_CONFIG_PEER_ENDPOINT | peer-%d-endpoint | no |
-| NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE | peer-%d-keep-alive | no |
+| NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE | peer-%d-keep-alive | no; seconds or AWG 3.1 range (`25`, `25-35`), `0` = off |
 | NM_AWG_VPN_CONFIG_PEER_ADVANCED_SECURITY | peer-%d-advanced-security | no |
 
 ## Editor Validation
@@ -1055,6 +1055,7 @@ Supports all AmneziaWG parameters: jc, jmin, jmax, s1-s4, h1-h4, i1-i5, plus the
 | `HeaderProtectionKey` | `WGDEVICE_A_HEADER_PROTECTION_KEY` | 32 raw bytes (kernel policy `NLA_POLICY_EXACT_LEN(32)`) |
 | `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts` | matching `WGDEVICE_A_*` | `u16_range_t` packed as `hi<<16 \| lo`, transmitted as `u32` |
 | `RandomTrailers`, `DisableCookies` | `WGDEVICE_A_RANDOM_TRAILERS`, `WGDEVICE_A_DISABLE_COOKIES` | `u8` flag, only sent when enabled (`= on`) |
+| Peer `PersistentKeepalive` | `WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL` | current ABI (module ≥ 3): packed `u16_range_t` as `u32`; legacy: `u16` low bound (as `amneziawg-tools` `ipc-linux.h`). Stored on the peer as a validated string (`awg_device_peer_get/set_keep_alive`, NULL = off); a disabled keepalive is omitted from generated config because the 3.1 tools reject `= off` |
 
 Generic netlink validates attributes strictly (`NL_VALIDATE_STRICT`, `lib/nlattr.c`), so a type above the module's `maxattr` fails the whole `WG_CMD_SET_DEVICE` request with `-EINVAL` / "Unknown attribute type". The netlink backend therefore asks `amneziawg_kernel_version()` first and refuses the connection with an actionable message (`check_awg31_support()` in `awg-connection-manager-netlink.c`) instead of surfacing a bare `EINVAL`; `awg_device_has_awg31_params()` decides whether the configuration needs them at all. When the version cannot be read the attributes are still sent and the kernel decides, as before.
 

@@ -94,7 +94,7 @@ struct AWGDevicePeerPrivate {
     GList *allowed_ips; // list of AWGSubnet structs
     gchar *endpoint;
     GInetAddress *resolved_endpoint;
-    guint16 keep_alive;
+    gchar *keep_alive;
     gboolean advanced_security;
 };
 
@@ -254,7 +254,7 @@ awg_device_peer_init(AWGDevicePeer *self)
     priv->shared_key_base64 = NULL;
     priv->endpoint = NULL;
     priv->allowed_ips = NULL;
-    priv->keep_alive = 0;
+    priv->keep_alive = NULL;
     priv->advanced_security = FALSE;
 }
 
@@ -271,6 +271,7 @@ awg_device_peer_finalize(GObject *object)
     g_clear_pointer(&priv->shared_key, g_free);
     g_clear_pointer(&priv->shared_key_base64, g_free);
     g_clear_pointer(&priv->endpoint, g_free);
+    g_clear_pointer(&priv->keep_alive, g_free);
     g_clear_object(&priv->resolved_endpoint);
     g_list_free_full(priv->allowed_ips, (GDestroyNotify)g_object_unref);
 
@@ -2187,7 +2188,7 @@ awg_device_peer_new_clone(AWGDevicePeer *peer)
         clone_priv->resolved_endpoint = priv->resolved_endpoint;
     }
 
-    awg_device_peer_set_keep_alive_interval(clone, priv->keep_alive);
+    awg_device_peer_set_keep_alive(clone, priv->keep_alive);
     awg_device_peer_set_advanced_security(clone, priv->advanced_security);
 
     return clone;
@@ -2356,47 +2357,47 @@ awg_device_peer_get_allowed_ips_as_string(AWGDevicePeer *self)
     return g_string_free(str, FALSE);
 }
 
+/* PersistentKeepalive is a u16 range in AWG 3.1 ("25" or "25-35"), packed for
+ * the kernel by awg_range_parse_u32(). "off", "0" and "0-0" all disable it and
+ * are stored as NULL, so the getter returns NULL exactly when it is off.
+ */
 gboolean
-awg_device_peer_set_keep_alive_interval(AWGDevicePeer *self, guint64 interval)
+awg_device_peer_set_keep_alive(AWGDevicePeer *self, const gchar *str)
 {
     AWGDevicePeerPrivate *priv;
+    guint32 packed;
+
     g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), FALSE);
 
     priv = awg_device_peer_get_instance_private(self);
 
-    if (interval <= G_MAXUINT16) {
-        priv->keep_alive = (guint16)interval;
+    if (!str || !*str || g_strcmp0(str, "off") == 0) {
+        g_clear_pointer(&priv->keep_alive, g_free);
         return TRUE;
     }
 
-    return FALSE;
-}
-
-gboolean
-awg_device_peer_set_keep_alive_interval_from_string(AWGDevicePeer *self, const gchar *str)
-{
-    guint64 interval;
-
-    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), FALSE);
-    g_return_val_if_fail(str != NULL, FALSE);
-
-    if (g_strcmp0(str, "off") == 0) {
-        return awg_device_peer_set_keep_alive_interval(self, 0);
-    }
-
-    if (!g_ascii_string_to_unsigned(str, 10, 0, UINT16_MAX, &interval, NULL)) {
-        g_warning("Invalid keep alive interval: %s", str);
+    if (!awg_range_parse_u32(str, &packed)) {
+        g_warning("Invalid PersistentKeepalive: %s (expected off, a number or range within 0-%u, e.g. 25 or 25-35)", str, G_MAXUINT16);
         return FALSE;
     }
 
-    return awg_device_peer_set_keep_alive_interval(self, (guint16)interval);
+    if (packed == 0) {
+        g_clear_pointer(&priv->keep_alive, g_free);
+        return TRUE;
+    }
+
+    if (str != priv->keep_alive) {
+        g_free(priv->keep_alive);
+        priv->keep_alive = g_strdup(str);
+    }
+    return TRUE;
 }
 
-guint16
-awg_device_peer_get_keep_alive_interval(AWGDevicePeer *self)
+const gchar *
+awg_device_peer_get_keep_alive(AWGDevicePeer *self)
 {
     AWGDevicePeerPrivate *priv;
-    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), 0);
+    g_return_val_if_fail(AWG_IS_DEVICE_PEER(self), NULL);
 
     priv = awg_device_peer_get_instance_private(self);
     return priv->keep_alive;

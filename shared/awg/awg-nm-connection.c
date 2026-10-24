@@ -380,9 +380,7 @@ awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GE
         g_free(key);
 
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE, i);
-        guint16 keep_alive = awg_device_peer_get_keep_alive_interval(peer);
-        g_autofree gchar *keep_alive_str = g_strdup_printf("%u", keep_alive);
-        nm_setting_vpn_add_data_item(s_vpn, key, keep_alive_str);
+        nm_setting_vpn_add_data_item(s_vpn, key, awg_device_peer_get_keep_alive(peer) ?: "0");
         g_free(key);
 
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_ADVANCED_SECURITY, i);
@@ -706,7 +704,7 @@ awg_device_new_from_nm_connection(NMConnection *connection, GError **error)
         key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE, i);
         value = nm_setting_vpn_get_data_item(s_vpn, key);
         if (value) {
-            awg_device_peer_set_keep_alive_interval_from_string(peer, value);
+            awg_device_peer_set_keep_alive(peer, value);
         }
         g_free(key);
 

@@ -60,11 +60,11 @@ test_awg_device_new_from_config_ipv4(void)
     g_assert_nonnull(peers);
     AWGDevicePeer *peer = peers->data;
     g_assert_cmpstr(awg_device_peer_get_endpoint(peer), ==, "192.168.1.1:51820");
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer), ==, 25);
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer), ==, "25");
     g_assert_true(awg_device_peer_get_advanced_security(peer));
 
-    g_assert_true(awg_device_peer_set_keep_alive_interval(peer, G_MAXUINT16));
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer), ==, G_MAXUINT16);
+    g_assert_true(awg_device_peer_set_keep_alive(peer, "65535"));
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer), ==, "65535");
 
     g_object_unref(device);
     g_free(config_path);
@@ -148,19 +148,19 @@ test_awg_device_new_from_config_multi_peer(void)
 
     AWGDevicePeer *peer1 = peers->data;
     g_assert_cmpstr(awg_device_peer_get_endpoint(peer1), ==, "192.168.1.1:51820");
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer1), ==, 25);
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer1), ==, "25");
     g_assert_true(awg_device_peer_get_advanced_security(peer1));
     g_assert_cmpstr(awg_device_peer_get_allowed_ips_as_string(peer1), ==, "10.0.0.0/24");
 
     AWGDevicePeer *peer2 = peers->next->data;
     g_assert_cmpstr(awg_device_peer_get_endpoint(peer2), ==, "[2001:db8::1]:51820");
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer2), ==, 0);
+    g_assert_null(awg_device_peer_get_keep_alive(peer2));
     g_assert_false(awg_device_peer_get_advanced_security(peer2));
     g_assert_cmpstr(awg_device_peer_get_allowed_ips_as_string(peer2), ==, "fd00::/8");
 
     AWGDevicePeer *peer3 = peers->next->next->data;
     g_assert_cmpstr(awg_device_peer_get_endpoint(peer3), ==, "vpn2.example.com:443");
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer3), ==, 30);
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer3), ==, "30");
     g_assert_true(awg_device_peer_get_advanced_security(peer3));
     g_assert_cmpstr(awg_device_peer_get_allowed_ips_as_string(peer3), ==, "172.16.0.0/12");
 
@@ -194,7 +194,7 @@ test_awg_device_save_and_load_ipv4(void)
     const GList *peers = awg_device_get_peers_list(device2);
     AWGDevicePeer *peer = peers->data;
     g_assert_cmpstr(awg_device_peer_get_endpoint(peer), ==, "192.168.1.1:51820");
-    g_assert_cmpint(awg_device_peer_get_keep_alive_interval(peer), ==, 25);
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer), ==, "25");
 
     g_object_unref(device2);
 
@@ -1559,6 +1559,7 @@ test_awg_config_awg31_roundtrip(void)
     g_assert_cmpstr(awg_device_get_max_handshake_attempts(device), ==, "16-20");
     g_assert_true(awg_device_get_random_trailers(device));
     g_assert_true(awg_device_get_disable_cookies(device));
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(awg_device_get_peers_list(device)->data), ==, "25-35");
 
     /* awg-quick consumes the generated file, so the parameters must survive
      * being written back out.
@@ -1577,6 +1578,7 @@ test_awg_config_awg31_roundtrip(void)
     g_assert_cmpstr(awg_device_get_max_handshake_attempts(reloaded), ==, "16-20");
     g_assert_true(awg_device_get_random_trailers(reloaded));
     g_assert_true(awg_device_get_disable_cookies(reloaded));
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(awg_device_get_peers_list(reloaded)->data), ==, "25-35");
     g_object_unref(reloaded);
 
     unlink(output_path);
@@ -1610,10 +1612,53 @@ test_awg_nm_connection_awg31_roundtrip(void)
     g_assert_cmpstr(awg_device_get_max_handshake_attempts(restored), ==, "16-20");
     g_assert_true(awg_device_get_random_trailers(restored));
     g_assert_true(awg_device_get_disable_cookies(restored));
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(awg_device_get_peers_list(restored)->data), ==, "25-35");
 
     g_object_unref(restored);
     g_object_unref(connection);
     g_free(config_path);
+}
+
+static void
+test_awg_peer_keep_alive_range(void)
+{
+    AWGDevice *device = awg_device_new();
+    AWGDevicePeer *peer = awg_device_peer_new();
+    gchar *config_str;
+
+    g_assert_true(awg_device_peer_set_keep_alive(peer, "25-35"));
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer), ==, "25-35");
+
+    /* Rejected input keeps the previous value. */
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid PersistentKeepalive*");
+    g_assert_false(awg_device_peer_set_keep_alive(peer, "35-25"));
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid PersistentKeepalive*");
+    g_assert_false(awg_device_peer_set_keep_alive(peer, "70000"));
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*Invalid PersistentKeepalive*");
+    g_assert_false(awg_device_peer_set_keep_alive(peer, "abc"));
+    g_test_assert_expected_messages();
+    g_assert_cmpstr(awg_device_peer_get_keep_alive(peer), ==, "25-35");
+
+    /* Every spelling of "disabled" reads back as off. */
+    g_assert_true(awg_device_peer_set_keep_alive(peer, "0-0"));
+    g_assert_null(awg_device_peer_get_keep_alive(peer));
+    g_assert_true(awg_device_peer_set_keep_alive(peer, "25"));
+    g_assert_true(awg_device_peer_set_keep_alive(peer, "off"));
+    g_assert_null(awg_device_peer_get_keep_alive(peer));
+
+    /* AWG 3.1 tools reject "PersistentKeepalive = off": off is omitted. */
+    awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=");
+    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "10.0.0.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    config_str = awg_device_create_config_string(device);
+    g_assert_nonnull(config_str);
+    g_assert_null(strstr(config_str, "PersistentKeepalive"));
+    g_free(config_str);
+
+    g_object_unref(peer);
+    g_object_unref(device);
 }
 
 static void
@@ -1911,6 +1956,7 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/device/range-setters-reject-over-u16", test_awg_device_range_setters_reject_over_u16);
     g_test_add_func("/awg/config/awg31-roundtrip", test_awg_config_awg31_roundtrip);
     g_test_add_func("/awg/nm-connection/awg31-roundtrip", test_awg_nm_connection_awg31_roundtrip);
+    g_test_add_func("/awg/peer/keep-alive-range", test_awg_peer_keep_alive_range);
     g_test_add_func("/awg/validate/version-parse", test_awg_version_parse);
     g_test_add_func("/awg/validate/version-at-least", test_awg_version_at_least);
     g_test_add_func("/awg/device/has-awg31-params", test_awg_device_has_awg31_params);

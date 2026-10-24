@@ -793,7 +793,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         const gchar *peer_shared_key;
         const gchar *endpoint;
         const gchar *allowed_ips;
-        guint16 keep_alive;
+        const gchar *keep_alive;
 
         if (!new_peer)
             continue;
@@ -884,9 +884,8 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
             g_strfreev(ip_list);
         }
 
-        keep_alive = awg_device_peer_get_keep_alive_interval(awg_peer);
-        if (keep_alive > 0) {
-            new_peer->persistent_keepalive_interval = keep_alive;
+        keep_alive = awg_device_peer_get_keep_alive(awg_peer);
+        if (keep_alive && awg_range_parse_u32(keep_alive, &new_peer->persistent_keepalive_interval)) {
             new_peer->flags |= WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL;
         }
 
