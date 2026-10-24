@@ -169,7 +169,7 @@ NMSettingSecretFlags awg_device_peer_get_shared_key_flags(AWGDevicePeer *self);
 void awg_device_peer_set_shared_key_flags(AWGDevicePeer *self, NMSettingSecretFlags flags);
 gchar *awg_device_peer_get_allowed_ips_as_string(AWGDevicePeer *self);
 const gchar *awg_device_peer_get_endpoint(AWGDevicePeer *self);
-guint16 awg_device_peer_get_keep_alive_interval(AWGDevicePeer *self);
+const gchar *awg_device_peer_get_keep_alive(AWGDevicePeer *self);
 gboolean awg_device_peer_get_advanced_security(AWGDevicePeer *self);
 
 void awg_device_peer_set_resolved_endpoint(AWGDevicePeer *self, GInetAddress *resolved_endpoint);
@@ -179,8 +179,7 @@ gboolean awg_device_peer_set_public_key(AWGDevicePeer *self, const gchar *public
 gboolean awg_device_peer_set_shared_key(AWGDevicePeer *self, const gchar *shared_key);
 gboolean awg_device_peer_set_allowed_ips_from_string(AWGDevicePeer *self, const gchar *allowed_ips);
 gboolean awg_device_peer_set_endpoint(AWGDevicePeer *self, const gchar *endpoint);
-gboolean awg_device_peer_set_keep_alive_interval(AWGDevicePeer *self, guint64 interval);
-gboolean awg_device_peer_set_keep_alive_interval_from_string(AWGDevicePeer *self, const gchar *str);
+gboolean awg_device_peer_set_keep_alive(AWGDevicePeer *self, const gchar *str);
 void awg_device_peer_set_advanced_security(AWGDevicePeer *self, gboolean enabled);
 
 #endif // AWG_DEVICE_H

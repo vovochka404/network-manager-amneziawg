@@ -229,7 +229,7 @@ awg_device_new_from_config(const char *config_path, GError **error)
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ALLOWED_IPS) == 0) {
                 SET_OR_FAIL(awg_device_peer_set_allowed_ips_from_string(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_KEEP_ALIVE) == 0) {
-                SET_OR_FAIL(awg_device_peer_set_keep_alive_interval_from_string(peer, value));
+                SET_OR_FAIL(awg_device_peer_set_keep_alive(peer, value));
             } else if (g_strcmp0(key, AWG_CONFIG_PEER_ADVANCED_SECURITY) == 0) {
                 if (g_strcmp0(value, "on") == 0) {
                     awg_device_peer_set_advanced_security(peer, TRUE);
@@ -491,11 +491,11 @@ awg_device_create_config_string(AWGDevice *device)
             if (value) {
                 g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_ENDPOINT, value);
             }
-            uint_value = awg_device_peer_get_keep_alive_interval(peer);
-            if (uint_value) {
-                g_string_append_printf(config, "%s = %u\n", AWG_CONFIG_PEER_KEEP_ALIVE, uint_value);
-            } else {
-                g_string_append_printf(config, "%s = off\n", AWG_CONFIG_PEER_KEEP_ALIVE);
+            /* AWG 3.1 tools parse PersistentKeepalive as a u16 range and reject
+             * "off", so a disabled keepalive is left out, which means off. */
+            value = awg_device_peer_get_keep_alive(peer);
+            if (value) {
+                g_string_append_printf(config, "%s = %s\n", AWG_CONFIG_PEER_KEEP_ALIVE, value);
             }
             value = awg_device_peer_get_allowed_ips_as_string(peer);
             if (value) {

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+- **Peer `PersistentKeepalive` accepts AWG 3.1 ranges**: `PersistentKeepalive = 25-35` was rejected on import because the peer keepalive was a plain `u16`. It is now stored as a validated number or range, sent to AWG 3.x kernels as a packed `u16_range_t` (legacy modules get the low bound, as `amneziawg-tools` does), kept in `vpn.data`, and edited in a text field instead of a spin button. A plain value used to reach 3.x kernels as an inverted range (`lo=N, hi=0`); it is now packed as `N-N`
+- **Disabled keepalive is no longer written as `off`**: the generated config omits `PersistentKeepalive` when it is disabled, because the AWG 3.1 tools parser rejects `off`. `off` is still accepted on import
+- **Arch package ships the GTK3 editor**: `packaging/arch/PKGBUILD` built only the GTK4 editor, so the plugin was invisible in Arch's GTK3 `nm-connection-editor`. Both editors are built now (thanks to Ilya B.)
+
 ## [0.9.12]
 
 ### Bug Fixes
