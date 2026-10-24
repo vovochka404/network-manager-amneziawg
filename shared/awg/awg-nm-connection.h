@@ -61,7 +61,11 @@
 #define NM_AWG_VPN_CONFIG_PEER_KEEP_ALIVE "peer-%d-keep-alive"
 #define NM_AWG_VPN_CONFIG_PEER_ADVANCED_SECURITY "peer-%d-advanced-security"
 
+#define NM_AWG_MAX_PEERS 16
+
 AWGDevice *awg_device_new_from_nm_connection(NMConnection *connection, GError **error);
 gboolean awg_device_save_to_nm_connection(AWGDevice *device, NMConnection *connection, GError **error);
+void awg_nm_connection_set_peer_preshared_key(NMSettingVpn *s_vpn, guint index, AWGDevicePeer *peer);
+gboolean awg_nm_connection_apply_edited_psk(AWGDevicePeer *peer, NMSettingSecretFlags chosen, const gchar *psk);
 
 #endif // AWG_NM_CONNECTION_H

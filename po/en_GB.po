@@ -29,9 +29,9 @@ msgstr "H1-H4 magic header ranges must not overlap"
 msgid "JMax must be greater than or equal to JMin"
 msgstr "JMax must be greater than or equal to JMin"
 
-#: properties/nm-amneziawg-editor.c:725
-msgid "Public key is required and must be valid base64\n"
-msgstr "Public key is required and must be valid base64\n"
+#: properties/nm-amneziawg-editor.c:898
+msgid "Public key is required and must be a 32-byte base64 key"
+msgstr "Public key is required and must be a 32-byte base64 key"
 
 #: properties/nm-amneziawg-editor.c:729
 msgid "Endpoint is required and must be valid (host:port)"
@@ -41,9 +41,9 @@ msgstr "Endpoint is required and must be valid (host:port)"
 msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 msgstr "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 
-#: properties/nm-amneziawg-editor.c:740
-msgid "Preshared key must be valid base64 or empty"
-msgstr "Preshared key must be valid base64 or empty"
+#: properties/nm-amneziawg-editor.c:913
+msgid "Preshared key must be a 32-byte base64 key or empty"
+msgstr "Preshared key must be a 32-byte base64 key or empty"
 
 #: properties/nm-amneziawg-editor.c:1060 properties/nm-amneziawg-editor.c:1073
 #, c-format
@@ -101,6 +101,11 @@ msgid ""
 msgstr ""
 "value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
 "type '%s'"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:53
+#, c-format
+msgid "unable to get editor plugin name: %s"
+msgstr "unable to get editor plugin name: %s"
 
 #: shared/nm-utils/nm-vpn-plugin-utils.c:80
 #, c-format
@@ -437,3 +442,40 @@ msgstr "Edit"
 #: properties/nm-amneziawg-dialog.ui:1457
 msgid "Remove"
 msgstr "Remove"
+
+#: src/nm-amneziawg-auth-dialog.c:102
+msgid "Private key"
+msgstr "Private key"
+
+#. TRANSLATORS: %d is the number of the peer as in its peer-N-* keys
+#. * (from 0), %s its endpoint (host:port) or, without one, its public key
+#: src/nm-amneziawg-auth-dialog.c:114
+#, c-format
+msgid "Preshared key of peer %d (%s)"
+msgstr "Preshared key of peer %d (%s)"
+
+#: src/nm-amneziawg-auth-dialog.c:137
+#, c-format
+msgid "You need to authenticate to access the Virtual Private Network “%s”."
+msgstr "You need to authenticate to access the Virtual Private Network “%s”."
+
+#: src/nm-amneziawg-auth-dialog.c:155
+msgid ""
+"If a peer has no preshared key, choose “The password is not required” for its "
+"preshared key in the connection editor, or run:"
+msgstr ""
+"If a peer has no preshared key, choose “The password is not required” for its "
+"preshared key in the connection editor, or run:"
+
+#. TRANSLATORS: keep KEY as it is, the command that follows uses it
+#: src/nm-amneziawg-auth-dialog.c:164
+msgid ""
+"A key stored for all users that is typed in here is saved only if you may "
+"modify this connection. Otherwise restore it, with the key in place of KEY:"
+msgstr ""
+"A key stored for all users that is typed in here is saved only if you may "
+"modify this connection. Otherwise restore it, with the key in place of KEY:"
+
+#: src/nm-amneziawg-auth-dialog.c:187
+msgid "Authenticate VPN"
+msgstr "Authenticate VPN"

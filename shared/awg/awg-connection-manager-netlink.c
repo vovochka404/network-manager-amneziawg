@@ -582,28 +582,39 @@ awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int fami
 }
 
 /* AmneziaWG 3.1 obfuscation parameters live in netlink attributes the kernel
- * knows only since module 3.0. An older module rejects the whole request with
- * EINVAL ("Unknown attribute type"), which says nothing to the user, so refuse
- * the connection up front with a version that can be acted on. */
-static gboolean
-check_awg31_support(AWGDevice *device, GError **error)
+ * knows only since module 3.0, RandomTrailers and DisableCookies only since
+ * 3.1. An older module rejects the whole request with EINVAL ("Unknown
+ * attribute type"), which says nothing to the user, so refuse the connection
+ * up front with a version that can be acted on.
+ *
+ * The awg-quick backend needs the same check: it creates the interface with
+ * "ip link add ... type amneziawg", which goes to the loaded module (and loads
+ * an installed one on demand), and falls back to the userspace amneziawg-go
+ * only when no module can be loaded. Switching backends therefore does not
+ * get around an old module, and the message must not suggest it. */
+gboolean
+awg_connection_manager_netlink_check_module(AWGDevice *device, const gchar *version_file, GError **error)
 {
     g_autofree gchar *version = NULL;
+    const gchar *param = NULL;
+    guint major = 0;
+    guint minor = 0;
 
-    if (!awg_device_has_awg31_params(device))
+    if (!awg_device_get_required_awg_version(device, &major, &minor, &param))
         return TRUE;
 
-    version = amneziawg_kernel_version();
-    if (awg_version_at_least(version, 3, 0))
+    version = amneziawg_kernel_version_from(version_file);
+    if (awg_version_at_least(version, major, minor))
         return TRUE;
 
     g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, 0,
-                "This connection uses AmneziaWG 3.1 parameters (HeaderProtectionKey, "
-                "ContentPaddingAddition, ...), which need kernel module amneziawg 3.0 or "
-                "newer, but %s is loaded. Upgrade the module, or switch to the awg-quick "
-                "backend with NM_FORCE_AWG_QUICK=1 if amneziawg-tools 3.0 or newer is "
-                "installed",
-                version);
+                "This connection uses the AmneziaWG 3.1 parameter %s, which needs kernel module "
+                "amneziawg %u.%u or newer, but %s is loaded. Upgrade the module and load the new "
+                "one: reboot, or run \"modprobe -r amneziawg\" while no AmneziaWG interface "
+                "exists. NM_FORCE_AWG_QUICK=1 does not help: awg-quick creates the interface "
+                "through the same module and uses the userspace amneziawg-go only when no "
+                "amneziawg module can be loaded",
+                param, major, minor, version);
     return FALSE;
 }
 
@@ -619,7 +630,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
     gboolean iface_added = FALSE;
     gboolean success = FALSE;
 
-    if (!check_awg31_support(priv->device, error))
+    if (!awg_connection_manager_netlink_check_module(priv->device, NULL, error))
         return FALSE;
 
     dev = calloc(1, sizeof(wg_device));

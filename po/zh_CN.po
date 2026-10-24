@@ -28,9 +28,9 @@ msgstr "H1-H4 魔法头范围不能重叠"
 msgid "JMax must be greater than or equal to JMin"
 msgstr "JMax 必须大于或等于 JMin"
 
-#: properties/nm-amneziawg-editor.c:725
-msgid "Public key is required and must be valid base64\n"
-msgstr "公钥是必需的且必须是有效的 base64\n"
+#: properties/nm-amneziawg-editor.c:898
+msgid "Public key is required and must be a 32-byte base64 key"
+msgstr "公钥是必需的，且必须是 Base64 编码的 32 字节密钥"
 
 #: properties/nm-amneziawg-editor.c:729
 msgid "Endpoint is required and must be valid (host:port)"
@@ -40,9 +40,9 @@ msgstr "端点是必需的且必须是有效的 (主机:端口)"
 msgid "Allowed IPs must be valid subnets (e.g., 10.0.0.0/24)"
 msgstr "Allowed IPs 必须是有效的子网（例如 10.0.0.0/24）"
 
-#: properties/nm-amneziawg-editor.c:740
-msgid "Preshared key must be valid base64 or empty"
-msgstr "预共享密钥必须是有效的 base64 或为空"
+#: properties/nm-amneziawg-editor.c:913
+msgid "Preshared key must be a 32-byte base64 key or empty"
+msgstr "预共享密钥必须是 Base64 编码的 32 字节密钥或为空"
 
 #: properties/nm-amneziawg-editor.c:1060 properties/nm-amneziawg-editor.c:1073
 #, c-format
@@ -97,6 +97,11 @@ msgid ""
 "value \"%s\" of type '%s' is invalid or out of range for property '%s' of "
 "type '%s'"
 msgstr "类型 '%2$s' 的值 \"%1$s\" 对于类型 '%4$s' 的属性 '%3$s' 无效或超出范围"
+
+#: shared/nm-utils/nm-vpn-plugin-utils.c:53
+#, c-format
+msgid "unable to get editor plugin name: %s"
+msgstr "无法获取编辑器插件名称：%s"
 
 #: shared/nm-utils/nm-vpn-plugin-utils.c:80
 #, c-format
@@ -429,3 +434,38 @@ msgstr "编辑"
 #: properties/nm-amneziawg-dialog.ui:1457
 msgid "Remove"
 msgstr "移除"
+
+#: src/nm-amneziawg-auth-dialog.c:102
+msgid "Private key"
+msgstr "私钥"
+
+#. TRANSLATORS: %d is the number of the peer as in its peer-N-* keys
+#. * (from 0), %s its endpoint (host:port) or, without one, its public key
+#: src/nm-amneziawg-auth-dialog.c:114
+#, c-format
+msgid "Preshared key of peer %d (%s)"
+msgstr "对端 %d 的预共享密钥（%s）"
+
+#: src/nm-amneziawg-auth-dialog.c:137
+#, c-format
+msgid "You need to authenticate to access the Virtual Private Network “%s”."
+msgstr "您需要进行身份验证才能访问虚拟专用网络“%s”。"
+
+#: src/nm-amneziawg-auth-dialog.c:155
+msgid ""
+"If a peer has no preshared key, choose “The password is not required” for its "
+"preshared key in the connection editor, or run:"
+msgstr ""
+"如果对端没有预共享密钥，请在连接编辑器中将其预共享密钥设为“不需要密码”，"
+"或运行："
+
+#. TRANSLATORS: keep KEY as it is, the command that follows uses it
+#: src/nm-amneziawg-auth-dialog.c:164
+msgid ""
+"A key stored for all users that is typed in here is saved only if you may "
+"modify this connection. Otherwise restore it, with the key in place of KEY:"
+msgstr "在此输入的“为所有用户存储”的密钥，仅当您有权修改此连接时才会被保存。否则请用以下命令恢复它，并将 KEY 替换为该密钥："
+
+#: src/nm-amneziawg-auth-dialog.c:187
+msgid "Authenticate VPN"
+msgstr "VPN 身份验证"

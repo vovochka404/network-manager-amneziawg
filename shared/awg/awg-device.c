@@ -252,6 +252,9 @@ awg_device_peer_init(AWGDevicePeer *self)
     priv->public_key_base64 = NULL;
     priv->shared_key = NULL;
     priv->shared_key_base64 = NULL;
+    /* No preshared key until one is configured, as nm_wireguard_peer_new()
+     * does for WireGuard peers. */
+    priv->shared_key_flags = NM_SETTING_SECRET_FLAG_NOT_REQUIRED;
     priv->endpoint = NULL;
     priv->allowed_ips = NULL;
     priv->keep_alive = 0;
@@ -530,7 +533,7 @@ awg_device_set_private_key(AWGDevice *self, const gchar *primary_key)
 
     decoded_key = awg_key_from_base64(primary_key);
     if (!decoded_key) {
-        g_warning("Failed to decode device primary key: %s", primary_key);
+        g_warning("Failed to decode device private key (expected %d-byte base64 key)", AWG_KEY_SIZE);
         return FALSE;
     }
 
@@ -1814,22 +1817,51 @@ awg_device_set_disable_cookies(AWGDevice *self, gboolean enabled)
     return TRUE;
 }
 
+/* Module and tools releases share their numbering, and both gained the AWG
+ * 3.1 parameters in two steps: the timing and padding ones with 3.0, the two
+ * flags with 3.1. */
 gboolean
-awg_device_has_awg31_params(AWGDevice *self)
+awg_device_get_required_awg_version(AWGDevice *self, guint *major, guint *minor, const gchar **param)
 {
     AWGDevicePrivate *priv;
+    const gchar *name = NULL;
+    guint need_minor = 0;
 
     g_return_val_if_fail(AWG_IS_DEVICE(self), FALSE);
     priv = awg_device_get_instance_private(self);
 
-    return (priv->header_protection_key && *priv->header_protection_key) ||
-           (priv->content_padding_addition && *priv->content_padding_addition) ||
-           (priv->rekey_after_time && *priv->rekey_after_time) ||
-           (priv->rekey_timeout && *priv->rekey_timeout) ||
-           (priv->reject_after_time && *priv->reject_after_time) ||
-           (priv->keepalive_timeout && *priv->keepalive_timeout) ||
-           (priv->max_handshake_attempts && *priv->max_handshake_attempts) ||
-           priv->random_trailers || priv->disable_cookies;
+    if (priv->random_trailers) {
+        name = "RandomTrailers";
+        need_minor = 1;
+    } else if (priv->disable_cookies) {
+        name = "DisableCookies";
+        need_minor = 1;
+    } else if (priv->header_protection_key && *priv->header_protection_key) {
+        name = "HeaderProtectionKey";
+    } else if (priv->content_padding_addition && *priv->content_padding_addition) {
+        name = "ContentPaddingAddition";
+    } else if (priv->rekey_after_time && *priv->rekey_after_time) {
+        name = "RekeyAfterTime";
+    } else if (priv->rekey_timeout && *priv->rekey_timeout) {
+        name = "RekeyTimeout";
+    } else if (priv->reject_after_time && *priv->reject_after_time) {
+        name = "RejectAfterTime";
+    } else if (priv->keepalive_timeout && *priv->keepalive_timeout) {
+        name = "KeepaliveTimeout";
+    } else if (priv->max_handshake_attempts && *priv->max_handshake_attempts) {
+        name = "MaxHandshakeAttempts";
+    }
+
+    if (!name)
+        return FALSE;
+
+    if (major)
+        *major = 3;
+    if (minor)
+        *minor = need_minor;
+    if (param)
+        *param = name;
+    return TRUE;
 }
 
 guint32
@@ -2132,11 +2164,12 @@ awg_device_get_invalid_reason(AWGDevice *self)
         if (awg_device_peer_is_valid(peer))
             continue;
 
+        /* Numbered from 0, as their peer-N-* keys */
         if (!awg_device_peer_get_public_key(peer))
-            return g_strdup_printf("Peer %u: PublicKey is missing", peer_idx + 1);
+            return g_strdup_printf("Peer %u: PublicKey is missing", peer_idx);
         if (!awg_device_peer_get_endpoint(peer))
-            return g_strdup_printf("Peer %u: Endpoint is missing", peer_idx + 1);
-        return g_strdup_printf("Peer %u: AllowedIPs are missing", peer_idx + 1);
+            return g_strdup_printf("Peer %u: Endpoint is missing", peer_idx);
+        return g_strdup_printf("Peer %u: AllowedIPs are missing", peer_idx);
     }
 
     return NULL;
@@ -2244,7 +2277,7 @@ awg_device_peer_set_shared_key(AWGDevicePeer *self,
 
     decoded_key = awg_key_from_base64(shared_key);
     if (!decoded_key) {
-        g_warning("Failed to decode peer shared key: %s", shared_key);
+        g_warning("Failed to decode peer preshared key (expected %d-byte base64 key)", AWG_KEY_SIZE);
         return FALSE;
     }
 

@@ -11,9 +11,11 @@
 
 #include "awg/awg-config.h"
 #include "awg/awg-connection-manager-external.h"
+#include "awg/awg-connection-manager-netlink.h"
 #include "awg/awg-connection-manager.h"
 #include "awg/awg-device.h"
 #include "awg/awg-nm-connection.h"
+#include "awg/awg-secrets.h"
 #include "awg/awg-validate.h"
 #include <glib.h>
 #include <stdio.h>
@@ -1056,6 +1058,91 @@ test_awg_config_string_with_s3_s4(void)
     g_object_unref(device);
 }
 
+/* Keys that mean nothing when 0 are left out of the generated file: S3/S4
+ * are unknown to older AmneziaWG implementations, and amneziawg-tools 3.0
+ * and newer reject "PersistentKeepalive = off". The keys every version
+ * knows (Jc..S2) stay. */
+static void
+test_awg_config_string_omits_zero_values(void)
+{
+    g_autofree gchar *dir = g_dir_make_tmp("awg-zero-XXXXXX", NULL);
+    g_autofree gchar *path = g_build_filename(dir, "awg0.conf", NULL);
+    g_autofree gchar *config_str = NULL;
+    g_autofree gchar *keepalive_str = NULL;
+    AWGDevice *device = awg_device_new();
+    AWGDevicePeer *peer = awg_device_peer_new();
+    AWGDevice *reloaded;
+    GError *error = NULL;
+
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_true(awg_device_peer_set_public_key(peer, "GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "10.0.0.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+
+    config_str = awg_device_create_config_string(device);
+    g_assert_null(strstr(config_str, "S3"));
+    g_assert_null(strstr(config_str, "S4"));
+    g_assert_null(strstr(config_str, "PersistentKeepalive"));
+    g_assert_null(strstr(config_str, "off"));
+    g_assert_nonnull(strstr(config_str, "Jc = 0\n"));
+    g_assert_nonnull(strstr(config_str, "Jmin = 0\n"));
+    g_assert_nonnull(strstr(config_str, "Jmax = 0\n"));
+    g_assert_nonnull(strstr(config_str, "S1 = 0\n"));
+    g_assert_nonnull(strstr(config_str, "S2 = 0\n"));
+
+    awg_device_peer_set_keep_alive_interval(peer, 25);
+    keepalive_str = awg_device_create_config_string(device);
+    g_assert_nonnull(strstr(keepalive_str, "PersistentKeepalive = 25\n"));
+
+    /* What is left out reads back as 0 */
+    awg_device_peer_set_keep_alive_interval(peer, 0);
+    g_assert_true(awg_device_save_to_file(device, path));
+    reloaded = awg_device_new_from_config(path, &error);
+    g_assert_no_error(error);
+    g_assert_nonnull(reloaded);
+    g_assert_cmpuint(awg_device_get_s3(reloaded), ==, 0);
+    g_assert_cmpuint(awg_device_get_s4(reloaded), ==, 0);
+    g_assert_cmpuint(awg_device_peer_get_keep_alive_interval(awg_device_get_peers_list(reloaded)->data), ==, 0);
+
+    g_object_unref(reloaded);
+    g_object_unref(peer);
+    g_object_unref(device);
+    unlink(path);
+    rmdir(dir);
+}
+
+/* Configurations written by older versions (and by hand) still import. */
+static void
+test_awg_config_keepalive_off_imports(void)
+{
+    g_autofree gchar *dir = g_dir_make_tmp("awg-off-XXXXXX", NULL);
+    g_autofree gchar *path = g_build_filename(dir, "awg0.conf", NULL);
+    AWGDevice *device;
+    GError *error = NULL;
+
+    g_assert_true(g_file_set_contents(path,
+                                      "[Interface]\n"
+                                      "PrivateKey = IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20=\n"
+                                      "S3 = 0\n"
+                                      "S4 = 0\n"
+                                      "\n"
+                                      "[Peer]\n"
+                                      "PublicKey = GevpLmD6PchV4uC2vS0n/1kLJZ5rK9jE3nN2mM8XzY0=\n"
+                                      "Endpoint = 10.0.0.1:51820\n"
+                                      "AllowedIPs = 0.0.0.0/0\n"
+                                      "PersistentKeepalive = off\n",
+                                      -1, NULL));
+    device = awg_device_new_from_config(path, &error);
+    g_assert_no_error(error);
+    g_assert_nonnull(device);
+    g_assert_cmpuint(awg_device_peer_get_keep_alive_interval(awg_device_get_peers_list(device)->data), ==, 0);
+
+    g_object_unref(device);
+    unlink(path);
+    rmdir(dir);
+}
+
 static void
 test_awg_config_string_with_i1_i5(void)
 {
@@ -1346,7 +1433,8 @@ test_invalid_reason_messages(void)
     }
 
     /* Peer without public key (injected via replace_peer, which unlike
-     * add_peer performs no validation, same as NMConnection restore) */
+     * add_peer performs no validation; NMConnection restore and .conf import
+     * go through add_peer, which drops such a peer) */
     {
         gchar *peer_config_path = get_test_config_path("test-config-ipv4.conf");
         AWGDevice *d = awg_device_new_from_config(peer_config_path, NULL);
@@ -1360,8 +1448,7 @@ test_invalid_reason_messages(void)
         g_assert_false(awg_device_is_valid(d));
         g_autofree gchar *reason = awg_device_get_invalid_reason(d);
         g_assert_nonnull(reason);
-        g_assert_nonnull(strstr(reason, "Peer 1"));
-        g_assert_nonnull(strstr(reason, "PublicKey"));
+        g_assert_nonnull(strstr(reason, "Peer 0: PublicKey is missing"));
         g_object_unref(d);
     }
 
@@ -1413,6 +1500,16 @@ test_force_awg_quick_selects_external(void)
     /* Must be the external manager even if the netlink module is present */
     g_assert_true(AWG_IS_CONNECTION_MANAGER_EXTERNAL(mgr));
     g_assert_true(awg_connection_manager_manages_routes(mgr));
+    /* Outside NetworkManager's private /tmp, see the next test */
+    {
+        g_autofree gchar *config_dir = NULL;
+
+        g_autofree gchar *module_version_file = NULL;
+
+        g_object_get(mgr, "config-dir", &config_dir, "module-version-file", &module_version_file, NULL);
+        g_assert_cmpstr(config_dir, ==, "/run/nm-amneziawg");
+        g_assert_cmpstr(module_version_file, ==, "/sys/module/amneziawg/version");
+    }
 
     g_object_unref(mgr);
     g_object_unref(device);
@@ -1683,7 +1780,25 @@ test_awg_version_at_least(void)
 }
 
 static void
-test_awg_device_has_awg31_params(void)
+assert_required_version(AWGDevice *device, guint major, guint minor, const char *param)
+{
+    guint got_major = 0;
+    guint got_minor = 0;
+    const gchar *got_param = NULL;
+
+    if (!param) {
+        g_assert_false(awg_device_get_required_awg_version(device, &got_major, &got_minor, &got_param));
+        return;
+    }
+
+    g_assert_true(awg_device_get_required_awg_version(device, &got_major, &got_minor, &got_param));
+    g_assert_cmpuint(got_major, ==, major);
+    g_assert_cmpuint(got_minor, ==, minor);
+    g_assert_cmpstr(got_param, ==, param);
+}
+
+static void
+test_awg_device_required_awg_version(void)
 {
     gchar *config_path;
     AWGDevice *device;
@@ -1692,145 +1807,926 @@ test_awg_device_has_awg31_params(void)
     config_path = get_test_config_path("test-config-dual.conf");
     device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
-    g_assert_false(awg_device_has_awg31_params(device));
+    assert_required_version(device, 0, 0, NULL);
     g_object_unref(device);
     g_free(config_path);
 
-    /* A 3.1 configuration carries all of them. */
+    /* A 3.1 configuration carries all of them; the flags need 3.1. */
     config_path = get_test_config_path("test-config-awg31.conf");
     device = awg_device_new_from_config(config_path, NULL);
     g_assert_nonnull(device);
-    g_assert_true(awg_device_has_awg31_params(device));
+    assert_required_version(device, 3, 1, "RandomTrailers");
     g_object_unref(device);
     g_free(config_path);
 
     device = awg_device_new();
     g_assert_nonnull(device);
-    g_assert_false(awg_device_has_awg31_params(device));
+    assert_required_version(device, 0, 0, NULL);
 
     /* Booleans count only when enabled: "off" is never encoded. */
     g_assert_true(awg_device_set_random_trailers(device, FALSE));
     g_assert_true(awg_device_set_disable_cookies(device, FALSE));
-    g_assert_false(awg_device_has_awg31_params(device));
+    assert_required_version(device, 0, 0, NULL);
     g_assert_true(awg_device_set_disable_cookies(device, TRUE));
-    g_assert_true(awg_device_has_awg31_params(device));
+    assert_required_version(device, 3, 1, "DisableCookies");
     g_assert_true(awg_device_set_disable_cookies(device, FALSE));
-    g_assert_false(awg_device_has_awg31_params(device));
+    assert_required_version(device, 0, 0, NULL);
 
-    /* A single scalar parameter is enough. */
+    /* A single scalar parameter is enough, and needs 3.0 only ... */
     g_assert_true(awg_device_set_content_padding_addition(device, "2-10"));
-    g_assert_true(awg_device_has_awg31_params(device));
+    assert_required_version(device, 3, 0, "ContentPaddingAddition");
+
+    /* ... unless a flag needs 3.1 as well. */
+    g_assert_true(awg_device_set_random_trailers(device, TRUE));
+    assert_required_version(device, 3, 1, "RandomTrailers");
 
     g_object_unref(device);
+}
+
+static AWGDevice *
+external_test_device(void)
+{
+    AWGDevice *device = awg_device_new();
+    AWGDevicePeer *peer = awg_device_peer_new();
+
+    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
+    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
+    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
+    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
+    g_assert_true(awg_device_add_peer(device, peer));
+    g_object_unref(peer);
+
+    return device;
+}
+
+/* Hermetic stubs for awg-quick (logs its arguments), awg (reports
+ * @tools_version), modprobe (logs its arguments and "loads" the installed
+ * module by writing its version), found through NM_AWG_QUICK_PATH and PATH,
+ * and the version file of the amneziawg module (absent: no module loaded). */
+typedef struct {
+    gchar *dir;
+    gchar *quick;
+    gchar *awg;
+    gchar *log;
+    gchar *modprobe;
+    gchar *modprobe_log;
+    gchar *module_version;
+    gchar *saved_path;
+    gchar *saved_quick_path;
+} ExternalStubs;
+
+static AWGConnectionManager *
+external_test_manager(ExternalStubs *stubs, const char *interface_name, AWGDevice *device, const char *config_dir)
+{
+    return g_object_new(AWG_TYPE_CONNECTION_MANAGER_EXTERNAL,
+                        "interface-name", interface_name,
+                        "device", device,
+                        "config-dir", config_dir,
+                        "module-version-file", stubs->module_version,
+                        NULL);
+}
+
+/* Version of the amneziawg module modprobe loads, NULL: none installed */
+static void
+external_stubs_set_installed_module(ExternalStubs *stubs, const char *version)
+{
+    g_autofree gchar *script = NULL;
+
+    if (version)
+        script = g_strdup_printf("#!/bin/sh\necho \"$*\" >> '%s'\necho '%s' > '%s'\n",
+                                 stubs->modprobe_log, version, stubs->module_version);
+    else
+        script = g_strdup_printf("#!/bin/sh\necho \"$*\" >> '%s'\n"
+                                 "echo \"modprobe: FATAL: Module $1 not found\" >&2\nexit 1\n",
+                                 stubs->modprobe_log);
+    g_assert_true(g_file_set_contents(stubs->modprobe, script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->modprobe, 0755), ==, 0);
+}
+
+/* What modprobe was asked to load since the last call */
+static gchar *
+external_stubs_take_modprobe_log(ExternalStubs *stubs)
+{
+    gchar *contents = NULL;
+
+    if (!g_file_get_contents(stubs->modprobe_log, &contents, NULL, NULL))
+        contents = g_strdup("");
+    unlink(stubs->modprobe_log);
+    return contents;
+}
+
+static void
+external_stubs_setup(ExternalStubs *stubs)
+{
+    g_autofree gchar *quick_script = NULL;
+    g_autofree gchar *search_path = NULL;
+    const gchar *old_path = g_getenv("PATH");
+
+    stubs->dir = g_dir_make_tmp("awg-tools-XXXXXX", NULL);
+    g_assert_nonnull(stubs->dir);
+    stubs->quick = g_build_filename(stubs->dir, "awg-quick", NULL);
+    stubs->awg = g_build_filename(stubs->dir, "awg", NULL);
+    stubs->log = g_build_filename(stubs->dir, "awg-quick.log", NULL);
+    stubs->modprobe = g_build_filename(stubs->dir, "modprobe", NULL);
+    stubs->modprobe_log = g_build_filename(stubs->dir, "modprobe.log", NULL);
+    stubs->module_version = g_build_filename(stubs->dir, "module-version", NULL);
+    stubs->saved_path = g_strdup(old_path);
+    stubs->saved_quick_path = g_strdup(g_getenv("NM_AWG_QUICK_PATH"));
+
+    /* Logs "<command> <file> <mode of the file>" */
+    quick_script = g_strdup_printf("#!/bin/sh\necho \"$1 $2 $(stat -c %%a \"$2\")\" >> '%s'\nexit 0\n", stubs->log);
+    g_assert_true(g_file_set_contents(stubs->quick, quick_script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->quick, 0755), ==, 0);
+
+    search_path = g_strdup_printf("%s:%s", stubs->dir, old_path ? old_path : "");
+    g_setenv("NM_AWG_QUICK_PATH", stubs->quick, TRUE);
+    g_setenv("PATH", search_path, TRUE);
+
+    external_stubs_set_installed_module(stubs, NULL);
+}
+
+static void
+external_stubs_set_tools_version(ExternalStubs *stubs, const char *version)
+{
+    g_autofree gchar *script = g_strdup_printf("#!/bin/sh\necho 'amneziawg-tools %s - https://amnezia.org'\n", version);
+
+    g_assert_true(g_file_set_contents(stubs->awg, script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->awg, 0755), ==, 0);
+}
+
+/* NULL: no amneziawg module loaded */
+static void
+external_stubs_set_module_version(ExternalStubs *stubs, const char *version)
+{
+    if (version)
+        g_assert_true(g_file_set_contents(stubs->module_version, version, -1, NULL));
+    else
+        unlink(stubs->module_version);
+}
+
+static gchar *
+external_stubs_take_log(ExternalStubs *stubs)
+{
+    gchar *contents = NULL;
+
+    if (!g_file_get_contents(stubs->log, &contents, NULL, NULL))
+        contents = g_strdup("");
+    unlink(stubs->log);
+    return contents;
+}
+
+static void
+external_stubs_teardown(ExternalStubs *stubs)
+{
+    if (stubs->saved_quick_path)
+        g_setenv("NM_AWG_QUICK_PATH", stubs->saved_quick_path, TRUE);
+    else
+        g_unsetenv("NM_AWG_QUICK_PATH");
+    if (stubs->saved_path)
+        g_setenv("PATH", stubs->saved_path, TRUE);
+    else
+        g_unsetenv("PATH");
+
+    unlink(stubs->quick);
+    unlink(stubs->awg);
+    unlink(stubs->log);
+    unlink(stubs->modprobe);
+    unlink(stubs->modprobe_log);
+    unlink(stubs->module_version);
+    rmdir(stubs->dir);
+    g_free(stubs->dir);
+    g_free(stubs->quick);
+    g_free(stubs->awg);
+    g_free(stubs->log);
+    g_free(stubs->modprobe);
+    g_free(stubs->modprobe_log);
+    g_free(stubs->module_version);
+    g_free(stubs->saved_path);
+    g_free(stubs->saved_quick_path);
+}
+
+static void
+assert_external_connect(ExternalStubs *stubs, AWGDevice *device, gboolean accepted, const char *message_part)
+{
+    AWGConnectionManager *mgr = external_test_manager(stubs, "awgtest", device, stubs->dir);
+    g_autofree gchar *log = NULL;
+    GError *error = NULL;
+
+    if (accepted) {
+        g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+        g_assert_no_error(error);
+    } else {
+        g_assert_false(awg_connection_manager_connect(mgr, NULL, &error));
+        g_assert_nonnull(error);
+        g_test_message("%s", error->message);
+        g_assert_nonnull(strstr(error->message, message_part));
+        g_clear_error(&error);
+    }
+    g_object_unref(mgr);
+
+    /* A refused connection never reaches awg-quick */
+    log = external_stubs_take_log(stubs);
+    if (accepted)
+        g_assert_true(g_str_has_prefix(log, "up "));
+    else
+        g_assert_cmpstr(log, ==, "");
 }
 
 static void
 test_external_awg31_requires_new_tools(void)
 {
-    /* Hermetic stubs: awg-quick does nothing, awg reports a version. */
-    g_autofree gchar *dir = g_dir_make_tmp("awg-tools-XXXXXX", NULL);
-    g_autofree gchar *quick = g_build_filename(dir, "awg-quick", NULL);
-    g_autofree gchar *awg = g_build_filename(dir, "awg", NULL);
-    const gchar *old_path = g_getenv("PATH");
-    const gchar *old_quick_path = g_getenv("NM_AWG_QUICK_PATH");
-    const gchar *old_force = g_getenv("NM_FORCE_AWG_QUICK");
-    g_autofree gchar *saved_path = old_path ? g_strdup(old_path) : NULL;
-    g_autofree gchar *saved_quick_path = old_quick_path ? g_strdup(old_quick_path) : NULL;
-    g_autofree gchar *saved_force = old_force ? g_strdup(old_force) : NULL;
-    g_autofree gchar *search_path = g_strdup_printf("%s:%s", dir, old_path ? old_path : "");
-    AWGDevice *device;
-    AWGDevicePeer *peer;
+    ExternalStubs stubs = { 0 };
+    AWGDevice *awg20 = external_test_device();
+    AWGDevice *awg30 = external_test_device();
+    AWGDevice *awg31 = external_test_device();
+
+    external_stubs_setup(&stubs);
+
+    /* HeaderProtectionKey .. MaxHandshakeAttempts came with tools 3.0 */
+    g_assert_true(awg_device_set_header_protection_key(awg30, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304="));
+    g_assert_true(awg_device_set_content_padding_addition(awg30, "2-10"));
+    /* RandomTrailers and DisableCookies only with 3.1 */
+    g_assert_true(awg_device_set_content_padding_addition(awg31, "2-10"));
+    g_assert_true(awg_device_set_disable_cookies(awg31, TRUE));
+
+    /* Tools without the 3.1 keys must not be asked to parse one ... */
+    external_stubs_set_tools_version(&stubs, "v1.0.20260618");
+    assert_external_connect(&stubs, awg20, TRUE, NULL);
+    assert_external_connect(&stubs, awg30, FALSE, "HeaderProtectionKey, which needs amneziawg-tools 3.0");
+    assert_external_connect(&stubs, awg31, FALSE, "DisableCookies, which needs amneziawg-tools 3.1");
+
+    /* ... 3.0 parses all but the two flags ... */
+    external_stubs_set_tools_version(&stubs, "v3.0.20260805");
+    assert_external_connect(&stubs, awg20, TRUE, NULL);
+    assert_external_connect(&stubs, awg30, TRUE, NULL);
+    assert_external_connect(&stubs, awg31, FALSE, "DisableCookies, which needs amneziawg-tools 3.1");
+
+    /* ... and 3.1 all of them */
+    external_stubs_set_tools_version(&stubs, "v3.1.20260812");
+    assert_external_connect(&stubs, awg31, TRUE, NULL);
+
+    g_object_unref(awg20);
+    g_object_unref(awg30);
+    g_object_unref(awg31);
+    external_stubs_teardown(&stubs);
+}
+
+/* awg-quick creates the interface through the amneziawg module whenever one
+ * can be loaded, so new tools alone are not enough: the module has to know
+ * the parameters too, also one that is installed but not loaded yet. No
+ * module to load, or one without a readable version, leaves the decision to
+ * the tools. */
+static void
+test_external_awg31_requires_new_module(void)
+{
+    ExternalStubs stubs = { 0 };
+    AWGDevice *awg20 = external_test_device();
+    AWGDevice *awg30 = external_test_device();
+    AWGDevice *awg31 = external_test_device();
+    gchar *modprobe_log = NULL;
+
+    external_stubs_setup(&stubs);
+    external_stubs_set_tools_version(&stubs, "v3.1.20260812");
+    g_assert_true(awg_device_set_header_protection_key(awg30, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304="));
+    g_assert_true(awg_device_set_random_trailers(awg31, TRUE));
+
+    /* Last 1.x module: none of the 3.1 attributes */
+    external_stubs_set_module_version(&stubs, "1.0.20260725\n");
+    assert_external_connect(&stubs, awg20, TRUE, NULL);
+    assert_external_connect(&stubs, awg30, FALSE,
+                            "HeaderProtectionKey, which needs kernel module amneziawg 3.0 or newer, "
+                            "but 1.0.20260725 is loaded");
+    assert_external_connect(&stubs, awg31, FALSE, "RandomTrailers, which needs kernel module amneziawg 3.1");
+
+    /* 3.0 knows all but the two flags ... */
+    external_stubs_set_module_version(&stubs, "3.0.20260730\n");
+    assert_external_connect(&stubs, awg30, TRUE, NULL);
+    assert_external_connect(&stubs, awg31, FALSE, "RandomTrailers, which needs kernel module amneziawg 3.1");
+
+    /* ... and 3.1 all of them */
+    external_stubs_set_module_version(&stubs, "3.1.20260812\n");
+    assert_external_connect(&stubs, awg31, TRUE, NULL);
+
+    /* A loaded module is not loaded again */
+    modprobe_log = external_stubs_take_modprobe_log(&stubs);
+    g_assert_cmpstr(modprobe_log, ==, "");
+    g_free(modprobe_log);
+
+    /* Installed but not loaded yet: "ip link add" in awg-quick would load
+     * it, so it is loaded first and checked like a loaded one ... */
+    external_stubs_set_module_version(&stubs, NULL);
+    external_stubs_set_installed_module(&stubs, "1.0.20260725");
+    assert_external_connect(&stubs, awg30, FALSE,
+                            "HeaderProtectionKey, which needs kernel module amneziawg 3.0 or newer, "
+                            "but 1.0.20260725 is loaded");
+    modprobe_log = external_stubs_take_modprobe_log(&stubs);
+    g_assert_cmpstr(modprobe_log, ==, "amneziawg\n");
+    g_free(modprobe_log);
+
+    external_stubs_set_module_version(&stubs, NULL);
+    external_stubs_set_installed_module(&stubs, "3.1.20260812");
+    assert_external_connect(&stubs, awg31, TRUE, NULL);
+    modprobe_log = external_stubs_take_modprobe_log(&stubs);
+    g_assert_cmpstr(modprobe_log, ==, "amneziawg\n");
+    g_free(modprobe_log);
+
+    /* ... but only for a configuration that needs a version */
+    external_stubs_set_module_version(&stubs, NULL);
+    assert_external_connect(&stubs, awg20, TRUE, NULL);
+    modprobe_log = external_stubs_take_modprobe_log(&stubs);
+    g_assert_cmpstr(modprobe_log, ==, "");
+    g_free(modprobe_log);
+
+    /* No module to load (awg-quick uses amneziawg-go), or an unknown
+     * version: the tools decide */
+    external_stubs_set_installed_module(&stubs, NULL);
+    assert_external_connect(&stubs, awg31, TRUE, NULL);
+    modprobe_log = external_stubs_take_modprobe_log(&stubs);
+    g_assert_cmpstr(modprobe_log, ==, "amneziawg\n");
+    g_free(modprobe_log);
+    external_stubs_set_module_version(&stubs, "\n");
+    assert_external_connect(&stubs, awg31, TRUE, NULL);
+
+    /* Both too old: the module is reported first, the tools once it is new */
+    external_stubs_set_tools_version(&stubs, "v1.0.20260618");
+    external_stubs_set_module_version(&stubs, "1.0.20260725\n");
+    assert_external_connect(&stubs, awg30, FALSE, "needs kernel module amneziawg 3.0");
+    external_stubs_set_module_version(&stubs, "3.1.20260812\n");
+    assert_external_connect(&stubs, awg30, FALSE, "needs amneziawg-tools 3.0");
+
+    g_object_unref(awg20);
+    g_object_unref(awg30);
+    g_object_unref(awg31);
+    external_stubs_teardown(&stubs);
+}
+
+/* The refusal for an old module must not send the user to awg-quick, which
+ * goes through the same module; it has to name the way out: a newer module,
+ * loaded. */
+static void
+test_netlink_module_check(void)
+{
+    g_autofree gchar *dir = g_dir_make_tmp("awg-module-XXXXXX", NULL);
+    g_autofree gchar *version_file = g_build_filename(dir, "version", NULL);
+    g_autofree gchar *missing = g_build_filename(dir, "missing", NULL);
+    AWGDevice *awg20 = external_test_device();
+    AWGDevice *awg30 = external_test_device();
+    GError *error = NULL;
+
+    g_assert_true(awg_device_set_rekey_timeout(awg30, "4-6"));
+
+    g_assert_true(g_file_set_contents(version_file, "1.0.20260725\n", -1, NULL));
+    g_assert_true(awg_connection_manager_netlink_check_module(awg20, version_file, &error));
+    g_assert_no_error(error);
+    g_assert_false(awg_connection_manager_netlink_check_module(awg30, version_file, &error));
+    g_assert_nonnull(error);
+    g_test_message("%s", error->message);
+    g_assert_nonnull(strstr(error->message, "RekeyTimeout, which needs kernel module amneziawg 3.0 or newer, "
+                                            "but 1.0.20260725 is loaded"));
+    g_assert_nonnull(strstr(error->message, "Upgrade the module and load the new one"));
+    g_assert_nonnull(strstr(error->message, "NM_FORCE_AWG_QUICK=1 does not help"));
+    g_assert_null(strstr(error->message, "switch to the awg-quick backend"));
+    g_clear_error(&error);
+
+    g_assert_true(g_file_set_contents(version_file, "3.0.20260730\n", -1, NULL));
+    g_assert_true(awg_connection_manager_netlink_check_module(awg30, version_file, &error));
+    g_assert_no_error(error);
+
+    /* Not loaded: the kernel decides */
+    g_assert_true(awg_connection_manager_netlink_check_module(awg30, missing, &error));
+    g_assert_no_error(error);
+
+    g_object_unref(awg20);
+    g_object_unref(awg30);
+    unlink(version_file);
+    rmdir(dir);
+}
+
+/* The configuration lives in the configured directory (/run/nm-amneziawg in
+ * the service) only while awg-quick runs, readable by root only, and an
+ * interface left over from an earlier activation is taken down first. */
+static void
+test_external_config_and_leftover_interface(void)
+{
+    ExternalStubs stubs = { 0 };
+    g_autofree gchar *config_dir = NULL;
+    g_autofree gchar *conf = NULL;
+    g_autofree gchar *lo_conf = NULL;
+    g_autofree gchar *expected = NULL;
+    g_autofree gchar *log = NULL;
+    AWGDevice *device = external_test_device();
     AWGConnectionManager *mgr;
     GError *error = NULL;
 
-    g_assert_nonnull(dir);
-    g_assert_true(g_file_set_contents(quick, "#!/bin/sh\nexit 0\n", -1, NULL));
-    g_assert_cmpint(chmod(quick, 0755), ==, 0);
+    external_stubs_setup(&stubs);
+    external_stubs_set_tools_version(&stubs, "v3.1.20260812");
+    /* Created on demand */
+    config_dir = g_build_filename(stubs.dir, "run", NULL);
+    conf = g_build_filename(config_dir, "awgtest-none.conf", NULL);
+    lo_conf = g_build_filename(config_dir, "lo.conf", NULL);
 
-    g_setenv("NM_AWG_QUICK_PATH", quick, TRUE);
-    g_setenv("NM_FORCE_AWG_QUICK", "1", TRUE);
-    g_setenv("PATH", search_path, TRUE);
-
-    /* A 2.0 device carries no 3.1 parameter. */
-    device = awg_device_new();
-    g_assert_nonnull(device);
-    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
-    peer = awg_device_peer_new();
-    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
-    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
-    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
-    g_assert_true(awg_device_add_peer(device, peer));
-    g_object_unref(peer);
-
-    /* Tools without the 3.1 keys must not be asked to parse one. */
-    g_assert_true(g_file_set_contents(awg, "#!/bin/sh\necho 'amneziawg-tools v1.0.20260618 - https://amnezia.org'\n", -1, NULL));
-    g_assert_cmpint(chmod(awg, 0755), ==, 0);
-
-    mgr = awg_connection_manager_external_new("awgtest20", device);
+    mgr = external_test_manager(&stubs, "awgtest-none", device, config_dir);
     g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
     g_assert_no_error(error);
+    g_assert_false(g_file_test(conf, G_FILE_TEST_EXISTS));
+    g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+    g_assert_no_error(error);
+    g_assert_false(g_file_test(conf, G_FILE_TEST_EXISTS));
     g_object_unref(mgr);
-    g_object_unref(device);
 
-    /* The same tools refuse a 3.1 one ... */
-    device = awg_device_new();
-    g_assert_nonnull(device);
-    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
-    g_assert_true(awg_device_set_header_protection_key(device, "65P9KtswVjU7zVR1f5915+lhDOEi62lMYclBlkP6304="));
-    g_assert_true(awg_device_set_content_padding_addition(device, "2-10"));
-    peer = awg_device_peer_new();
-    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
-    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
-    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
-    g_assert_true(awg_device_add_peer(device, peer));
-    g_object_unref(peer);
+    log = external_stubs_take_log(&stubs);
+    expected = g_strdup_printf("up %s 400\ndown %s 400\n", conf, conf);
+    g_assert_cmpstr(log, ==, expected);
+    g_clear_pointer(&log, g_free);
+    g_clear_pointer(&expected, g_free);
 
-    mgr = awg_connection_manager_external_new("awgtest31", device);
-    g_assert_false(awg_connection_manager_connect(mgr, NULL, &error));
-    g_assert_nonnull(error);
-    g_assert_nonnull(strstr(error->message, "3.0"));
-    g_assert_nonnull(strstr(error->message, "amneziawg-tools"));
-    g_clear_error(&error);
-    g_object_unref(mgr);
-    g_object_unref(device);
-
-    /* ... and 3.1 tools accept it. */
-    g_assert_true(g_file_set_contents(awg, "#!/bin/sh\necho 'amneziawg-tools v3.1.20260812 - https://amnezia.org'\n", -1, NULL));
-    g_assert_cmpint(chmod(awg, 0755), ==, 0);
-
-    device = awg_device_new();
-    g_assert_nonnull(device);
-    g_assert_true(awg_device_set_private_key(device, "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="));
-    g_assert_true(awg_device_set_disable_cookies(device, TRUE));
-    peer = awg_device_peer_new();
-    g_assert_true(awg_device_peer_set_public_key(peer, "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="));
-    g_assert_true(awg_device_peer_set_endpoint(peer, "192.168.1.1:51820"));
-    g_assert_true(awg_device_peer_set_allowed_ips_from_string(peer, "0.0.0.0/0"));
-    g_assert_true(awg_device_add_peer(device, peer));
-    g_object_unref(peer);
-
-    mgr = awg_connection_manager_external_new("awgtest31new", device);
+    /* "lo" always exists: it stands for a leftover interface */
+    mgr = external_test_manager(&stubs, "lo", device, config_dir);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*lo is left over*");
     g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+    g_test_assert_expected_messages();
     g_assert_no_error(error);
     g_object_unref(mgr);
+
+    log = external_stubs_take_log(&stubs);
+    expected = g_strdup_printf("down %s 400\nup %s 400\n", lo_conf, lo_conf);
+    g_assert_cmpstr(log, ==, expected);
+
     g_object_unref(device);
+    rmdir(config_dir);
+    external_stubs_teardown(&stubs);
+}
 
-    if (saved_quick_path)
-        g_setenv("NM_AWG_QUICK_PATH", saved_quick_path, TRUE);
-    else
-        g_unsetenv("NM_AWG_QUICK_PATH");
-    if (saved_force)
-        g_setenv("NM_FORCE_AWG_QUICK", saved_force, TRUE);
-    else
-        g_unsetenv("NM_FORCE_AWG_QUICK");
-    if (saved_path)
-        g_setenv("PATH", saved_path, TRUE);
-    else
-        g_unsetenv("PATH");
+#define TEST_PRIVATE_KEY "IrQF2MOyaXsmiCEE3FUxejKowR0q65O41dHt3bSTj20="
+#define TEST_PSK "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w="
+#define TEST_PEER_KEY "9rLL/fiLgF39EZnzj1xSwIHrY3G+AIwUtnfDpR2H8uU="
 
-    unlink(quick);
-    unlink(awg);
-    rmdir(dir);
+/* @flags < 0 leaves out the "<name>-flags" item. */
+static void
+vpn_set_secret(NMSettingVpn *s_vpn, const char *name, const char *value, gint flags)
+{
+    if (value)
+        nm_setting_vpn_add_secret(s_vpn, name, value);
+    if (flags >= 0)
+        nm_setting_set_secret_flags(NM_SETTING(s_vpn), name, flags, NULL);
+}
+
+static const AWGSecret *
+find_secret(GPtrArray *secrets, const char *name)
+{
+    for (guint i = 0; i < secrets->len; i++) {
+        const AWGSecret *secret = g_ptr_array_index(secrets, i);
+
+        if (g_strcmp0(secret->name, name) == 0)
+            return secret;
+    }
+    return NULL;
+}
+
+static void
+test_secrets_private_key_flags(void)
+{
+    static const struct {
+        gint flags;
+        const char *value;
+        gboolean missing;
+        gboolean missing_stored;
+    } cases[] = {
+        /* No flags: stored by NetworkManager, as flags 0 */
+        { -1, NULL, TRUE, TRUE },
+        { -1, TEST_PRIVATE_KEY, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NONE, NULL, TRUE, TRUE },
+        { NM_SETTING_SECRET_FLAG_NONE, "", TRUE, TRUE },
+        { NM_SETTING_SECRET_FLAG_NONE, TEST_PRIVATE_KEY, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_AGENT_OWNED, NULL, TRUE, FALSE },
+        { NM_SETTING_SECRET_FLAG_AGENT_OWNED, TEST_PRIVATE_KEY, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_SAVED, NULL, TRUE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_SAVED, TEST_PRIVATE_KEY, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NULL, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_REQUIRED, TEST_PRIVATE_KEY, FALSE, FALSE },
+    };
+
+    for (guint i = 0; i < G_N_ELEMENTS(cases); i++) {
+        NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+        g_autoptr(GPtrArray) secrets = NULL;
+        const AWGSecret *secret;
+
+        nm_setting_vpn_add_data_item(s_vpn, "peer-0-public-key", TEST_PEER_KEY);
+        vpn_set_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, cases[i].value, cases[i].flags);
+
+        secrets = awg_secrets_list(s_vpn);
+        g_assert_cmpuint(secrets->len, ==, 1);
+        secret = g_ptr_array_index(secrets, 0);
+        g_assert_cmpstr(secret->name, ==, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
+        g_assert_cmpint(secret->peer, ==, -1);
+        g_assert_cmpint(secret->flags, ==, cases[i].flags < 0 ? NM_SETTING_SECRET_FLAG_NONE : cases[i].flags);
+        g_assert_cmpint(awg_secret_is_missing(secret), ==, cases[i].missing);
+        g_assert_cmpint(awg_secret_is_missing_stored(secret), ==, cases[i].missing_stored);
+        g_assert_true(awg_secrets_find_missing(secrets) == (cases[i].missing ? secret : NULL));
+
+        g_object_unref(s_vpn);
+    }
+}
+
+static void
+test_secrets_preshared_key_flags(void)
+{
+    static const struct {
+        gint flags;
+        const char *value;
+        gboolean listed;
+        gboolean missing;
+        gboolean missing_stored;
+    } cases[] = {
+        /* No key and no flags: the peer has no preshared key */
+        { -1, NULL, FALSE, FALSE, FALSE },
+        { -1, TEST_PSK, TRUE, FALSE, FALSE },
+        /* An empty value, as nmcli --ask stores for an Enter: still none */
+        { -1, "", FALSE, FALSE, FALSE },
+        /* Stored by NetworkManager but gone (or written by 0.9.12): asked */
+        { NM_SETTING_SECRET_FLAG_NONE, NULL, TRUE, TRUE, TRUE },
+        { NM_SETTING_SECRET_FLAG_NONE, "", TRUE, TRUE, TRUE },
+        { NM_SETTING_SECRET_FLAG_NONE, TEST_PSK, TRUE, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_AGENT_OWNED, NULL, TRUE, TRUE, FALSE },
+        { NM_SETTING_SECRET_FLAG_AGENT_OWNED, TEST_PSK, TRUE, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_SAVED, NULL, TRUE, TRUE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_SAVED, TEST_PSK, TRUE, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NULL, TRUE, FALSE, FALSE },
+        { NM_SETTING_SECRET_FLAG_NOT_REQUIRED, TEST_PSK, TRUE, FALSE, FALSE },
+    };
+
+    for (guint i = 0; i < G_N_ELEMENTS(cases); i++) {
+        NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+        g_autoptr(GPtrArray) secrets = NULL;
+        const AWGSecret *secret;
+
+        nm_setting_vpn_add_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, TEST_PRIVATE_KEY);
+        nm_setting_vpn_add_data_item(s_vpn, "peer-0-public-key", TEST_PEER_KEY);
+        vpn_set_secret(s_vpn, "peer-0-preshared-key", cases[i].value, cases[i].flags);
+
+        secrets = awg_secrets_list(s_vpn);
+        secret = find_secret(secrets, "peer-0-preshared-key");
+        g_test_message("case %u: flags %d, value %s", i, cases[i].flags, cases[i].value ? cases[i].value : "(none)");
+        g_assert_cmpint(secret != NULL, ==, cases[i].listed);
+        g_assert_cmpint(awg_secrets_has_preshared_key(s_vpn, 0), ==, cases[i].listed);
+        if (secret) {
+            g_assert_cmpint(secret->peer, ==, 0);
+            g_assert_cmpint(awg_secret_is_missing(secret), ==, cases[i].missing);
+            g_assert_cmpint(awg_secret_is_missing_stored(secret), ==, cases[i].missing_stored);
+        }
+        g_assert_true(awg_secrets_find_missing(secrets) == (cases[i].missing ? secret : NULL));
+
+        g_object_unref(s_vpn);
+    }
+}
+
+static void
+test_secrets_several_peers(void)
+{
+    NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+    g_autoptr(GPtrArray) secrets = NULL;
+    const AWGSecret *missing;
+
+    nm_setting_vpn_add_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, TEST_PRIVATE_KEY);
+    for (guint i = 0; i < 3; i++) {
+        g_autofree gchar *key = g_strdup_printf(NM_AWG_VPN_CONFIG_PEER_PUBLIC_KEY, i);
+        nm_setting_vpn_add_data_item(s_vpn, key, TEST_PEER_KEY);
+    }
+    vpn_set_secret(s_vpn, "peer-0-preshared-key", TEST_PSK, NM_SETTING_SECRET_FLAG_NONE);
+    /* peer 1 has no preshared key */
+    vpn_set_secret(s_vpn, "peer-2-preshared-key", NULL, NM_SETTING_SECRET_FLAG_AGENT_OWNED);
+    /* Past the gap at index 3: the service never uses peer 4 */
+    nm_setting_vpn_add_data_item(s_vpn, "peer-4-public-key", TEST_PEER_KEY);
+    vpn_set_secret(s_vpn, "peer-4-preshared-key", NULL, NM_SETTING_SECRET_FLAG_NONE);
+    /* A secret of no peer at all */
+    vpn_set_secret(s_vpn, "peer-7-preshared-key", TEST_PSK, NM_SETTING_SECRET_FLAG_NONE);
+
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_cmpuint(secrets->len, ==, 3);
+    g_assert_cmpstr(((AWGSecret *)g_ptr_array_index(secrets, 0))->name, ==, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
+    g_assert_cmpstr(((AWGSecret *)g_ptr_array_index(secrets, 1))->name, ==, "peer-0-preshared-key");
+    g_assert_cmpstr(((AWGSecret *)g_ptr_array_index(secrets, 2))->name, ==, "peer-2-preshared-key");
+
+    missing = awg_secrets_find_missing(secrets);
+    g_assert_nonnull(missing);
+    g_assert_cmpstr(missing->name, ==, "peer-2-preshared-key");
+    g_assert_cmpint(missing->peer, ==, 2);
+    g_clear_pointer(&secrets, g_ptr_array_unref);
+
+    /* The private key is reported first */
+    nm_setting_vpn_remove_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_cmpstr(awg_secrets_find_missing(secrets)->name, ==, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY);
+    g_clear_pointer(&secrets, g_ptr_array_unref);
+
+    vpn_set_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, TEST_PRIVATE_KEY, -1);
+    vpn_set_secret(s_vpn, "peer-2-preshared-key", TEST_PSK, -1);
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_null(awg_secrets_find_missing(secrets));
+
+    g_object_unref(s_vpn);
+}
+
+static void
+test_secrets_modify_action(void)
+{
+    /* NetworkManager keeps system-owned secrets from an agent under
+     * modify.own only for a profile restricted to one user. */
+    static const struct {
+        const char *users[3];
+        const char *action;
+    } cases[] = {
+        { { NULL }, "org.freedesktop.NetworkManager.settings.modify.system" },
+        { { "alice", NULL }, "org.freedesktop.NetworkManager.settings.modify.own" },
+        { { "alice", "bob", NULL }, "org.freedesktop.NetworkManager.settings.modify.system" },
+    };
+
+    NMConnection *connection;
+
+    for (guint i = 0; i < G_N_ELEMENTS(cases); i++) {
+        NMSettingConnection *s_con = NM_SETTING_CONNECTION(nm_setting_connection_new());
+
+        connection = nm_simple_connection_new();
+        for (guint j = 0; cases[i].users[j]; j++)
+            g_assert_true(nm_setting_connection_add_permission(s_con, "user", cases[i].users[j], NULL));
+        nm_connection_add_setting(connection, NM_SETTING(s_con));
+        g_assert_cmpstr(awg_secrets_modify_action(connection), ==, cases[i].action);
+        g_object_unref(connection);
+    }
+
+    /* No connection setting at all */
+    connection = nm_simple_connection_new();
+    g_assert_cmpstr(awg_secrets_modify_action(connection), ==,
+                    "org.freedesktop.NetworkManager.settings.modify.system");
+    g_object_unref(connection);
+}
+
+static void
+test_secrets_empty_psk_round_trip(void)
+{
+    /* A peer whose flags were removed after nmcli --ask stored an empty
+     * value: no preshared key, and saving it again keeps it that way. */
+    NMConnection *connection = nm_simple_connection_new();
+    NMConnection *resaved = nm_simple_connection_new();
+    NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+    NMSettingVpn *s_vpn_resaved;
+    g_autoptr(GPtrArray) secrets = NULL;
+    AWGDevice *device;
+    GError *error = NULL;
+
+    g_object_set(s_vpn, NM_SETTING_VPN_SERVICE_TYPE, NM_AWG_VPN_SERVICE_TYPE, NULL);
+    nm_setting_vpn_add_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, TEST_PRIVATE_KEY);
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-public-key", TEST_PEER_KEY);
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-endpoint", "192.168.1.1:51820");
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-allowed-ips", "0.0.0.0/0");
+    vpn_set_secret(s_vpn, "peer-0-preshared-key", "", -1);
+    nm_connection_add_setting(connection, NM_SETTING(s_vpn));
+
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_null(awg_secrets_find_missing(secrets));
+    g_assert_null(find_secret(secrets, "peer-0-preshared-key"));
+
+    device = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    g_assert_null(awg_device_peer_get_shared_key(awg_device_get_peers_list(device)->data));
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(awg_device_get_peers_list(device)->data), ==,
+                    NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+
+    g_assert_true(awg_device_save_to_nm_connection(device, resaved, &error));
+    g_assert_no_error(error);
+    s_vpn_resaved = nm_connection_get_setting_vpn(resaved);
+    g_assert_null(nm_setting_vpn_get_data_item(s_vpn_resaved, "peer-0-preshared-key-flags"));
+    g_assert_null(nm_setting_vpn_get_secret(s_vpn_resaved, "peer-0-preshared-key"));
+
+    g_object_unref(device);
+    g_object_unref(resaved);
+    g_object_unref(connection);
+}
+
+static void
+test_apply_edited_psk(void)
+{
+    static const struct {
+        const char *old_key;
+        NMSettingSecretFlags old_flags;
+        NMSettingSecretFlags chosen;
+        const char *psk;
+        NMSettingSecretFlags expected;
+    } cases[] = {
+        /* A peer without a preshared key: an empty field keeps it so */
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_NONE, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_AGENT_OWNED, NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        /* ... unless it is to be asked for every time */
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_NOT_SAVED, "", NM_SETTING_SECRET_FLAG_NOT_SAVED },
+        /* A key typed in is stored as chosen */
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_NONE, TEST_PSK, NM_SETTING_SECRET_FLAG_NONE },
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NM_SETTING_SECRET_FLAG_AGENT_OWNED, TEST_PSK, NM_SETTING_SECRET_FLAG_AGENT_OWNED },
+        /* A key that was shown and cleared is removed, wherever it was kept */
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_NONE, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_AGENT_OWNED, NM_SETTING_SECRET_FLAG_AGENT_OWNED, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_AGENT_OWNED, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_AGENT_OWNED, NM_SETTING_SECRET_FLAG_NOT_SAVED, "", NM_SETTING_SECRET_FLAG_NOT_SAVED },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_NONE, TEST_PSK, NM_SETTING_SECRET_FLAG_NONE },
+        /* A stored key the editor was not given stays asked for */
+        { NULL, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_NONE, "", NM_SETTING_SECRET_FLAG_NONE },
+        { NULL, NM_SETTING_SECRET_FLAG_AGENT_OWNED, NM_SETTING_SECRET_FLAG_AGENT_OWNED, "", NM_SETTING_SECRET_FLAG_AGENT_OWNED },
+        { NULL, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_AGENT_OWNED, "", NM_SETTING_SECRET_FLAG_AGENT_OWNED },
+        /* ... until "not required" is picked for it */
+        { NULL, NM_SETTING_SECRET_FLAG_NONE, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, "", NM_SETTING_SECRET_FLAG_NOT_REQUIRED },
+    };
+    /* Base64 that is not a 32-byte key: awg_validate_base64() accepts all of
+     * them, the setter none. */
+    static const char *const rejected[] = {
+        "AAAA",
+        "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+",
+        "2hAJ4eqUN13Ue6DjcLn3MGq6ARllKvI6lzg6Uh62K+w+AAAA",
+    };
+
+    for (guint i = 0; i < G_N_ELEMENTS(cases); i++) {
+        AWGDevicePeer *peer = awg_device_peer_new();
+        const char *expected_key = cases[i].psk && cases[i].psk[0] ? cases[i].psk : NULL;
+
+        if (cases[i].old_key)
+            g_assert_true(awg_device_peer_set_shared_key(peer, cases[i].old_key));
+        awg_device_peer_set_shared_key_flags(peer, cases[i].old_flags);
+
+        g_test_message("case %u", i);
+        g_assert_true(awg_nm_connection_apply_edited_psk(peer, cases[i].chosen, cases[i].psk));
+        g_assert_cmpstr(awg_device_peer_get_shared_key(peer), ==, expected_key);
+        g_assert_cmpint(awg_device_peer_get_shared_key_flags(peer), ==, cases[i].expected);
+
+        g_object_unref(peer);
+    }
+
+    /* A rejected key changes nothing: a new peer keeps no preshared key
+     * (instead of flags 0 without a value, which asks for it forever) and an
+     * existing one keeps its key and flags. */
+    for (guint i = 0; i < G_N_ELEMENTS(rejected); i++) {
+        AWGDevicePeer *peer = awg_device_peer_new();
+
+        g_assert_false(awg_validate_key(rejected[i]));
+        g_assert_true(awg_validate_base64(rejected[i]));
+
+        g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*preshared key*");
+        g_assert_false(awg_nm_connection_apply_edited_psk(peer, NM_SETTING_SECRET_FLAG_NONE, rejected[i]));
+        g_test_assert_expected_messages();
+        g_assert_null(awg_device_peer_get_shared_key(peer));
+        g_assert_cmpint(awg_device_peer_get_shared_key_flags(peer), ==, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+
+        g_assert_true(awg_device_peer_set_shared_key(peer, TEST_PSK));
+        awg_device_peer_set_shared_key_flags(peer, NM_SETTING_SECRET_FLAG_AGENT_OWNED);
+        g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*preshared key*");
+        g_assert_false(awg_nm_connection_apply_edited_psk(peer, NM_SETTING_SECRET_FLAG_NONE, rejected[i]));
+        g_test_assert_expected_messages();
+        g_assert_cmpstr(awg_device_peer_get_shared_key(peer), ==, TEST_PSK);
+        g_assert_cmpint(awg_device_peer_get_shared_key_flags(peer), ==, NM_SETTING_SECRET_FLAG_AGENT_OWNED);
+
+        g_object_unref(peer);
+    }
+}
+
+static void
+test_awg_validate_key(void)
+{
+    g_assert_true(awg_validate_key(TEST_PSK));
+    g_assert_true(awg_validate_key("YAnL1JqN5iMHW2kHbNfT9xLqX5vBz1mQWc8p3Kf9R0E="));
+    g_assert_false(awg_validate_key(NULL));
+    g_assert_false(awg_validate_key(""));
+    /* valid base64, but 29, 3 and 21 bytes */
+    g_assert_false(awg_validate_key("YWFhYmFhYmFhYmFhYmFhYmFhYmFhYmFhYmFhYmE="));
+    g_assert_false(awg_validate_key("AAAA"));
+    g_assert_false(awg_validate_key("YAnL1JqN5iMHW2kHbNfT9xLqX5vB"));
+    /* not base64 */
+    g_assert_false(awg_validate_key("YAnL1JqN5iMHW2kHbNfT9xLqX5vBz1mQWc8p3Kf9R0E=A"));
+    g_assert_false(awg_validate_key("YAnL1JqN5iMHW2kHbNfT9xLqX5vBz1mQWc8p3Kf9R0!="));
+}
+
+static void
+test_import_peer_without_psk(void)
+{
+    g_autofree gchar *config_path = get_test_config_path("test-config-mixed-psk.conf");
+    AWGDevice *device = awg_device_new_from_config(config_path, NULL);
+    NMConnection *connection = nm_simple_connection_new();
+    NMConnection *resaved = nm_simple_connection_new();
+    AWGDevice *restored;
+    NMSettingVpn *s_vpn;
+    GError *error = NULL;
+    g_autoptr(GPtrArray) secrets = NULL;
+    const GList *peers;
+
+    g_assert_nonnull(device);
+    peers = awg_device_get_peers_list(device);
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(peers->data), ==, NM_SETTING_SECRET_FLAG_NONE);
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(peers->next->data), ==, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+
+    g_assert_true(awg_device_save_to_nm_connection(device, connection, &error));
+    g_assert_no_error(error);
+    s_vpn = nm_connection_get_setting_vpn(connection);
+
+    /* As nmcli imports WireGuard: flags only for the peer that has a key */
+    g_assert_cmpstr(nm_setting_vpn_get_data_item(s_vpn, "peer-0-preshared-key-flags"), ==, "0");
+    g_assert_cmpstr(nm_setting_vpn_get_secret(s_vpn, "peer-0-preshared-key"), ==, TEST_PSK);
+    g_assert_null(nm_setting_vpn_get_data_item(s_vpn, "peer-1-preshared-key-flags"));
+    g_assert_null(nm_setting_vpn_get_secret(s_vpn, "peer-1-preshared-key"));
+
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_null(awg_secrets_find_missing(secrets));
+    g_assert_null(find_secret(secrets, "peer-1-preshared-key"));
+    g_clear_pointer(&secrets, g_ptr_array_unref);
+
+    /* Load and save again (what the editor does): still no flags for peer 1 */
+    restored = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    peers = awg_device_get_peers_list(restored);
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(peers->next->data), ==, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+    g_assert_true(awg_device_save_to_nm_connection(restored, resaved, &error));
+    g_assert_no_error(error);
+    g_assert_null(nm_setting_vpn_get_data_item(nm_connection_get_setting_vpn(resaved), "peer-1-preshared-key-flags"));
+    g_assert_cmpstr(nm_setting_vpn_get_data_item(nm_connection_get_setting_vpn(resaved), "peer-0-preshared-key-flags"), ==, "0");
+
+    /* A stored key that goes missing later is still asked for */
+    nm_setting_vpn_remove_secret(s_vpn, "peer-0-preshared-key");
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_nonnull(awg_secrets_find_missing(secrets));
+    g_assert_cmpstr(awg_secrets_find_missing(secrets)->name, ==, "peer-0-preshared-key");
+
+    g_object_unref(restored);
+    g_object_unref(resaved);
+    g_object_unref(connection);
+    g_object_unref(device);
+}
+
+static void
+test_old_import_psk_flags_stay_required(void)
+{
+    /* What earlier versions wrote for a peer without PresharedKey. It cannot
+     * be told apart from a stored key that got lost, so it keeps asking. */
+    NMConnection *connection = nm_simple_connection_new();
+    NMConnection *resaved = nm_simple_connection_new();
+    NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+    g_autoptr(GPtrArray) secrets = NULL;
+    AWGDevice *device;
+    GError *error = NULL;
+
+    g_object_set(s_vpn, NM_SETTING_VPN_SERVICE_TYPE, NM_AWG_VPN_SERVICE_TYPE, NULL);
+    nm_setting_vpn_add_secret(s_vpn, NM_AWG_VPN_CONFIG_DEVICE_PRIVATE_KEY, TEST_PRIVATE_KEY);
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-public-key", TEST_PEER_KEY);
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-endpoint", "192.168.1.1:51820");
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-allowed-ips", "0.0.0.0/0");
+    nm_setting_vpn_add_data_item(s_vpn, "peer-0-preshared-key-flags", "0");
+    nm_connection_add_setting(connection, NM_SETTING(s_vpn));
+
+    secrets = awg_secrets_list(s_vpn);
+    g_assert_cmpstr(awg_secrets_find_missing(secrets)->name, ==, "peer-0-preshared-key");
+
+    device = awg_device_new_from_nm_connection(connection, &error);
+    g_assert_no_error(error);
+    g_assert_true(awg_device_save_to_nm_connection(device, resaved, &error));
+    g_assert_no_error(error);
+    g_assert_cmpstr(nm_setting_vpn_get_data_item(nm_connection_get_setting_vpn(resaved), "peer-0-preshared-key-flags"), ==, "0");
+
+    g_object_unref(device);
+    g_object_unref(resaved);
+    g_object_unref(connection);
+}
+
+static void
+test_set_peer_preshared_key(void)
+{
+    static const struct {
+        const char *value;
+        NMSettingSecretFlags flags;
+        const char *stored_flags;
+    } cases[] = {
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, NULL },
+        { NULL, NM_SETTING_SECRET_FLAG_NONE, "0" },
+        { NULL, NM_SETTING_SECRET_FLAG_AGENT_OWNED, "1" },
+        { NULL, NM_SETTING_SECRET_FLAG_NOT_SAVED, "2" },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_NONE, "0" },
+        { TEST_PSK, NM_SETTING_SECRET_FLAG_NOT_REQUIRED, "4" },
+    };
+    AWGDevicePeer *fresh = awg_device_peer_new();
+
+    /* Like nm_wireguard_peer_new(): no preshared key by default */
+    g_assert_cmpint(awg_device_peer_get_shared_key_flags(fresh), ==, NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+    g_object_unref(fresh);
+
+    for (guint i = 0; i < G_N_ELEMENTS(cases); i++) {
+        NMSettingVpn *s_vpn = NM_SETTING_VPN(nm_setting_vpn_new());
+        AWGDevicePeer *peer = awg_device_peer_new();
+
+        if (cases[i].value)
+            g_assert_true(awg_device_peer_set_shared_key(peer, cases[i].value));
+        awg_device_peer_set_shared_key_flags(peer, cases[i].flags);
+
+        awg_nm_connection_set_peer_preshared_key(s_vpn, 3, peer);
+        g_assert_cmpstr(nm_setting_vpn_get_data_item(s_vpn, "peer-3-preshared-key-flags"), ==, cases[i].stored_flags);
+        g_assert_cmpstr(nm_setting_vpn_get_secret(s_vpn, "peer-3-preshared-key"), ==, cases[i].value);
+
+        g_object_unref(peer);
+        g_object_unref(s_vpn);
+    }
 }
 
 int
@@ -1883,6 +2779,8 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/config/extended", test_awg_device_new_from_config_extended);
     g_test_add_func("/awg/config/save-load-extended", test_awg_device_save_load_extended);
     g_test_add_func("/awg/config/s3-s4", test_awg_config_string_with_s3_s4);
+    g_test_add_func("/awg/config/zero-values-omitted", test_awg_config_string_omits_zero_values);
+    g_test_add_func("/awg/config/keepalive-off-imports", test_awg_config_keepalive_off_imports);
     g_test_add_func("/awg/config/i1-i5", test_awg_config_string_with_i1_i5);
     g_test_add_func("/awg/config/h1-h4-strings", test_awg_config_string_h1_h4_strings);
     g_test_add_func("/awg/device/s3-s4-setters", test_awg_s3_s4_setters);
@@ -1906,6 +2804,9 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/device/invalid-reason", test_invalid_reason_messages);
     g_test_add_func("/awg/manager/force-quick-selects-external", test_force_awg_quick_selects_external);
     g_test_add_func("/awg/manager/external-awg31-needs-new-tools", test_external_awg31_requires_new_tools);
+    g_test_add_func("/awg/manager/external-awg31-needs-new-module", test_external_awg31_requires_new_module);
+    g_test_add_func("/awg/manager/netlink-module-check", test_netlink_module_check);
+    g_test_add_func("/awg/manager/external-config-and-leftover", test_external_config_and_leftover_interface);
     g_test_add_func("/awg/validate/range-parse-u32", test_awg_range_parse_u32);
     g_test_add_func("/awg/device/header-protection-key", test_awg_device_header_protection_key);
     g_test_add_func("/awg/device/range-setters-reject-over-u16", test_awg_device_range_setters_reject_over_u16);
@@ -1913,7 +2814,17 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/nm-connection/awg31-roundtrip", test_awg_nm_connection_awg31_roundtrip);
     g_test_add_func("/awg/validate/version-parse", test_awg_version_parse);
     g_test_add_func("/awg/validate/version-at-least", test_awg_version_at_least);
-    g_test_add_func("/awg/device/has-awg31-params", test_awg_device_has_awg31_params);
+    g_test_add_func("/awg/device/required-awg-version", test_awg_device_required_awg_version);
+    g_test_add_func("/awg/secrets/private-key-flags", test_secrets_private_key_flags);
+    g_test_add_func("/awg/secrets/preshared-key-flags", test_secrets_preshared_key_flags);
+    g_test_add_func("/awg/secrets/several-peers", test_secrets_several_peers);
+    g_test_add_func("/awg/secrets/modify-action", test_secrets_modify_action);
+    g_test_add_func("/awg/secrets/empty-psk-round-trip", test_secrets_empty_psk_round_trip);
+    g_test_add_func("/awg/secrets/apply-edited-psk", test_apply_edited_psk);
+    g_test_add_func("/awg/validate/key", test_awg_validate_key);
+    g_test_add_func("/awg/secrets/set-peer-preshared-key", test_set_peer_preshared_key);
+    g_test_add_func("/awg/secrets/import-peer-without-psk", test_import_peer_without_psk);
+    g_test_add_func("/awg/secrets/old-import-psk-flags-stay-required", test_old_import_psk_flags_stay_required);
 
     return g_test_run();
 }

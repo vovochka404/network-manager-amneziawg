@@ -49,6 +49,8 @@ gboolean awg_validate_junk_size(const gchar *str);
 
 gboolean awg_validate_base64(const gchar *str);
 
+gboolean awg_validate_key(const gchar *str);
+
 gboolean awg_validate_fqdn(const gchar *str);
 
 gboolean awg_validate_subnet(const gchar *str);

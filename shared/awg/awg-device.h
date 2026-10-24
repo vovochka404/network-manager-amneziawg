@@ -131,10 +131,13 @@ gboolean awg_device_set_random_trailers(AWGDevice *self, gboolean enabled);
 gboolean awg_device_get_disable_cookies(AWGDevice *self);
 gboolean awg_device_set_disable_cookies(AWGDevice *self, gboolean enabled);
 
-/* TRUE when the device carries an AmneziaWG 3.1 obfuscation parameter that the
- * backends actually apply. A disabled boolean does not count: it is never
- * encoded, so an old kernel can still carry such a configuration. */
-gboolean awg_device_has_awg31_params(AWGDevice *self);
+/* The oldest amneziawg module or amneziawg-tools release that knows every
+ * AWG 3.1 parameter the device applies: 3.1 for RandomTrailers and
+ * DisableCookies, 3.0 for the others. FALSE when it uses none of them;
+ * otherwise @param names one that needs that release. A disabled flag does
+ * not count: it is never encoded, so an old module or parser can still carry
+ * such a configuration. */
+gboolean awg_device_get_required_awg_version(AWGDevice *self, guint *major, guint *minor, const gchar **param);
 
 guint32 awg_device_get_mtu(AWGDevice *self);
 gboolean awg_device_set_mtu(AWGDevice *self, guint32 mtu);
