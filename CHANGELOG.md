@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **Allow concurrent VPN connections**: advertise the service's existing per-instance D-Bus support so NetworkManager can run separate AmneziaWG connections at the same time. Each instance uses its own D-Bus name and UUID-derived interface name.
+
 ## [0.9.12]
 
 ### Bug Fixes

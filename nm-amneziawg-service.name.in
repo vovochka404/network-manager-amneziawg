@@ -2,7 +2,7 @@
 name=amneziawg
 service=org.freedesktop.NetworkManager.amneziawg
 program=@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBEXECDIR@/nm-amneziawg-service
-supports-multiple-connections=false
+supports-multiple-connections=true
 
 [libnm]
 plugin=@NM_PLUGIN_DIR@/libnm-vpn-plugin-amneziawg.so
