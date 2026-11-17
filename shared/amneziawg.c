@@ -1325,9 +1325,11 @@ again:
                 if (!mnl_attr_put_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_ENDPOINT, sizeof(peer->endpoint.addr6), &peer->endpoint.addr6))
                     goto toobig_peers;
             }
+            /* AWG 3.x takes the packed u16 range; legacy kernels a plain u16,
+             * so they get the low bound, as amneziawg-tools does. */
             if (peer->flags & WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL) {
                 if (!(current_abi ? mnl_attr_put_u32_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval)
-                                  : mnl_attr_put_u16_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, peer->persistent_keepalive_interval)))
+                                  : mnl_attr_put_u16_check(nlh, mnl_ideal_socket_buffer_size(), WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, (uint16_t)peer->persistent_keepalive_interval)))
                     goto toobig_peers;
             }
         }
@@ -1522,8 +1524,12 @@ parse_peer(const struct nlattr *attr, void *data)
         break;
     }
     case WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL:
-        if (!mnl_attr_validate(attr, MNL_TYPE_U16))
-            peer->persistent_keepalive_interval = mnl_attr_get_u16(attr);
+        if (!mnl_attr_validate(attr, MNL_TYPE_U32)) {
+            peer->persistent_keepalive_interval = mnl_attr_get_u32(attr);
+        } else if (!mnl_attr_validate(attr, MNL_TYPE_U16)) {
+            uint16_t interval = mnl_attr_get_u16(attr);
+            peer->persistent_keepalive_interval = (uint32_t)interval << 16 | interval;
+        }
         break;
     case WGPEER_A_LAST_HANDSHAKE_TIME:
         if (mnl_attr_get_payload_len(attr) == sizeof(peer->last_handshake_time))

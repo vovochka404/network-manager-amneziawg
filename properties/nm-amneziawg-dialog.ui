@@ -22,11 +22,6 @@
     <property name="step-increment">1</property>
     <property name="page-increment">10</property>
   </object>
-  <object class="GtkAdjustment" id="adj_keepalive">
-    <property name="upper">450</property>
-    <property name="step-increment">1</property>
-    <property name="page-increment">10</property>
-  </object>
   <object class="GtkDialog" id="PeerDialog">
     <property name="width-request">450</property>
     <property name="can-focus">False</property>
@@ -259,13 +254,12 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton" id="peer_dialog_keepalive">
+                  <object class="GtkEntry" id="peer_dialog_keepalive">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
-                    <property name="tooltip-markup" translatable="yes">Seconds between persistent keepalive packets (0 = disabled, recommended 25).</property>
+                    <property name="tooltip-markup" translatable="yes">Seconds between persistent keepalive packets, as a number or range (e.g. 25 or 25-35). Empty or 0 disables it. Ranges need AWG 3.1.</property>
                     <property name="hexpand">False</property>
-                    <property name="width-chars">5</property>
-                    <property name="adjustment">adj_keepalive</property>
+                    <property name="width-chars">11</property>
                   </object>
                   <packing>
                     <property name="left-attach">1</property>

@@ -184,10 +184,11 @@ msgstr "Persistant Keepalive:"
 
 #: properties/nm-amneziawg-dialog.ui:265
 msgid ""
-"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
+"Seconds between persistent keepalive packets, as a number or range (e.g. 25 "
+"or 25-35). Empty or 0 disables it. Ranges need AWG 3.1."
 msgstr ""
-"Sekunden zwischen persistent Keepalive-Paketen (0 = deaktiviert, empfohlen "
-"25)."
+"Sekunden zwischen persistent Keepalive-Paketen, als Zahl oder Bereich (z. B. "
+"25 oder 25-35). Leer oder 0 deaktiviert. Bereiche benötigen AWG 3.1."
 
 #: properties/nm-amneziawg-dialog.ui:277
 msgid "_Advanced Security"
