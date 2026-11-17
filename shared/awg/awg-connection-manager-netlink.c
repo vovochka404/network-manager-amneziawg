@@ -590,8 +590,18 @@ check_awg31_support(AWGDevice *device, GError **error)
 {
     g_autofree gchar *version = NULL;
 
-    if (!awg_device_has_awg31_params(device))
+    if (!awg_device_has_awg31_params(device)) {
+        /* Legacy modules take a plain u16 keepalive: the range is reduced to
+         * its low bound, as amneziawg-tools does. Not fatal, but say so. */
+        if (awg_device_has_peer_keepalive_range(device)) {
+            version = amneziawg_kernel_version();
+            if (version && !awg_version_at_least(version, 3, 0))
+                g_warning("Kernel module amneziawg %s does not support PersistentKeepalive "
+                          "ranges; using the lower bound. Upgrade the module to 3.0 or newer",
+                          version);
+        }
         return TRUE;
+    }
 
     version = amneziawg_kernel_version();
     if (awg_version_at_least(version, 3, 0))
@@ -793,7 +803,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         const gchar *peer_shared_key;
         const gchar *endpoint;
         const gchar *allowed_ips;
-        guint16 keep_alive;
+        const gchar *keep_alive;
 
         if (!new_peer)
             continue;
@@ -884,9 +894,8 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
             g_strfreev(ip_list);
         }
 
-        keep_alive = awg_device_peer_get_keep_alive_interval(awg_peer);
-        if (keep_alive > 0) {
-            new_peer->persistent_keepalive_interval = keep_alive;
+        keep_alive = awg_device_peer_get_keep_alive(awg_peer);
+        if (keep_alive && awg_range_parse_u32(keep_alive, &new_peer->persistent_keepalive_interval)) {
             new_peer->flags |= WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL;
         }
 

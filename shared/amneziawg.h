@@ -57,7 +57,7 @@ typedef struct wg_peer {
 
     struct timespec64 last_handshake_time;
     uint64_t rx_bytes, tx_bytes;
-    uint16_t persistent_keepalive_interval;
+    uint32_t persistent_keepalive_interval; /* u16 range packed as hi<<16 | lo */
 
     bool awg;
 

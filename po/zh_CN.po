@@ -175,8 +175,9 @@ msgstr "持久保活："
 
 #: properties/nm-amneziawg-dialog.ui:265
 msgid ""
-"Seconds between persistent keepalive packets (0 = disabled, recommended 25)."
-msgstr "持久保活数据包之间的秒数（0 = 禁用，建议 25）。"
+"Seconds between persistent keepalive packets, as a number or range (e.g. 25 "
+"or 25-35). Empty or 0 disables it. Ranges need AWG 3.1."
+msgstr "持久保活数据包之间的秒数，可为数字或范围（例如 25 或 25-35）。留空或 0 表示禁用。范围需要 AWG 3.1。"
 
 #: properties/nm-amneziawg-dialog.ui:277
 msgid "_Advanced Security"
