@@ -28,6 +28,7 @@
 #include "nm-amneziawg-editor-plugin.h"
 
 #include <arpa/inet.h>
+#include <dlfcn.h>
 #include <string.h>
 
 #include "nm-utils/nm-vpn-plugin-utils.h"
@@ -205,19 +206,31 @@ _call_editor_factory(gpointer factory,
 static NMVpnEditor *
 get_editor(NMVpnEditorPlugin *iface, NMConnection *connection, GError **error)
 {
+    void *self_handle;
+    const char *editor;
+
     g_return_val_if_fail(AMNEZIAWG_IS_EDITOR_PLUGIN(iface), NULL);
     g_return_val_if_fail(NM_IS_CONNECTION(connection), NULL);
     g_return_val_if_fail(!error || !*error, NULL);
 
-    {
-        return nm_vpn_plugin_utils_load_editor(NM_PLUGIN_DIR "/libnm-vpn-plugin-amneziawg-editor.so",
-                                               "nm_vpn_editor_factory_amneziawg",
-                                               _call_editor_factory,
-                                               iface,
-                                               connection,
-                                               NULL,
-                                               error);
-    }
+    /* Pick the editor module matching the GTK version of the calling
+     * process: gtk_container_add() only exists in GTK3. The relative
+     * module name is resolved against the directory of the core library. */
+    self_handle = dlopen(NULL, RTLD_LAZY);
+    if (self_handle && dlsym(self_handle, "gtk_container_add"))
+        editor = "libnm-vpn-plugin-amneziawg-editor.so";
+    else
+        editor = "libnm-gtk4-vpn-plugin-amneziawg-editor.so";
+    if (self_handle)
+        dlclose(self_handle);
+
+    return nm_vpn_plugin_utils_load_editor(editor,
+                                           "nm_vpn_editor_factory_amneziawg",
+                                           _call_editor_factory,
+                                           iface,
+                                           connection,
+                                           NULL,
+                                           error);
 }
 
 /*****************************************************************************/

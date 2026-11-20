@@ -11,6 +11,7 @@
 
 #include "awg-connection-manager-netlink.h"
 #include "awg-config.h"
+#include "awg-connection-manager-external.h"
 #include "awg-validate.h"
 
 #include <arpa/inet.h>
@@ -42,6 +43,8 @@ struct _AWGConnectionManagerNetlinkPrivate {
     AWGDevice *device;
     gboolean running;
     gint socket_fd;
+    /* Of the link connect() created: the name may pass to a newer activation */
+    int ifindex;
 };
 
 enum {
@@ -297,6 +300,7 @@ set_interface_mtu(const gchar *ifname, guint32 mtu)
 
 static gboolean
 manage_route(const gchar *ifname,
+             int ifindex,
              const gchar *destination,
              int family,
              gboolean add,
@@ -406,7 +410,8 @@ manage_route(const gchar *ifname,
 
     rta->rta_type = RTA_OIF;
     rta->rta_len = RTA_LENGTH(sizeof(int));
-    int ifindex = if_nametoindex(ifname);
+    if (ifindex == 0)
+        ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {
         g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
                     "Interface %s was not found", ifname);
@@ -486,7 +491,7 @@ add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **error
                  * error: re-setting an already-set GError leaks it and makes
                  * GLib warn about setting an error over the top. */
                 GError *route_error = NULL;
-                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                if (!manage_route(ifname, priv->ifindex, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
                                   TRUE, &route_error)) {
                     if (error && !*error)
                         *error = g_steal_pointer(&route_error);
@@ -511,6 +516,11 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **er
     const GList *peers_list = awg_device_get_peers_list(priv->device);
     const GList *iter;
     gboolean success = TRUE;
+    gchar current_name[IF_NAMESIZE];
+
+    /* The routes went with our link; a link of that name now is a newer one */
+    if (priv->ifindex != 0 && !if_indextoname(priv->ifindex, current_name))
+        return TRUE;
 
     for (iter = peers_list; iter; iter = g_list_next(iter)) {
         AWGDevicePeer *awg_peer = iter->data;
@@ -529,7 +539,7 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **er
                  * error: re-setting an already-set GError leaks it and makes
                  * GLib warn about setting an error over the top. */
                 GError *route_error = NULL;
-                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                if (!manage_route(ifname, priv->ifindex, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
                                   FALSE, &route_error)) {
                     if (error && !*error)
                         *error = g_steal_pointer(&route_error);
@@ -582,19 +592,29 @@ awg_connection_manager_netlink_delete_routes(AWGConnectionManager *mgr, int fami
 }
 
 /* AmneziaWG 3.1 obfuscation parameters live in netlink attributes the kernel
- * knows only since module 3.0. An older module rejects the whole request with
- * EINVAL ("Unknown attribute type"), which says nothing to the user, so refuse
- * the connection up front with a version that can be acted on. */
-static gboolean
-check_awg31_support(AWGDevice *device, GError **error)
+ * knows only since module 3.0, RandomTrailers and DisableCookies only since
+ * 3.1. An older module rejects the whole request with EINVAL ("Unknown
+ * attribute type"), which says nothing to the user, so refuse the connection
+ * up front with a version that can be acted on.
+ *
+ * The awg-quick backend needs the same check: it creates the interface with
+ * "ip link add ... type amneziawg", which goes to the loaded module (and loads
+ * an installed one on demand), and falls back to the userspace amneziawg-go
+ * only when no module can be loaded. Switching backends therefore does not
+ * get around an old module, and the message must not suggest it. */
+gboolean
+awg_connection_manager_netlink_check_module(AWGDevice *device, const gchar *version_file, GError **error)
 {
     g_autofree gchar *version = NULL;
+    const gchar *param = NULL;
+    guint major = 0;
+    guint minor = 0;
 
-    if (!awg_device_has_awg31_params(device)) {
-        /* Legacy modules take a plain u16 keepalive: the range is reduced to
-         * its low bound, as amneziawg-tools does. Not fatal, but say so. */
-        if (awg_device_has_peer_keepalive_range(device)) {
-            version = amneziawg_kernel_version();
+    if (!awg_device_get_required_awg_version(device, &major, &minor, &param)) {
+        /* Only the tools need 3.0 for a PersistentKeepalive range: a legacy
+         * module gets its low bound, as from amneziawg-tools. Say so. */
+        if (awg_device_get_required_awg_tools_version(device, NULL, NULL, NULL)) {
+            version = amneziawg_kernel_version_from(version_file);
             if (version && !awg_version_at_least(version, 3, 0))
                 g_warning("Kernel module amneziawg %s does not support PersistentKeepalive "
                           "ranges; using the lower bound. Upgrade the module to 3.0 or newer",
@@ -603,17 +623,18 @@ check_awg31_support(AWGDevice *device, GError **error)
         return TRUE;
     }
 
-    version = amneziawg_kernel_version();
-    if (awg_version_at_least(version, 3, 0))
+    version = amneziawg_kernel_version_from(version_file);
+    if (awg_version_at_least(version, major, minor))
         return TRUE;
 
     g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, 0,
-                "This connection uses AmneziaWG 3.1 parameters (HeaderProtectionKey, "
-                "ContentPaddingAddition, ...), which need kernel module amneziawg 3.0 or "
-                "newer, but %s is loaded. Upgrade the module, or switch to the awg-quick "
-                "backend with NM_FORCE_AWG_QUICK=1 if amneziawg-tools 3.0 or newer is "
-                "installed",
-                version);
+                "This connection uses the AmneziaWG 3.1 parameter %s, which needs kernel module "
+                "amneziawg %u.%u or newer, but %s is loaded. Upgrade the module and load the new "
+                "one: reboot, or run \"modprobe -r amneziawg\" while no AmneziaWG interface "
+                "exists. NM_FORCE_AWG_QUICK=1 does not help: awg-quick creates the interface "
+                "through the same module and uses the userspace amneziawg-go only when no "
+                "amneziawg module can be loaded",
+                param, major, minor, version);
     return FALSE;
 }
 
@@ -629,7 +650,7 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
     gboolean iface_added = FALSE;
     gboolean success = FALSE;
 
-    if (!check_awg31_support(priv->device, error))
+    if (!awg_connection_manager_netlink_check_module(priv->device, NULL, error))
         return FALSE;
 
     dev = calloc(1, sizeof(wg_device));
@@ -787,6 +808,26 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         dev->flags |= WGDEVICE_HAS_DISABLE_COOKIES;
 
     dev->flags |= WGDEVICE_REPLACE_PEERS;
+
+    /* The name is unique per connection (awg-<first 8 UUID chars>), so an
+     * existing interface is ours: left over from an activation that never tore
+     * down, or that of an older instance still disconnecting (by ifindex, so it
+     * cannot delete the new link). */
+    if (if_nametoindex(ifname) != 0) {
+        int ret;
+
+        g_message("%s is left over from an earlier activation, deleting it", ifname);
+        ret = wg_del_device(ifname);
+        if (ret != 0 && ret != -ENODEV) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, -ret,
+                        "Interface %s is left over from an earlier activation and could "
+                        "not be deleted: %s",
+                        ifname, g_strerror(-ret));
+            goto cleanup;
+        }
+        /* The leftover may come from the awg-quick backend */
+        awg_connection_manager_external_remove_leftovers(ifname);
+    }
 
     if (wg_add_device(ifname) != 0) {
         g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
@@ -962,6 +1003,8 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         }
     }
 
+    /* Not right after wg_add_device(): wg_set_device() may recreate the link */
+    priv->ifindex = (int)if_nametoindex(ifname);
     priv->running = TRUE;
     success = TRUE;
 
@@ -979,20 +1022,29 @@ awg_connection_manager_netlink_disconnect(AWGConnectionManager *mgr, GError **er
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
     AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);
     const gchar *ifname = priv->interface_name;
-    gboolean success = FALSE;
+    int ret;
 
-    set_interface_up(ifname, FALSE);
+    /* With concurrent connections NetworkManager starts a re-activation in a
+     * new instance without waiting for this Disconnect: by index, a link that
+     * instance created under the same name is never deleted here. */
+    if (priv->ifindex != 0) {
+        ret = wg_del_device_index(priv->ifindex);
+        if (ret == -ENODEV)
+            g_message("%s was already deleted, by a newer activation or from outside", ifname);
+    } else {
+        set_interface_up(ifname, FALSE);
+        ret = wg_del_device(ifname);
+    }
 
-    if (wg_del_device(ifname) != 0) {
-        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
-                    "Failed to delete device %s", ifname);
+    if (ret != 0 && !(ret == -ENODEV && priv->ifindex != 0)) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, -ret,
+                    "Failed to delete device %s: %s", ifname, g_strerror(-ret));
         return FALSE;
     }
 
+    priv->ifindex = 0;
     priv->running = FALSE;
-    success = TRUE;
-
-    return success;
+    return TRUE;
 }
 
 static gboolean

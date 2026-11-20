@@ -10,10 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_ROOT/build"
 
-# Default options
+# Default options: build each editor whose dependencies are installed
 CLEAN=0
-GTK3=ON
-GTK4=OFF
+GTK3=AUTO
+GTK4=AUTO
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

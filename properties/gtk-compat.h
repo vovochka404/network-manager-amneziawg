@@ -22,4 +22,12 @@
 #define AWG_EDITABLE_SET_TEXT(widget, text) gtk_entry_set_text(GTK_ENTRY(widget), text)
 #endif
 
+#if GTK_CHECK_VERSION(4, 0, 0)
+#define AWG_CHECK_BUTTON_GET_ACTIVE(widget) gtk_check_button_get_active(GTK_CHECK_BUTTON(widget))
+#define AWG_CHECK_BUTTON_SET_ACTIVE(widget, active) gtk_check_button_set_active(GTK_CHECK_BUTTON(widget), (active))
+#else
+#define AWG_CHECK_BUTTON_GET_ACTIVE(widget) gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))
+#define AWG_CHECK_BUTTON_SET_ACTIVE(widget, active) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), (active))
+#endif
+
 #endif

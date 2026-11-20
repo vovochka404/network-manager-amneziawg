@@ -169,6 +169,22 @@ awg_validate_base64(const gchar *str)
     return TRUE;
 }
 
+/* A WireGuard key: base64 that decodes to exactly 32 bytes, the only form
+ * the AWGDevice setters accept. awg_validate_base64() checks the alphabet
+ * alone, so a truncated key would pass it and then be dropped. */
+gboolean
+awg_validate_key(const gchar *str)
+{
+    g_autofree guchar *decoded = NULL;
+    gsize len = 0;
+
+    if (!str || !*str || !awg_validate_base64(str))
+        return FALSE;
+
+    decoded = g_base64_decode(str, &len);
+    return len == 32;
+}
+
 gboolean
 awg_validate_fqdn(const gchar *str)
 {

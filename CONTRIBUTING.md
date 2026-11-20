@@ -21,7 +21,7 @@ Thank you for contributing to this project! This document provides guidelines an
 git clone https://github.com/amnezia-vpn/network-manager-amneziawg.git
 cd network-manager-amneziawg
 
-# Build with default options (GTK3 if available)
+# Build with default options (every editor whose dependencies are installed)
 mkdir build && cd build
 cmake ..
 cmake --build .
@@ -38,10 +38,11 @@ sudo cmake --install .
 Use the provided build script for common tasks:
 
 ```bash
-# Build with GTK3 (default)
+# Build every editor whose dependencies are installed (default)
 ./scripts/build.sh
 
-# Build with GTK4
+# GTK3 or GTK4 editor only
+./scripts/build.sh --gtk3
 ./scripts/build.sh --gtk4
 
 # Minimal build (service only, no editor)
@@ -55,10 +56,12 @@ Use the provided build script for common tasks:
 
 | CMake Option | Description | Default |
 |--------------|-------------|---------|
-| `WITH_GTK3` | Build GTK3 editor | Auto-detect |
-| `WITH_GTK4` | Build GTK4 editor | Auto-detect |
+| `WITH_GTK3` | GTK3 editor: `AUTO`, `ON` or `OFF` | `AUTO` |
+| `WITH_GTK4` | GTK4 editor: `AUTO`, `ON` or `OFF` | `AUTO` |
 | `CMAKE_INSTALL_PREFIX` | Install prefix | `/usr` |
 | `CMAKE_INSTALL_LIBDIR` | Library directory | Auto-detect |
+
+`AUTO` builds an editor when its dependencies are found, `ON` makes a missing one an error. Re-running `cmake` in the same build directory keeps the choice.
 
 ### Dependencies
 
@@ -67,25 +70,29 @@ Use the provided build script for common tasks:
 ```bash
 # Core dependencies
 sudo apt-get install -y cmake gcc pkg-config \
-    libnm-dev libglib2.0-dev
+    libnm-dev libglib2.0-dev gettext intltool
 
 # GTK3 editor
-sudo apt-get install -y libnma-dev gettext network-manager-dev
+sudo apt-get install -y libnma-dev libgtk-3-dev
 
-# GTK4 editor
-sudo apt-get install -y libnma-gtk4-dev
+# GTK4 editor (gtk4-builder-tool is in libgtk-4-bin)
+sudo apt-get install -y libnma-gtk4-dev libgtk-4-dev libgtk-4-bin
 
-# Package building
-sudo apt-get install -y dpkg-dev debhelper rpm
+# DEB package (dpkg-shlibdeps computes the dependencies)
+sudo apt-get install -y dpkg-dev
 ```
 
 #### Fedora
 
 ```bash
 sudo dnf install -y cmake gcc pkg-config \
-    NetworkManager-devel libnma-devel \
-    glib2-devel gettext rpm-build
+    NetworkManager-libnm-devel glib2-devel gettext intltool \
+    libnma-devel gtk3-devel \
+    libnma-gtk4-devel gtk4-devel \
+    rpm-build
 ```
+
+`make -C packaging/fedora deps rpm` installs these and builds an RPM with both editors (optional helper, also for Fedora Atomic in a toolbox; see [packaging/fedora/README.md](packaging/fedora/README.md)).
 
 ## Code Style
 
@@ -133,7 +140,8 @@ cd build
 ctest
 
 # Run specific test
-ctest -R amneziawg-test
+ctest -R amneziawg-test     # tests/test-main.c
+ctest -R auth-dialog-test   # tests/test-auth-dialog.c: runs the built nm-amneziawg-auth-dialog with crafted agent input
 
 # Verbose output
 ctest --output-on-failure --verbose
@@ -141,7 +149,7 @@ ctest --output-on-failure --verbose
 
 ### Writing Tests
 
-Tests use GLib test framework. See `tests/test-main.c` for examples.
+Tests use GLib test framework. See `tests/test-main.c` for examples. `tests/test-auth-dialog.c` runs the built auth dialog helper the way secret agents do. The connection managers are tested against stub `awg-quick`/`awg`/`modprobe` scripts, so no kernel module or amneziawg-tools is needed. Warnings are fatal in GLib tests: expect them with `g_test_expect_message()`.
 
 ```c
 #include <glib.h>
@@ -176,14 +184,12 @@ Place `.conf` test files in `tests/` directory. They are automatically copied to
 The project uses GitHub Actions for continuous integration:
 
 - **CI Checks** (`.github/workflows/ci.yml`): Runs on every PR and push
-  - Code style validation
-  - Build on Ubuntu (GTK3)
-  - Build on Fedora (GTK3)
-  - Minimal build (no GTK)
-  - GTK4 build
-  
+  - Code style validation (`./scripts/check-style.sh`, clang-format 18 on Ubuntu 24.04)
+  - Build on Ubuntu (GTK3 + GTK4), tests, DEB artifact
+  - Build on Fedora (GTK3 + GTK4), tests, RPM artifact
+
 - **Release Packages** (`.github/workflows/release.yml`): Runs on release
-  - Builds RPM and DEB packages
+  - Builds RPM (Fedora) and DEB (Ubuntu 24.04) packages with both editors
   - Uploads to GitHub Releases
 
 ### Local Pre-commit Checks
@@ -270,14 +276,16 @@ Include:
 ### Directory Structure
 
 ```
-├── src/              # Service binary (nm-amneziawg-service)
+├── src/              # Service binary (nm-amneziawg-service), auth dialog helper (nm-amneziawg-auth-dialog)
 ├── properties/       # Connection editor plugin (GTK3/GTK4)
 ├── shared/           # Shared utility code
 │   ├── awg/          # AmneziaWG core module
 │   ├── nm-utils/     # NetworkManager utilities
 │   └── amneziawg.c   # Netlink helper
 ├── tests/            # Unit tests
-└── po/               # Translations
+├── po/               # Translations
+├── scripts/          # build.sh, check-style.sh, build helpers
+└── packaging/        # Distribution helpers (Arch PKGBUILD, optional Fedora RPM Makefile)
 ```
 
 ### Key Components
@@ -285,6 +293,7 @@ Include:
 - **AWGDevice** (`shared/awg/awg-device.h`): GObject representation of WireGuard config
 - **AWGConnectionManager** (`shared/awg/awg-connection-manager.h`): Abstract interface for tunnel management
 - **Service** (`src/nm-amneziawg-service.c`): NM VPN plugin implementation
+- **Auth dialog** (`src/nm-amneziawg-auth-dialog.c`): secrets helper that GNOME Shell, nm-applet and `nmcli` run to build their password prompt; which secrets are needed comes from `shared/awg/awg-secrets.h`, shared with the service
 - **Editor** (`properties/nm-amneziawg-editor.c`): GTK connection editor
 
 ### Data Flow

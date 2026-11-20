@@ -7,4 +7,5 @@ properties/nm-amneziawg-editor.c
 shared/nm-utils/nm-shared-utils.c
 shared/nm-utils/nm-vpn-plugin-utils.c
 shared/awg/awg-validate.c
+src/nm-amneziawg-auth-dialog.c
 src/nm-amneziawg-service.c

@@ -149,6 +149,7 @@ int wg_set_device(wg_device *dev);
 int wg_get_device(wg_device **dev, const char *device_name);
 int wg_add_device(const char *device_name);
 int wg_del_device(const char *device_name);
+int wg_del_device_index(int ifindex);
 void wg_free_device(wg_device *dev);
 char *wg_list_device_names(void); /* first\0second\0third\0forth\0last\0\0 */
 void wg_key_to_base64(wg_key_b64_string base64, const wg_key key);
@@ -158,8 +159,14 @@ void wg_generate_public_key(wg_key public_key, const wg_key private_key);
 void wg_generate_private_key(wg_key private_key);
 void wg_generate_preshared_key(wg_key preshared_key);
 
+/* Plugin addition: where the loaded amneziawg module reports its release. */
+#define AMNEZIAWG_MODULE_VERSION_FILE "/sys/module/amneziawg/version"
+
 /* Plugin addition: release version the loaded amneziawg module reports, e.g.
- * "3.1.20260812", or NULL when it cannot be read. Free with g_free(). */
+ * "3.1.20260812", or NULL when it cannot be read (no module loaded). Free with
+ * g_free(). amneziawg_kernel_version_from() reads it from @path instead,
+ * AMNEZIAWG_MODULE_VERSION_FILE when NULL. */
 char *amneziawg_kernel_version(void);
+char *amneziawg_kernel_version_from(const char *path);
 
 #endif
