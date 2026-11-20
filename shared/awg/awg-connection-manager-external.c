@@ -14,17 +14,16 @@
 #include "awg-config.h"
 #include "awg-connection-manager-netlink.h"
 #include "awg-validate.h"
+#include "config.h"
 #include <errno.h>
 #include <glib.h>
 #include <net/if.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* Where the configuration for awg-quick is written. Not g_get_tmp_dir():
- * NetworkManager.service runs with PrivateTmp=true and KillMode=process, so
- * after a restart of NetworkManager with the tunnel up this process tears the
- * tunnel down when that /tmp is already gone. /run outlives the unit. */
-#define AWG_EXTERNAL_CONFIG_DIR "/run/nm-amneziawg"
+/* awg-quick configs go to AWG_EXTERNAL_CONFIG_DIR (config.h), not /tmp: NetworkManager
+ * 1.58+ has PrivateTmp=true, and with KillMode=process this process outlives an NM
+ * restart and tears the tunnel down after that private /tmp is gone. */
 
 typedef struct _AWGConnectionManagerExternalPrivate AWGConnectionManagerExternalPrivate;
 
@@ -186,7 +185,11 @@ external_load_module(const gchar *version_file)
 static gboolean
 write_config(AWGConnectionManagerExternalPrivate *priv, GError **error)
 {
-    if (g_mkdir_with_parents(priv->config_dir, 0700) != 0) {
+    g_autofree gchar *parent = g_path_get_dirname(priv->config_dir);
+
+    /* Only the last component is private: a missing NetworkManager run-time
+     * directory must stay readable for what NetworkManager puts there. */
+    if (g_mkdir_with_parents(parent, 0755) != 0 || g_mkdir_with_parents(priv->config_dir, 0700) != 0) {
         int errsv = errno;
 
         g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,

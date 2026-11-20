@@ -96,6 +96,10 @@ endif()
 # Use absolute path for LOCALEDIR (CMAKE_INSTALL_LOCALEDIR may be absolute)
 set(LOCALEDIR "${CMAKE_INSTALL_FULL_LOCALEDIR}")
 
+# Where the service writes the configuration for awg-quick, next to the
+# run-time files of NetworkManager (as NetworkManager-openvpn does)
+set(AWG_EXTERNAL_CONFIG_DIR "${CMAKE_INSTALL_FULL_RUNSTATEDIR}/NetworkManager/amneziawg")
+
 set(DIST_VERSION "0.9.0" CACHE STRING "Distribution version string")
 
 set(PACKAGE_NAME "NetworkManager-amneziawg")

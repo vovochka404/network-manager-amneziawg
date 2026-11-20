@@ -240,7 +240,7 @@ add_test(NAME amneziawg-test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND nm-am
 - Test functions take no arguments and return void
 - Use `g_object_unref()` for GObject cleanup
 - `g_test_init()` makes warnings fatal: a test that triggers a setter's `g_warning()` wraps the call in `g_test_expect_message()` / `g_test_assert_expected_messages()`
-- Connection managers are tested with stub `awg-quick`/`awg` scripts reached through `NM_AWG_QUICK_PATH` and `PATH`; the external manager takes a writable `config-dir` instead of `/run/nm-amneziawg` (see `ExternalStubs` in `tests/test-main.c`)
+- Connection managers are tested with stub `awg-quick`/`awg` scripts reached through `NM_AWG_QUICK_PATH` and `PATH`; the external manager takes a writable `config-dir` instead of `AWG_EXTERNAL_CONFIG_DIR` (see `ExternalStubs` in `tests/test-main.c`)
 
 ### Common Testing Patterns
 ```c
@@ -470,7 +470,7 @@ clang-format --style=file -i src/file.c
 ### Temporary Files
 - Use `g_get_tmp_dir()` from GLib instead of hardcoded `/tmp/`
 - This ensures proper handling across different systems and environments
-- Files the service needs for the lifetime of a connection go to `/run/nm-amneziawg`, not `/tmp`: NetworkManager.service has `PrivateTmp=true`, and that `/tmp` is gone when the service tears a tunnel down after NetworkManager stopped (see "External Implementation (awg-quick)")
+- Files the service needs for the lifetime of a connection go to `<runstatedir>/NetworkManager/amneziawg` (`AWG_EXTERNAL_CONFIG_DIR` in `config.h`), not `/tmp`: NetworkManager.service has `PrivateTmp=true` since NetworkManager 1.58, and that `/tmp` is gone when the service tears a tunnel down after NetworkManager stopped (see "External Implementation (awg-quick)")
 
 ### Includes
 - Keep includes minimal - only include what's actually used
@@ -1146,8 +1146,9 @@ Selection order:
 
 ### External Implementation (awg-quick)
 
-- The configuration is generated from the `AWGDevice` (`awg_device_save_to_file()`) as `/run/nm-amneziawg/<ifname>.conf` (directory 0700, file 0400; awg-quick takes the interface name from the file name), right before `awg-quick up` and again before `awg-quick down` (which re-reads the hooks), and removed after each run. The `config-dir` construct property overrides the directory; only the tests use it.
-- Why `/run`: NetworkManager.service has `PrivateTmp=true` and `KillMode=process`. When NetworkManager restarts with the tunnel up, the service (and `amneziawg-go`) outlive it, notice it gone (`NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER`) and disconnect, by then without the old private `/tmp`: with the file there, `awg-quick down` failed with `'/tmp/awg-….conf' does not exist`, the interface stayed, and every later activation failed with `'awg-…' already exists`.
+- The configuration is generated from the `AWGDevice` (`awg_device_save_to_file()`) as `<ifname>.conf` in `AWG_EXTERNAL_CONFIG_DIR` (directory 0700, file 0400; awg-quick takes the interface name from the file name), right before `awg-quick up` and again before `awg-quick down` (which re-reads the hooks), and removed after each run. The `config-dir` construct property overrides the directory; only the tests use it.
+- `AWG_EXTERNAL_CONFIG_DIR` is `${CMAKE_INSTALL_FULL_RUNSTATEDIR}/NetworkManager/amneziawg`, set in `CMakeLists.txt` and written to `config.h` (next to NetworkManager's own run-time files, as NetworkManager-openvpn keeps its under `LOCALSTATEDIR/run/NetworkManager`). GNUInstallDirs makes that `/var/run/...` for the `/usr` prefix (a symlink to `/run` on current distributions); packagers can pass `-DCMAKE_INSTALL_RUNSTATEDIR=/run`. Missing parents are created 0755, only the last component 0700.
+- Why not `/tmp`: NetworkManager.service has `PrivateTmp=true` (since NetworkManager 1.58) and `KillMode=process`. When NetworkManager restarts with the tunnel up, the service (and `amneziawg-go`) outlive it, notice it gone (`NM_VPN_SERVICE_PLUGIN_DBUS_WATCH_PEER`) and disconnect, by then without the old private `/tmp`: with the file there, `awg-quick down` failed with `'/tmp/awg-….conf' does not exist`, the interface stayed, and every later activation failed with `'awg-…' already exists`.
 - An interface that already has the connection's name when connecting is left over from an activation whose teardown never ran (the service was killed) or failed: `connect()` runs `awg-quick down` on it with the freshly generated file first (a failure there is only logged), then `awg-quick up`. The netlink backend tears down without files, so a NetworkManager restart does not leave interfaces behind; an interface left by a killed service is deleted (`wg_del_device()`) before `wg_add_device()`, which creates with `NLM_F_EXCL` and would fail with `EEXIST`. That backend adds no rules, nft tables or DNS itself, so deleting the link is all the cleanup it needs. Both checks rely on the name being unique per connection (`awg-<first 8 UUID chars>`).
 
 ### Netlink Implementation

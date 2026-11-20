@@ -5,6 +5,8 @@
 
 #define VERSION "0.9.0"
 
+#define AWG_EXTERNAL_CONFIG_DIR "@AWG_EXTERNAL_CONFIG_DIR@"
+
 #define HAVE_FCNTL_H 1
 #define HAVE_PATHS_H 1
 #define HAVE_SYS_IOCTL_H 1

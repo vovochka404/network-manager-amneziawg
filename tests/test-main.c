@@ -9,6 +9,8 @@
  * GNU General Public License for more details.
  */
 
+#include "config.h"
+
 #include "amneziawg.h"
 #include "awg/awg-config.h"
 #include "awg/awg-connection-manager-external.h"
@@ -1513,7 +1515,9 @@ test_force_awg_quick_selects_external(void)
         g_autofree gchar *module_version_file = NULL;
 
         g_object_get(mgr, "config-dir", &config_dir, "module-version-file", &module_version_file, NULL);
-        g_assert_cmpstr(config_dir, ==, "/run/nm-amneziawg");
+        g_assert_cmpstr(config_dir, ==, AWG_EXTERNAL_CONFIG_DIR);
+        g_assert_true(g_path_is_absolute(config_dir));
+        g_assert_true(g_str_has_suffix(config_dir, "/run/NetworkManager/amneziawg"));
         g_assert_cmpstr(module_version_file, ==, "/sys/module/amneziawg/version");
     }
 
@@ -2437,14 +2441,19 @@ test_netlink_delete_by_index(void)
     assert_test_tun_deleted(fd, "awgtest-i");
 }
 
-/* The configuration lives in the configured directory (/run/nm-amneziawg in
- * the service) only while awg-quick runs, readable by root only, and an
- * interface left over from an earlier activation is taken down first. */
+/* The configuration lives in the configured directory
+ * (<runstatedir>/NetworkManager/amneziawg in the service) only while awg-quick
+ * runs, readable by root only, and an interface left over from an earlier
+ * activation is taken down first. */
 static void
 test_external_config_and_leftover_interface(void)
 {
     ExternalStubs stubs = { 0 };
+    g_autofree gchar *run_dir = NULL;
+    g_autofree gchar *nm_dir = NULL;
     g_autofree gchar *config_dir = NULL;
+    struct stat st;
+    mode_t mask = umask(0);
     g_autofree gchar *conf = NULL;
     g_autofree gchar *lo_conf = NULL;
     g_autofree gchar *expected = NULL;
@@ -2453,10 +2462,13 @@ test_external_config_and_leftover_interface(void)
     AWGConnectionManager *mgr;
     GError *error = NULL;
 
+    umask(mask);
     external_stubs_setup(&stubs);
     external_stubs_set_tools_version(&stubs, "v3.1.20260812");
-    /* Created on demand */
-    config_dir = g_build_filename(stubs.dir, "run", NULL);
+    /* Created on demand, only the last component private */
+    run_dir = g_build_filename(stubs.dir, "run", NULL);
+    nm_dir = g_build_filename(run_dir, "NetworkManager", NULL);
+    config_dir = g_build_filename(nm_dir, "amneziawg", NULL);
     conf = g_build_filename(config_dir, "awgtest-none.conf", NULL);
     lo_conf = g_build_filename(config_dir, "lo.conf", NULL);
 
@@ -2464,6 +2476,10 @@ test_external_config_and_leftover_interface(void)
     g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
     g_assert_no_error(error);
     g_assert_false(g_file_test(conf, G_FILE_TEST_EXISTS));
+    g_assert_cmpint(stat(nm_dir, &st), ==, 0);
+    g_assert_cmpint(st.st_mode & 0777, ==, 0755 & ~mask);
+    g_assert_cmpint(stat(config_dir, &st), ==, 0);
+    g_assert_cmpint(st.st_mode & 0777, ==, 0700);
     g_assert_true(awg_connection_manager_disconnect(mgr, &error));
     g_assert_no_error(error);
     g_assert_false(g_file_test(conf, G_FILE_TEST_EXISTS));
@@ -2489,6 +2505,8 @@ test_external_config_and_leftover_interface(void)
 
     g_object_unref(device);
     rmdir(config_dir);
+    rmdir(nm_dir);
+    rmdir(run_dir);
     external_stubs_teardown(&stubs);
 }
 
