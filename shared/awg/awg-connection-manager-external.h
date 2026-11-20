@@ -32,6 +32,11 @@ gboolean awg_connection_manager_external_is_available(void);
 
 AWGConnectionManager *awg_connection_manager_external_new(const gchar *interface_name, AWGDevice *device);
 
+/* Best effort, once the link @ifname is gone: removes the nft tables and the
+ * resolvconf DNS awg-quick set up beside it, which a teardown without
+ * "awg-quick down" leaves behind. */
+void awg_connection_manager_external_remove_leftovers(const gchar *ifname);
+
 G_END_DECLS
 
 #endif /* AWG_CONNECTION_MANAGER_EXTERNAL_H */

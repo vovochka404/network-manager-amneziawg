@@ -16,8 +16,11 @@
 #include "awg-validate.h"
 #include "config.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <net/if.h>
+#include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -41,6 +44,8 @@ struct _AWGConnectionManagerExternalPrivate {
     gchar *config_dir;
     gchar *conf_path;
     gchar *module_version_file;
+    /* Of the link "awg-quick up" created: the name may pass to a newer activation */
+    unsigned int ifindex;
 };
 
 enum {
@@ -150,6 +155,22 @@ external_check_awg31_support(AWGDevice *device, GError **error)
     return FALSE;
 }
 
+static gchar *
+find_system_program(const gchar *name)
+{
+    static const gchar *sbin_dirs[] = { "/usr/sbin", "/sbin" };
+    gchar *path = g_find_program_in_path(name);
+
+    /* PATH may lack sbin when NetworkManager runs with a reduced environment */
+    for (guint i = 0; !path && i < G_N_ELEMENTS(sbin_dirs); i++) {
+        g_autofree gchar *candidate = g_build_filename(sbin_dirs[i], name, NULL);
+
+        if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE))
+            path = g_steal_pointer(&candidate);
+    }
+    return path;
+}
+
 /* awg-quick creates the interface with "ip link add ... type amneziawg", for
  * which the kernel loads an installed amneziawg module by itself
  * (MODULE_ALIAS_RTNL_LINK), and falls back to amneziawg-go only when no module
@@ -166,12 +187,7 @@ external_load_module(const gchar *version_file)
     if (g_file_test(version_file, G_FILE_TEST_EXISTS))
         return;
 
-    /* PATH may lack sbin when NetworkManager runs with a reduced environment */
-    modprobe = g_find_program_in_path("modprobe");
-    if (!modprobe && g_file_test("/usr/sbin/modprobe", G_FILE_TEST_IS_EXECUTABLE))
-        modprobe = g_strdup("/usr/sbin/modprobe");
-    if (!modprobe && g_file_test("/sbin/modprobe", G_FILE_TEST_IS_EXECUTABLE))
-        modprobe = g_strdup("/sbin/modprobe");
+    modprobe = find_system_program("modprobe");
     if (!modprobe)
         return;
 
@@ -180,10 +196,8 @@ external_load_module(const gchar *version_file)
                  NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-/* Writes the configuration awg-quick reads, named after the interface (which
- * is how awg-quick picks the interface name) and readable by root only. */
 static gboolean
-write_config(AWGConnectionManagerExternalPrivate *priv, GError **error)
+make_config_dir(AWGConnectionManagerExternalPrivate *priv, GError **error)
 {
     g_autofree gchar *parent = g_path_get_dirname(priv->config_dir);
 
@@ -196,6 +210,47 @@ write_config(AWGConnectionManagerExternalPrivate *priv, GError **error)
                     "Failed to create %s: %s", priv->config_dir, g_strerror(errsv));
         return FALSE;
     }
+    return TRUE;
+}
+
+/* Serializes the awg-quick runs on one interface name across service
+ * instances: with concurrent connections a re-activation runs in a new
+ * instance while the old one may still be taking that interface down.
+ * Returns the descriptor holding the lock, or -1 to go on without one. */
+static int
+lock_interface(AWGConnectionManagerExternalPrivate *priv)
+{
+    g_autofree gchar *path = NULL;
+    int fd;
+
+    if (!make_config_dir(priv, NULL))
+        return -1;
+
+    path = g_strdup_printf("%s/%s.lock", priv->config_dir, priv->interface_name);
+    fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    if (fd < 0)
+        return -1;
+    if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static void
+unlock_interface(int fd)
+{
+    if (fd >= 0)
+        close(fd);
+}
+
+/* Writes the configuration awg-quick reads, named after the interface (which
+ * is how awg-quick picks the interface name) and readable by root only. */
+static gboolean
+write_config(AWGConnectionManagerExternalPrivate *priv, GError **error)
+{
+    if (!make_config_dir(priv, error))
+        return FALSE;
 
     if (!awg_device_save_to_file(priv->device, priv->conf_path)) {
         g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
@@ -227,6 +282,103 @@ run_awg_quick(const gchar *awg_quick, const gchar *command, const gchar *conf_pa
     return g_spawn_check_exit_status(exit_status, error);
 }
 
+/* The nft tables awg-quick adds for a default route, named as in
+ * add_default() of amneziawg-tools src/wg-quick/linux.bash */
+static void
+remove_nft_tables(const gchar *ifname)
+{
+    static const gchar *families[] = { "ip", "ip6" };
+    g_autofree gchar *nft = find_system_program("nft");
+    g_autofree gchar *table = g_strdup_printf("wg-quick-%s", ifname);
+
+    if (!nft)
+        return;
+
+    for (guint i = 0; i < G_N_ELEMENTS(families); i++) {
+        gchar *argv[] = { nft, (gchar *)"delete", (gchar *)"table", (gchar *)families[i], table, NULL };
+
+        g_spawn_sync(NULL, argv, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                     NULL, NULL, NULL, NULL, NULL, NULL);
+    }
+}
+
+/* The name awg-quick registers its DNS under with resolvconf:
+ * resolvconf_iface_prefix() in linux.bash prepends the first "<name>*" entry
+ * of /etc/resolvconf/interface-order (Debian resolvconf) and a dot. */
+static gchar *
+resolvconf_record_name(const gchar *ifname)
+{
+    g_autofree gchar *contents = NULL;
+    g_auto(GStrv) lines = NULL;
+
+    if (!g_file_get_contents("/etc/resolvconf/interface-order", &contents, NULL, NULL))
+        return g_strdup(ifname);
+
+    lines = g_strsplit(contents, "\n", -1);
+    for (guint i = 0; lines[i]; i++) {
+        gchar *entry = g_strstrip(lines[i]);
+        gsize len = strlen(entry);
+        gsize name_len = 0;
+
+        while (name_len < len && (g_ascii_isalnum(entry[name_len]) || entry[name_len] == '-'))
+            name_len++;
+        if (name_len > 0 && name_len == len - 1 && entry[name_len] == '*')
+            return g_strdup_printf("%.*s.%s", (int)name_len, entry, ifname);
+    }
+    return g_strdup(ifname);
+}
+
+/* The DNS awg-quick set with resolvconf: without this, openresolv and Debian
+ * resolvconf keep the unreachable servers ("unset_dns" in linux.bash). */
+static void
+remove_resolvconf_dns(const gchar *ifname)
+{
+    g_autofree gchar *resolvconf = find_system_program("resolvconf");
+    g_autofree gchar *record = resolvconf_record_name(ifname);
+    gchar *argv[] = { resolvconf, (gchar *)"-d", record, (gchar *)"-f", NULL };
+
+    if (!resolvconf)
+        return;
+
+    g_spawn_sync(NULL, argv, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                 NULL, NULL, NULL, NULL, NULL, NULL);
+}
+
+void
+awg_connection_manager_external_remove_leftovers(const gchar *ifname)
+{
+    remove_nft_tables(ifname);
+    remove_resolvconf_dns(ifname);
+}
+
+/* Takes @ifname down after @cause kept awg-quick from it. Its ip rules are inert
+ * without the link; RTM_DELLINK also removes an amneziawg-go tun device. */
+static gboolean
+delete_link_fallback(const gchar *ifname, const GError *cause, GError **error)
+{
+    int ret;
+
+    if (if_nametoindex(ifname) == 0) {
+        g_message("Could not take down %s with awg-quick (%s); the interface is already gone",
+                  ifname, cause->message);
+    } else {
+        ret = wg_del_device(ifname);
+        if (ret != 0 && ret != -ENODEV) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
+                        "Could not take down %s with awg-quick (%s), and deleting the interface "
+                        "failed too: %s",
+                        ifname, cause->message, g_strerror(-ret));
+            return FALSE;
+        }
+        g_warning("Could not take down %s with awg-quick (%s); deleted the interface directly",
+                  ifname, cause->message);
+    }
+
+    /* Only once the link is gone: a tunnel that stays up keeps its rules */
+    awg_connection_manager_external_remove_leftovers(ifname);
+    return TRUE;
+}
+
 static gboolean
 awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable *cancellable, GError **error)
 {
@@ -234,6 +386,7 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
     AWGConnectionManagerExternalPrivate *priv = AWG_CONNECTION_MANAGER_EXTERNAL_GET_PRIVATE(self);
     const gchar *awg_quick = awg_quick_find_exe();
     gboolean success;
+    int lock_fd;
 
     if (!awg_quick) {
         g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
@@ -253,28 +406,45 @@ awg_connection_manager_external_connect(AWGConnectionManager *mgr, GCancellable 
     if (!external_check_awg31_support(priv->device, error))
         return FALSE;
 
-    if (!write_config(priv, error))
+    lock_fd = lock_interface(priv);
+    if (!write_config(priv, error)) {
+        unlock_interface(lock_fd);
         return FALSE;
+    }
 
     /* The interface name comes from the connection, so an interface that
      * already has it is left over from an earlier activation whose teardown
      * never ran (the service was killed) or failed. "awg-quick up" would
      * refuse with "already exists": take it down first.
      * This assumes the name is unique per connection (awg-<first 8 UUID
-     * chars>): concurrent connections must never share one. */
+     * chars>): concurrent connections must never share one. It may also be
+     * the live link of an older instance of this connection still
+     * disconnecting; the lock and the ifindex check there keep ours up. */
     if (if_nametoindex(priv->interface_name) != 0) {
         GError *down_error = NULL;
 
         g_message("%s is left over from an earlier activation, taking it down first",
                   priv->interface_name);
         if (!run_awg_quick(awg_quick, "down", priv->conf_path, &down_error)) {
-            g_message("Could not take down %s: %s", priv->interface_name, down_error->message);
+            success = delete_link_fallback(priv->interface_name, down_error, error);
             g_clear_error(&down_error);
+            if (!success) {
+                unlink(priv->conf_path);
+                unlock_interface(lock_fd);
+                return FALSE;
+            }
+        } else {
+            /* "down" unsets only DNS the new configuration has, so drop the
+             * old record (and nft tables) here; both are idempotent */
+            awg_connection_manager_external_remove_leftovers(priv->interface_name);
         }
     }
 
     success = run_awg_quick(awg_quick, "up", priv->conf_path, error);
     unlink(priv->conf_path);
+    if (success)
+        priv->ifindex = if_nametoindex(priv->interface_name);
+    unlock_interface(lock_fd);
     return success;
 }
 
@@ -284,20 +454,35 @@ awg_connection_manager_external_disconnect(AWGConnectionManager *mgr, GError **e
     AWGConnectionManagerExternal *self = AWG_CONNECTION_MANAGER_EXTERNAL(mgr);
     AWGConnectionManagerExternalPrivate *priv = AWG_CONNECTION_MANAGER_EXTERNAL_GET_PRIVATE(self);
     const gchar *awg_quick = awg_quick_find_exe();
+    GError *down_error = NULL;
     gboolean success;
+    unsigned int current;
+    int lock_fd = lock_interface(priv);
 
-    if (!awg_quick) {
-        g_set_error(error, AWG_CONNECTION_MANAGER_ERROR, 0,
-                    "awg-quick executable not found");
-        return FALSE;
+    /* NM may start the next activation of this profile in a new instance
+     * before this Disconnect runs; a link with a new index is that one's. */
+    current = if_nametoindex(priv->interface_name);
+    if (priv->ifindex != 0 && current != 0 && current != priv->ifindex) {
+        g_message("%s now belongs to a newer activation, leaving it up", priv->interface_name);
+        unlock_interface(lock_fd);
+        return TRUE;
     }
 
     /* awg-quick reads the hooks from the file again */
-    if (!write_config(priv, error))
-        return FALSE;
-
-    success = run_awg_quick(awg_quick, "down", priv->conf_path, error);
+    if (!awg_quick)
+        g_set_error(&down_error, AWG_CONNECTION_MANAGER_ERROR, 0, "awg-quick executable not found");
+    else if (write_config(priv, &down_error))
+        run_awg_quick(awg_quick, "down", priv->conf_path, &down_error);
     unlink(priv->conf_path);
+
+    if (!down_error) {
+        unlock_interface(lock_fd);
+        return TRUE;
+    }
+
+    success = delete_link_fallback(priv->interface_name, down_error, error);
+    g_error_free(down_error);
+    unlock_interface(lock_fd);
     return success;
 }
 

@@ -11,6 +11,7 @@
 
 #include "awg-connection-manager-netlink.h"
 #include "awg-config.h"
+#include "awg-connection-manager-external.h"
 #include "awg-validate.h"
 
 #include <arpa/inet.h>
@@ -824,6 +825,8 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
                         ifname, g_strerror(-ret));
             goto cleanup;
         }
+        /* The leftover may come from the awg-quick backend */
+        awg_connection_manager_external_remove_leftovers(ifname);
     }
 
     if (wg_add_device(ifname) != 0) {

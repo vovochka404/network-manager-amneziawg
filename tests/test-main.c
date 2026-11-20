@@ -1981,6 +1981,9 @@ typedef struct {
     gchar *modprobe;
     gchar *modprobe_log;
     gchar *module_version;
+    gchar *nft;
+    gchar *resolvconf;
+    gchar *cleanup_log;
     gchar *saved_path;
     gchar *saved_quick_path;
 } ExternalStubs;
@@ -2025,10 +2028,24 @@ external_stubs_take_modprobe_log(ExternalStubs *stubs)
     return contents;
 }
 
+/* Logs "<command> <file> <mode of the file>"; "down" fails like awg-quick on
+ * an interface it does not know when @fail_down is set */
+static void
+external_stubs_set_quick(ExternalStubs *stubs, gboolean fail_down)
+{
+    g_autofree gchar *script = g_strdup_printf("#!/bin/sh\necho \"$1 $2 $(stat -c %%a \"$2\")\" >> '%s'\n%s",
+                                               stubs->log,
+                                               fail_down ? "[ \"$1\" = down ] && { echo 'is not a WireGuard interface' >&2; exit 1; }\nexit 0\n"
+                                                         : "exit 0\n");
+
+    g_assert_true(g_file_set_contents(stubs->quick, script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->quick, 0755), ==, 0);
+}
+
 static void
 external_stubs_setup(ExternalStubs *stubs)
 {
-    g_autofree gchar *quick_script = NULL;
+    g_autofree gchar *cleanup_script = NULL;
     g_autofree gchar *search_path = NULL;
     const gchar *old_path = g_getenv("PATH");
 
@@ -2040,13 +2057,19 @@ external_stubs_setup(ExternalStubs *stubs)
     stubs->modprobe = g_build_filename(stubs->dir, "modprobe", NULL);
     stubs->modprobe_log = g_build_filename(stubs->dir, "modprobe.log", NULL);
     stubs->module_version = g_build_filename(stubs->dir, "module-version", NULL);
+    stubs->nft = g_build_filename(stubs->dir, "nft", NULL);
+    stubs->resolvconf = g_build_filename(stubs->dir, "resolvconf", NULL);
+    stubs->cleanup_log = g_build_filename(stubs->dir, "cleanup.log", NULL);
     stubs->saved_path = g_strdup(old_path);
     stubs->saved_quick_path = g_strdup(g_getenv("NM_AWG_QUICK_PATH"));
 
-    /* Logs "<command> <file> <mode of the file>" */
-    quick_script = g_strdup_printf("#!/bin/sh\necho \"$1 $2 $(stat -c %%a \"$2\")\" >> '%s'\nexit 0\n", stubs->log);
-    g_assert_true(g_file_set_contents(stubs->quick, quick_script, -1, NULL));
-    g_assert_cmpint(chmod(stubs->quick, 0755), ==, 0);
+    external_stubs_set_quick(stubs, FALSE);
+    /* Never the nft or resolvconf of the host */
+    cleanup_script = g_strdup_printf("#!/bin/sh\necho \"$(basename \"$0\") $*\" >> '%s'\n", stubs->cleanup_log);
+    g_assert_true(g_file_set_contents(stubs->nft, cleanup_script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->nft, 0755), ==, 0);
+    g_assert_true(g_file_set_contents(stubs->resolvconf, cleanup_script, -1, NULL));
+    g_assert_cmpint(chmod(stubs->resolvconf, 0755), ==, 0);
 
     search_path = g_strdup_printf("%s:%s", stubs->dir, old_path ? old_path : "");
     g_setenv("NM_AWG_QUICK_PATH", stubs->quick, TRUE);
@@ -2086,6 +2109,25 @@ external_stubs_take_log(ExternalStubs *stubs)
 }
 
 static void
+remove_tree(const char *path)
+{
+    GDir *dir = g_dir_open(path, 0, NULL);
+    const gchar *name;
+
+    if (!dir) {
+        unlink(path);
+        return;
+    }
+    while ((name = g_dir_read_name(dir))) {
+        g_autofree gchar *child = g_build_filename(path, name, NULL);
+
+        remove_tree(child);
+    }
+    g_dir_close(dir);
+    rmdir(path);
+}
+
+static void
 external_stubs_teardown(ExternalStubs *stubs)
 {
     if (stubs->saved_quick_path)
@@ -2097,13 +2139,8 @@ external_stubs_teardown(ExternalStubs *stubs)
     else
         g_unsetenv("PATH");
 
-    unlink(stubs->quick);
-    unlink(stubs->awg);
-    unlink(stubs->log);
-    unlink(stubs->modprobe);
-    unlink(stubs->modprobe_log);
-    unlink(stubs->module_version);
-    rmdir(stubs->dir);
+    /* With the lock files the backend leaves in its configuration directories */
+    remove_tree(stubs->dir);
     g_free(stubs->dir);
     g_free(stubs->quick);
     g_free(stubs->awg);
@@ -2111,8 +2148,48 @@ external_stubs_teardown(ExternalStubs *stubs)
     g_free(stubs->modprobe);
     g_free(stubs->modprobe_log);
     g_free(stubs->module_version);
+    g_free(stubs->nft);
+    g_free(stubs->resolvconf);
+    g_free(stubs->cleanup_log);
     g_free(stubs->saved_path);
     g_free(stubs->saved_quick_path);
+}
+
+/* What nft and resolvconf were asked to do since the last call */
+static gchar *
+external_stubs_take_cleanup_log(ExternalStubs *stubs)
+{
+    gchar *contents = NULL;
+
+    if (!g_file_get_contents(stubs->cleanup_log, &contents, NULL, NULL))
+        contents = g_strdup("");
+    unlink(stubs->cleanup_log);
+    return contents;
+}
+
+/* The nft tables and the resolvconf DNS of awg-quick; the DNS record may carry
+ * a prefix from /etc/resolvconf/interface-order of the host */
+static void
+assert_leftovers_removed(ExternalStubs *stubs, const char *ifname)
+{
+    g_autofree gchar *log = external_stubs_take_cleanup_log(stubs);
+    g_autofree gchar *nft = g_strdup_printf("nft delete table ip wg-quick-%s\n"
+                                            "nft delete table ip6 wg-quick-%s\n",
+                                            ifname, ifname);
+    g_autofree gchar *dns = g_strdup_printf("resolvconf -d *%s -f\n", ifname);
+
+    g_test_message("%s", log);
+    g_assert_true(g_str_has_prefix(log, nft));
+    g_assert_true(g_pattern_match_simple(dns, log + strlen(nft)));
+}
+
+/* A tunnel that stays up keeps them */
+static void
+assert_leftovers_kept(ExternalStubs *stubs)
+{
+    g_autofree gchar *log = external_stubs_take_cleanup_log(stubs);
+
+    g_assert_cmpstr(log, ==, "");
 }
 
 static void
@@ -2379,15 +2456,18 @@ assert_test_tun_deleted(int fd, const char *name)
 }
 
 /* An interface that already has the connection's name is deleted before the
- * netlink backend creates its own; one that cannot be deleted fails the
- * connection instead of a bare EEXIST. */
+ * netlink backend creates its own, then what awg-quick may have set up beside
+ * it; one that cannot be deleted fails the connection instead of a bare EEXIST. */
 static void
 test_netlink_leftover_interface(void)
 {
+    ExternalStubs stubs = { 0 };
     AWGDevice *device = external_test_device();
     AWGConnectionManager *mgr;
     GError *error = NULL;
     int fd;
+
+    external_stubs_setup(&stubs);
 
     /* "lo" always exists and can never be deleted (EPERM or EOPNOTSUPP) */
     mgr = awg_connection_manager_netlink_new("lo", device);
@@ -2398,10 +2478,12 @@ test_netlink_leftover_interface(void)
     g_assert_nonnull(strstr(error->message, "lo is left over from an earlier activation and could not be deleted"));
     g_clear_error(&error);
     g_object_unref(mgr);
+    assert_leftovers_kept(&stubs);
 
     fd = open_test_tun("awgtest-nl");
     if (fd < 0) {
         g_object_unref(device);
+        external_stubs_teardown(&stubs);
         g_test_skip("Deleting a real interface needs CAP_NET_ADMIN and /dev/net/tun");
         return;
     }
@@ -2413,8 +2495,11 @@ test_netlink_leftover_interface(void)
     g_test_assert_expected_messages();
     g_clear_error(&error);
     assert_test_tun_deleted(fd, "awgtest-nl");
+    /* The leftover may come from the awg-quick backend */
+    assert_leftovers_removed(&stubs, "awgtest-nl");
     g_object_unref(mgr);
     g_object_unref(device);
+    external_stubs_teardown(&stubs);
 }
 
 /* A link is deleted by the index it had: once its name went to a newer link,
@@ -2444,7 +2529,8 @@ test_netlink_delete_by_index(void)
 /* The configuration lives in the configured directory
  * (<runstatedir>/NetworkManager/amneziawg in the service) only while awg-quick
  * runs, readable by root only, and an interface left over from an earlier
- * activation is taken down first. */
+ * activation is taken down first, then its DNS, which "awg-quick down" keeps
+ * when the new configuration has none. */
 static void
 test_external_config_and_leftover_interface(void)
 {
@@ -2490,6 +2576,7 @@ test_external_config_and_leftover_interface(void)
     g_assert_cmpstr(log, ==, expected);
     g_clear_pointer(&log, g_free);
     g_clear_pointer(&expected, g_free);
+    assert_leftovers_kept(&stubs);
 
     /* "lo" always exists: it stands for a leftover interface */
     mgr = external_test_manager(&stubs, "lo", device, config_dir);
@@ -2502,11 +2589,191 @@ test_external_config_and_leftover_interface(void)
     log = external_stubs_take_log(&stubs);
     expected = g_strdup_printf("down %s 400\nup %s 400\n", lo_conf, lo_conf);
     g_assert_cmpstr(log, ==, expected);
+    /* The test device has no DNS */
+    assert_leftovers_removed(&stubs, "lo");
 
     g_object_unref(device);
     rmdir(config_dir);
     rmdir(nm_dir);
     rmdir(run_dir);
+    external_stubs_teardown(&stubs);
+}
+
+/* When "awg-quick down" cannot run, the link is deleted directly, and then the
+ * nft tables and DNS of awg-quick: a link that is gone afterwards is a success,
+ * one that cannot be deleted an error naming both failures. */
+static void
+test_external_down_fallback(void)
+{
+    ExternalStubs stubs = { 0 };
+    g_autofree gchar *config_dir = NULL;
+    g_autofree gchar *conf = NULL;
+    g_autofree gchar *lo_conf = NULL;
+    g_autofree gchar *unwritable = NULL;
+    g_autofree gchar *expected = NULL;
+    g_autofree gchar *log = NULL;
+    AWGDevice *device = external_test_device();
+    AWGConnectionManager *mgr;
+    GError *error = NULL;
+    int fd;
+
+    external_stubs_setup(&stubs);
+    external_stubs_set_tools_version(&stubs, "v3.1.20260812");
+    external_stubs_set_quick(&stubs, TRUE);
+    config_dir = g_build_filename(stubs.dir, "run", NULL);
+    conf = g_build_filename(config_dir, "awgtest-none.conf", NULL);
+    lo_conf = g_build_filename(config_dir, "lo.conf", NULL);
+
+    /* awg-quick fails on an interface that is already gone */
+    mgr = external_test_manager(&stubs, "awgtest-none", device, config_dir);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE,
+                          "*Could not take down awgtest-none with awg-quick (*exit*)*already gone*");
+    g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+    g_test_assert_expected_messages();
+    g_assert_no_error(error);
+    g_assert_false(g_file_test(conf, G_FILE_TEST_EXISTS));
+    g_object_unref(mgr);
+    log = external_stubs_take_log(&stubs);
+    expected = g_strdup_printf("down %s 400\n", conf);
+    g_assert_cmpstr(log, ==, expected);
+    g_clear_pointer(&log, g_free);
+    g_clear_pointer(&expected, g_free);
+    assert_leftovers_removed(&stubs, "awgtest-none");
+
+    /* The configuration cannot be written: awg-quick never runs */
+    unwritable = g_build_filename(stubs.awg, "run", NULL);
+    mgr = external_test_manager(&stubs, "awgtest-none", device, unwritable);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE,
+                          "*Could not take down awgtest-none with awg-quick (Failed to create*)*already gone*");
+    g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+    g_test_assert_expected_messages();
+    g_assert_no_error(error);
+    g_object_unref(mgr);
+    log = external_stubs_take_log(&stubs);
+    g_assert_cmpstr(log, ==, "");
+    g_clear_pointer(&log, g_free);
+    assert_leftovers_removed(&stubs, "awgtest-none");
+
+    /* "lo" always exists and can never be deleted (EPERM or EOPNOTSUPP) */
+    mgr = external_test_manager(&stubs, "lo", device, config_dir);
+    g_assert_false(awg_connection_manager_disconnect(mgr, &error));
+    g_assert_nonnull(error);
+    g_test_message("%s", error->message);
+    g_assert_true(g_str_has_prefix(error->message, "Could not take down lo with awg-quick ("));
+    g_assert_nonnull(strstr(error->message, "), and deleting the interface failed too: "));
+    g_clear_error(&error);
+    assert_leftovers_kept(&stubs);
+
+    /* A leftover that cannot be taken down fails the activation before "up" */
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*lo is left over*");
+    g_assert_false(awg_connection_manager_connect(mgr, NULL, &error));
+    g_test_assert_expected_messages();
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "deleting the interface failed too"));
+    g_clear_error(&error);
+    g_assert_false(g_file_test(lo_conf, G_FILE_TEST_EXISTS));
+    g_object_unref(mgr);
+    log = external_stubs_take_log(&stubs);
+    expected = g_strdup_printf("down %s 400\ndown %s 400\n", lo_conf, lo_conf);
+    g_assert_cmpstr(log, ==, expected);
+    g_clear_pointer(&log, g_free);
+    g_clear_pointer(&expected, g_free);
+    assert_leftovers_kept(&stubs);
+
+    fd = open_test_tun("awgtest-q");
+    if (fd < 0) {
+        g_test_skip("Deleting a real interface needs CAP_NET_ADMIN and /dev/net/tun");
+    } else {
+        g_autofree gchar *tun_conf = g_build_filename(config_dir, "awgtest-q.conf", NULL);
+
+        /* A leftover amneziawg-go device is deleted, then "up" runs */
+        mgr = external_test_manager(&stubs, "awgtest-q", device, config_dir);
+        g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*awgtest-q is left over*");
+        g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "*deleted the interface directly*");
+        g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+        g_test_assert_expected_messages();
+        g_assert_no_error(error);
+        assert_test_tun_deleted(fd, "awgtest-q");
+        log = external_stubs_take_log(&stubs);
+        expected = g_strdup_printf("down %s 400\nup %s 400\n", tun_conf, tun_conf);
+        g_assert_cmpstr(log, ==, expected);
+        g_clear_pointer(&log, g_free);
+        g_clear_pointer(&expected, g_free);
+        assert_leftovers_removed(&stubs, "awgtest-q");
+
+        /* And on disconnect */
+        fd = open_test_tun("awgtest-q");
+        g_assert_cmpint(fd, >=, 0);
+        g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING,
+                              "*Could not take down awgtest-q with awg-quick*deleted the interface directly*");
+        g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+        g_test_assert_expected_messages();
+        g_assert_no_error(error);
+        assert_test_tun_deleted(fd, "awgtest-q");
+        g_clear_pointer(&log, g_free);
+        log = external_stubs_take_log(&stubs);
+        expected = g_strdup_printf("down %s 400\n", tun_conf);
+        g_assert_cmpstr(log, ==, expected);
+        assert_leftovers_removed(&stubs, "awgtest-q");
+        g_object_unref(mgr);
+    }
+
+    g_object_unref(device);
+    rmdir(config_dir);
+    external_stubs_teardown(&stubs);
+}
+
+/* With concurrent connections a re-activation runs in a new service instance,
+ * which takes the old interface down as a leftover and creates its own under
+ * the same name: the old instance's disconnect must leave that one up. */
+static void
+test_external_disconnect_keeps_newer_interface(void)
+{
+    ExternalStubs stubs = { 0 };
+    g_autofree gchar *config_dir = NULL;
+    g_autofree gchar *log = NULL;
+    AWGDevice *device = external_test_device();
+    AWGConnectionManager *mgr;
+    GError *error = NULL;
+    int fd;
+
+    external_stubs_setup(&stubs);
+    external_stubs_set_tools_version(&stubs, "v3.1.20260812");
+    config_dir = g_build_filename(stubs.dir, "run", NULL);
+
+    /* Stands for the link "awg-quick up" creates */
+    fd = open_test_tun("awgtest-r");
+    if (fd < 0) {
+        g_object_unref(device);
+        external_stubs_teardown(&stubs);
+        g_test_skip("Real interfaces need CAP_NET_ADMIN and /dev/net/tun");
+        return;
+    }
+    mgr = external_test_manager(&stubs, "awgtest-r", device, config_dir);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*awgtest-r is left over*");
+    g_assert_true(awg_connection_manager_connect(mgr, NULL, &error));
+    g_test_assert_expected_messages();
+    g_assert_no_error(error);
+    g_free(external_stubs_take_log(&stubs));
+    assert_leftovers_removed(&stubs, "awgtest-r");
+
+    /* The newer instance replaced it */
+    close(fd);
+    fd = open_test_tun("awgtest-r");
+    g_assert_cmpint(fd, >=, 0);
+
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*awgtest-r now belongs to a newer activation*");
+    g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+    g_test_assert_expected_messages();
+    g_assert_no_error(error);
+    g_assert_cmpuint(if_nametoindex("awgtest-r"), !=, 0);
+    log = external_stubs_take_log(&stubs);
+    g_assert_cmpstr(log, ==, "");
+    assert_leftovers_kept(&stubs);
+
+    close(fd);
+    g_object_unref(mgr);
+    g_object_unref(device);
     external_stubs_teardown(&stubs);
 }
 
@@ -3062,6 +3329,8 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/manager/netlink-delete-by-index", test_netlink_delete_by_index);
     g_test_add_func("/awg/manager/netlink-leftover-interface", test_netlink_leftover_interface);
     g_test_add_func("/awg/manager/external-config-and-leftover", test_external_config_and_leftover_interface);
+    g_test_add_func("/awg/manager/external-down-fallback", test_external_down_fallback);
+    g_test_add_func("/awg/manager/external-disconnect-keeps-newer", test_external_disconnect_keeps_newer_interface);
     g_test_add_func("/awg/validate/range-parse-u32", test_awg_range_parse_u32);
     g_test_add_func("/awg/device/header-protection-key", test_awg_device_header_protection_key);
     g_test_add_func("/awg/device/range-setters-reject-over-u16", test_awg_device_range_setters_reject_over_u16);
