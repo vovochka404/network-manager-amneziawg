@@ -42,6 +42,8 @@ struct _AWGConnectionManagerNetlinkPrivate {
     AWGDevice *device;
     gboolean running;
     gint socket_fd;
+    /* Of the link connect() created: the name may pass to a newer activation */
+    int ifindex;
 };
 
 enum {
@@ -297,6 +299,7 @@ set_interface_mtu(const gchar *ifname, guint32 mtu)
 
 static gboolean
 manage_route(const gchar *ifname,
+             int ifindex,
              const gchar *destination,
              int family,
              gboolean add,
@@ -406,7 +409,8 @@ manage_route(const gchar *ifname,
 
     rta->rta_type = RTA_OIF;
     rta->rta_len = RTA_LENGTH(sizeof(int));
-    int ifindex = if_nametoindex(ifname);
+    if (ifindex == 0)
+        ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {
         g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
                     "Interface %s was not found", ifname);
@@ -486,7 +490,7 @@ add_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **error
                  * error: re-setting an already-set GError leaks it and makes
                  * GLib warn about setting an error over the top. */
                 GError *route_error = NULL;
-                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                if (!manage_route(ifname, priv->ifindex, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
                                   TRUE, &route_error)) {
                     if (error && !*error)
                         *error = g_steal_pointer(&route_error);
@@ -511,6 +515,11 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **er
     const GList *peers_list = awg_device_get_peers_list(priv->device);
     const GList *iter;
     gboolean success = TRUE;
+    gchar current_name[IF_NAMESIZE];
+
+    /* The routes went with our link; a link of that name now is a newer one */
+    if (priv->ifindex != 0 && !if_indextoname(priv->ifindex, current_name))
+        return TRUE;
 
     for (iter = peers_list; iter; iter = g_list_next(iter)) {
         AWGDevicePeer *awg_peer = iter->data;
@@ -529,7 +538,7 @@ delete_routes_for_allowed_ips(AWGConnectionManager *mgr, int family, GError **er
                  * error: re-setting an already-set GError leaks it and makes
                  * GLib warn about setting an error over the top. */
                 GError *route_error = NULL;
-                if (!manage_route(ifname, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
+                if (!manage_route(ifname, priv->ifindex, ip_str, is_ipv6 ? AF_INET6 : AF_INET,
                                   FALSE, &route_error)) {
                     if (error && !*error)
                         *error = g_steal_pointer(&route_error);
@@ -799,6 +808,24 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
 
     dev->flags |= WGDEVICE_REPLACE_PEERS;
 
+    /* The name is unique per connection (awg-<first 8 UUID chars>), so an
+     * existing interface is ours: left over from an activation that never tore
+     * down, or that of an older instance still disconnecting (by ifindex, so it
+     * cannot delete the new link). */
+    if (if_nametoindex(ifname) != 0) {
+        int ret;
+
+        g_message("%s is left over from an earlier activation, deleting it", ifname);
+        ret = wg_del_device(ifname);
+        if (ret != 0 && ret != -ENODEV) {
+            g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, -ret,
+                        "Interface %s is left over from an earlier activation and could "
+                        "not be deleted: %s",
+                        ifname, g_strerror(-ret));
+            goto cleanup;
+        }
+    }
+
     if (wg_add_device(ifname) != 0) {
         g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
                     "Failed to add device %s", ifname);
@@ -973,6 +1000,8 @@ awg_connection_manager_netlink_connect(AWGConnectionManager *mgr, GCancellable *
         }
     }
 
+    /* Not right after wg_add_device(): wg_set_device() may recreate the link */
+    priv->ifindex = (int)if_nametoindex(ifname);
     priv->running = TRUE;
     success = TRUE;
 
@@ -990,20 +1019,29 @@ awg_connection_manager_netlink_disconnect(AWGConnectionManager *mgr, GError **er
     AWGConnectionManagerNetlink *self = AWG_CONNECTION_MANAGER_NETLINK(mgr);
     AWGConnectionManagerNetlinkPrivate *priv = AWG_CONNECTION_MANAGER_NETLINK_GET_PRIVATE(self);
     const gchar *ifname = priv->interface_name;
-    gboolean success = FALSE;
+    int ret;
 
-    set_interface_up(ifname, FALSE);
+    /* With concurrent connections NetworkManager starts a re-activation in a
+     * new instance without waiting for this Disconnect: by index, a link that
+     * instance created under the same name is never deleted here. */
+    if (priv->ifindex != 0) {
+        ret = wg_del_device_index(priv->ifindex);
+        if (ret == -ENODEV)
+            g_message("%s was already deleted, by a newer activation or from outside", ifname);
+    } else {
+        set_interface_up(ifname, FALSE);
+        ret = wg_del_device(ifname);
+    }
 
-    if (wg_del_device(ifname) != 0) {
-        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, errno,
-                    "Failed to delete device %s", ifname);
+    if (ret != 0 && !(ret == -ENODEV && priv->ifindex != 0)) {
+        g_set_error(error, AWG_CONNECTION_MANAGER_NETLINK_ERROR, -ret,
+                    "Failed to delete device %s: %s", ifname, g_strerror(-ret));
         return FALSE;
     }
 
+    priv->ifindex = 0;
     priv->running = FALSE;
-    success = TRUE;
-
-    return success;
+    return TRUE;
 }
 
 static gboolean

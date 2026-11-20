@@ -17,6 +17,7 @@
 
 #### Connections
 - **Allow concurrent VPN connections**: advertise the service's existing per-instance D-Bus support so NetworkManager can run separate AmneziaWG connections at the same time. Each instance uses its own D-Bus name and UUID-derived interface name.
+- **The kernel backend deletes a leftover interface**: an interface with the connection's name, left over when the service was killed, made every later activation fail with `Failed to add device` (`EEXIST`). It is now deleted before the new one is created, and a leftover that cannot be deleted is named in the error. Disconnect deletes the link and its routes by the index it had, so a re-activation, which runs in a new service instance while the old one may still be disconnecting, keeps its new interface
 
 #### Secrets & Config Handling
 - **Peers without a preshared key no longer look like lost keys**: version 0.9.12 wrote `peer-N-preshared-key-flags=0` for every peer, on import and in the editor, so a peer without `PresharedKey` asked for one. Such a peer now has no flags (not required); imported `PresharedKey`s are stored by NetworkManager (flags `0`), as `nmcli` imports WireGuard ones. Profiles written by 0.9.12 keep asking, and the prompt says how to fix them (see README, "Peers without a preshared key")

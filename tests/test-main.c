@@ -9,6 +9,7 @@
  * GNU General Public License for more details.
  */
 
+#include "amneziawg.h"
 #include "awg/awg-config.h"
 #include "awg/awg-connection-manager-external.h"
 #include "awg/awg-connection-manager-netlink.h"
@@ -17,9 +18,14 @@
 #include "awg/awg-nm-connection.h"
 #include "awg/awg-secrets.h"
 #include "awg/awg-validate.h"
+#include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
+#include <linux/if_tun.h>
+#include <net/if.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -2337,6 +2343,100 @@ test_netlink_module_check(void)
     rmdir(dir);
 }
 
+/* A tun interface held open the way amneziawg-go holds its own, or -1 when
+ * that is not allowed (needs CAP_NET_ADMIN and /dev/net/tun). */
+static int
+open_test_tun(const char *name)
+{
+    struct ifreq ifr = { 0 };
+    int fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+
+    if (fd < 0)
+        return -1;
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+    g_strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
+    if (ioctl(fd, TUNSETIFF, &ifr) < 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+/* The kernel detaches the queues of a deleted tun interface */
+static void
+assert_test_tun_deleted(int fd, const char *name)
+{
+    char buf[64];
+
+    g_assert_cmpuint(if_nametoindex(name), ==, 0);
+    g_assert_cmpint(read(fd, buf, sizeof(buf)), ==, -1);
+    g_assert_cmpint(errno, ==, EBADFD);
+    close(fd);
+}
+
+/* An interface that already has the connection's name is deleted before the
+ * netlink backend creates its own; one that cannot be deleted fails the
+ * connection instead of a bare EEXIST. */
+static void
+test_netlink_leftover_interface(void)
+{
+    AWGDevice *device = external_test_device();
+    AWGConnectionManager *mgr;
+    GError *error = NULL;
+    int fd;
+
+    /* "lo" always exists and can never be deleted (EPERM or EOPNOTSUPP) */
+    mgr = awg_connection_manager_netlink_new("lo", device);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*lo is left over*");
+    g_assert_false(awg_connection_manager_connect(mgr, NULL, &error));
+    g_test_assert_expected_messages();
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "lo is left over from an earlier activation and could not be deleted"));
+    g_clear_error(&error);
+    g_object_unref(mgr);
+
+    fd = open_test_tun("awgtest-nl");
+    if (fd < 0) {
+        g_object_unref(device);
+        g_test_skip("Deleting a real interface needs CAP_NET_ADMIN and /dev/net/tun");
+        return;
+    }
+    mgr = awg_connection_manager_netlink_new("awgtest-nl", device);
+    g_test_expect_message(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "*awgtest-nl is left over*");
+    /* Without an amneziawg module the new interface cannot be created */
+    if (awg_connection_manager_connect(mgr, NULL, &error))
+        g_assert_true(awg_connection_manager_disconnect(mgr, &error));
+    g_test_assert_expected_messages();
+    g_clear_error(&error);
+    assert_test_tun_deleted(fd, "awgtest-nl");
+    g_object_unref(mgr);
+    g_object_unref(device);
+}
+
+/* A link is deleted by the index it had: once its name went to a newer link,
+ * as with a re-activation in a new service instance, that one stays. */
+static void
+test_netlink_delete_by_index(void)
+{
+    unsigned int old_index;
+    int fd = open_test_tun("awgtest-i");
+
+    if (fd < 0) {
+        g_test_skip("Deleting a real interface needs CAP_NET_ADMIN and /dev/net/tun");
+        return;
+    }
+    old_index = if_nametoindex("awgtest-i");
+    close(fd);
+    fd = open_test_tun("awgtest-i");
+    g_assert_cmpint(fd, >=, 0);
+    g_assert_cmpuint(if_nametoindex("awgtest-i"), !=, old_index);
+
+    g_assert_cmpint(wg_del_device_index((int)old_index), ==, -ENODEV);
+    g_assert_cmpuint(if_nametoindex("awgtest-i"), !=, 0);
+    g_assert_cmpint(wg_del_device_index((int)if_nametoindex("awgtest-i")), ==, 0);
+    assert_test_tun_deleted(fd, "awgtest-i");
+}
+
 /* The configuration lives in the configured directory (/run/nm-amneziawg in
  * the service) only while awg-quick runs, readable by root only, and an
  * interface left over from an earlier activation is taken down first. */
@@ -2941,6 +3041,8 @@ main(int argc, char *argv[])
     g_test_add_func("/awg/manager/external-awg31-needs-new-tools", test_external_awg31_requires_new_tools);
     g_test_add_func("/awg/manager/external-awg31-needs-new-module", test_external_awg31_requires_new_module);
     g_test_add_func("/awg/manager/netlink-module-check", test_netlink_module_check);
+    g_test_add_func("/awg/manager/netlink-delete-by-index", test_netlink_delete_by_index);
+    g_test_add_func("/awg/manager/netlink-leftover-interface", test_netlink_leftover_interface);
     g_test_add_func("/awg/manager/external-config-and-leftover", test_external_config_and_leftover_interface);
     g_test_add_func("/awg/validate/range-parse-u32", test_awg_range_parse_u32);
     g_test_add_func("/awg/device/header-protection-key", test_awg_device_header_protection_key);

@@ -1159,8 +1159,9 @@ cleanup:
     return ret;
 }
 
+/* @ifindex > 0 selects the link by index (RTM_DELLINK only), not by @ifname */
 static int
-add_del_iface(const char *ifname, bool add)
+add_del_iface(const char *ifname, int ifindex, bool add)
 {
     struct mnl_socket *nl = NULL;
     char *rtnl_buffer;
@@ -1193,7 +1194,9 @@ add_del_iface(const char *ifname, bool add)
     nlh->nlmsg_seq = time(NULL);
     ifm = mnl_nlmsg_put_extra_header(nlh, sizeof(*ifm));
     ifm->ifi_family = AF_UNSPEC;
-    mnl_attr_put_strz(nlh, IFLA_IFNAME, ifname);
+    ifm->ifi_index = ifindex;
+    if (ifname)
+        mnl_attr_put_strz(nlh, IFLA_IFNAME, ifname);
     nest = mnl_attr_nest_start(nlh, IFLA_LINKINFO);
     mnl_attr_put_strz(nlh, IFLA_INFO_KIND, WG_GENL_NAME);
     mnl_attr_nest_end(nlh, nest);
@@ -1413,10 +1416,10 @@ send:
             current_abi = false;
             peer = NULL;
             allowedip = NULL;
-            ret = add_del_iface(dev->name, false);
+            ret = add_del_iface(dev->name, 0, false);
             if (ret < 0)
                 goto out;
-            ret = add_del_iface(dev->name, true);
+            ret = add_del_iface(dev->name, 0, true);
             if (ret < 0)
                 goto out;
             goto again;
@@ -1833,13 +1836,19 @@ wg_list_device_names(void)
 int
 wg_add_device(const char *device_name)
 {
-    return add_del_iface(device_name, true);
+    return add_del_iface(device_name, 0, true);
 }
 
 int
 wg_del_device(const char *device_name)
 {
-    return add_del_iface(device_name, false);
+    return add_del_iface(device_name, 0, false);
+}
+
+int
+wg_del_device_index(int ifindex)
+{
+    return add_del_iface(NULL, ifindex, false);
 }
 
 void
